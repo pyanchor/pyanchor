@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `codex` adapter (shells out to the OpenAI Codex CLI)
+- `aider` adapter (shells out to aider-chat)
+
 ## [0.1.1] - 2026-04-19
 
 ### Security

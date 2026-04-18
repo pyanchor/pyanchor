@@ -73,6 +73,14 @@ export const pyanchorConfig = {
   openClawBin: optionalEnv("PYANCHOR_OPENCLAW_BIN", "openclaw"),
   openClawUser: optionalEnv("PYANCHOR_OPENCLAW_USER", currentUser),
 
+  // ─── agent: shell-out adapters (codex, aider) ──────────────────
+  // Path or basename of the OpenAI Codex CLI binary. Default: `codex` on PATH.
+  // Install: `npm i -g @openai/codex`.
+  codexBin: optionalEnv("PYANCHOR_CODEX_BIN", "codex"),
+  // Path or basename of the aider-chat CLI binary. Default: `aider` on PATH.
+  // Install: `pip install aider-chat`.
+  aiderBin: optionalEnv("PYANCHOR_AIDER_BIN", "aider"),
+
   // ─── cross-user / file ownership (default: same user) ──────────
   appDirOwner: optionalEnv("PYANCHOR_APP_DIR_OWNER", `${currentUser}:${currentUser}`),
   pm2ProcessName: optionalEnv("PYANCHOR_FRONTEND_PM2_NAME", ""),

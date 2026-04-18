@@ -1,13 +1,17 @@
 import { pyanchorConfig } from "../config";
 
+import { AiderAgentRunner } from "./aider";
 import { ClaudeCodeAgentRunner } from "./claude-code";
+import { CodexAgentRunner } from "./codex";
 import type { AgentRunner } from "./types";
 
 export type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./types";
 
 /** Registered adapters. Add new entries here to expose them to PYANCHOR_AGENT. */
 const adapters = new Map<string, () => AgentRunner>([
-  ["claude-code", () => new ClaudeCodeAgentRunner()]
+  ["claude-code", () => new ClaudeCodeAgentRunner()],
+  ["codex", () => new CodexAgentRunner()],
+  ["aider", () => new AiderAgentRunner()]
 ]);
 
 /**

@@ -172,8 +172,8 @@ Pick a backend with `PYANCHOR_AGENT`:
 | --- | --- | --- |
 | `openclaw` | ✅ default | OpenClaw CLI on `PATH` + `openclaw onboard`. Setup: [`docs/openclaw-setup.md`](./docs/openclaw-setup.md) |
 | `claude-code` | ✅ shipped | install peer dep `@anthropic-ai/claude-agent-sdk` + `ANTHROPIC_API_KEY`. Setup: [`docs/claude-code-setup.md`](./docs/claude-code-setup.md) |
-| `codex` | 🟡 v0.2.0 | community adapter welcome |
-| `aider` | 🟡 v0.2.0 | community adapter welcome |
+| `codex` | ✅ shipped | OpenAI Codex CLI on `PATH`. Install: `npm i -g @openai/codex`. Override binary with `PYANCHOR_CODEX_BIN`. |
+| `aider` | ✅ shipped | aider-chat CLI on `PATH`. Install: `pip install aider-chat`. Workspace should be a git repo. Override binary with `PYANCHOR_AIDER_BIN`. |
 | Goose, Cline, custom | 🟡 | implement the [`AgentRunner`](./src/agents/types.ts) interface — see [`docs/adapters.md`](./docs/adapters.md) |
 
 The interface is ~70 lines; a working adapter is typically ~100-200.
