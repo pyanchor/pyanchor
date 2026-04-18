@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-19
+
+### Security
+- **Bootstrap hostname allowlist.** The injected `bootstrap.js` now
+  self-disables on hosts outside `localhost`, `127.0.0.1`, `[::1]`, and
+  `*.local`. Override with `data-pyanchor-trusted-hosts="..."` on the
+  `<script>` tag. This is belt-and-suspenders defense for the case
+  where a production build accidentally still renders the bootstrap.
+- **Origin allowlist (`PYANCHOR_ALLOWED_ORIGINS`).** Optional CSV of
+  origins that may call `POST /api/edit` and `POST /api/cancel`.
+  When unset, every origin with a valid token is accepted (v0.1.0
+  behavior preserved). When set, mismatched `Origin`/`Referer` is
+  rejected with 403. Closes the trivial CSRF surface where a leaked
+  token could be exercised from any page.
+
+### Changed
+- `stampLogLine` no longer hard-codes the `ko-KR` locale; activity log
+  timestamps are now ISO-style `HH:MM:SS` regardless of system locale.
+- README rewritten with a centered hero, badges row, collapsible
+  per-agent prerequisite blocks, and a new **Production safety
+  checklist** section.
+- `SECURITY.md` updated to describe the new hostname / origin
+  allowlists.
+
+### Notes
+- These two security additions are deliberately framed to not break
+  v0.1.0 deployments: the origin check is opt-in, and the hostname
+  allowlist's defaults cover the dev-time host names that v0.1.0
+  documentation pointed at. Staging hosts on real domains will need a
+  one-line `data-pyanchor-trusted-hosts` addition on upgrade.
+
+## [0.1.0] - 2026-04-18
+
 ### Added
 - Initial import of the sidecar source from the AIG project.
 - MIT license, project metadata, `.gitignore`, README skeleton, CHANGELOG.

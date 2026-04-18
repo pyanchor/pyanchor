@@ -98,13 +98,8 @@ const appendActivityLog = (state: AiEditState, lines: string[]) => ({
 });
 
 const stampLogLine = (message: string) => {
-  const time = new Intl.DateTimeFormat("ko-KR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  }).format(new Date());
-
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
   return `[${time}] ${message}`;
 };
 

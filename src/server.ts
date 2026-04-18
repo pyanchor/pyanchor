@@ -4,6 +4,7 @@ import path from "node:path";
 import { renderAdminHtml } from "./admin";
 import { pyanchorConfig, validateConfig } from "./config";
 import { requireToken } from "./auth";
+import { requireAllowedOrigin } from "./origin";
 import { tokenBucketMiddleware } from "./rate-limit";
 import { cancelAiEdit, getAdminHealth, readAiEditState, startAiEdit } from "./state";
 import type { AiEditCancelInput, AiEditStartInput } from "./shared/types";
@@ -70,6 +71,7 @@ for (const basePath of runtimeBases) {
 
   app.post(
     `${basePath}/api/edit`,
+    requireAllowedOrigin,
     requireToken,
     editLimiter,
     asyncRoute(async (request, response) => {
@@ -80,6 +82,7 @@ for (const basePath of runtimeBases) {
 
   app.post(
     `${basePath}/api/cancel`,
+    requireAllowedOrigin,
     requireToken,
     asyncRoute(async (request, response) => {
       setNoStore(response);

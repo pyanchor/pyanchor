@@ -33,7 +33,18 @@ in-page bootstrap injection on a domain that anonymous users can reach.
    `<script src="/_pyanchor/bootstrap.js">` tag should only be rendered
    for sessions you trust. The minimal example uses an env flag
    (`NEXT_PUBLIC_PYANCHOR_DEVTOOLS_ENABLED`) that defaults to `false`.
-4. **Rate limits.** The sidecar applies a per-IP token bucket on
+4. **Hostname allowlist (since v0.1.1).** The bootstrap self-disables
+   on hosts outside `localhost`, `127.0.0.1`, `[::1]`, and `*.local`.
+   To enable on additional hosts, set
+   `data-pyanchor-trusted-hosts="staging.example.com,..."` on the
+   `<script>` tag. This is belt-and-suspenders defense against an
+   accidental production build that still injects the script.
+5. **Origin allowlist (since v0.1.1).** Set
+   `PYANCHOR_ALLOWED_ORIGINS=https://app.example.com,https://stage.example.com`
+   to reject `/api/edit` and `/api/cancel` requests whose `Origin` (or
+   `Referer`) header is not in the list. When unset, every origin
+   presenting a valid token is accepted (v0.1.0 compatibility).
+6. **Rate limits.** The sidecar applies a per-IP token bucket on
    `POST /api/edit` (default: 6 requests / minute). Tune via fork or
    PR. Cancel and status calls are not rate-limited; protect them with
    network ACLs if needed.

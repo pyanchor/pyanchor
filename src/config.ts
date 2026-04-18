@@ -87,6 +87,10 @@ export const pyanchorConfig = {
   host: optionalEnv("PYANCHOR_HOST", "127.0.0.1"),
   runtimeBasePath: normalizeBasePath(env.PYANCHOR_RUNTIME_BASE_PATH, "/_pyanchor"),
   runtimeAliasPath: normalizeBasePath(env.PYANCHOR_RUNTIME_ALIAS_PATH, "/runtime"),
+  allowedOrigins: (env.PYANCHOR_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
 
   // ─── paths (derived / overridable) ─────────────────────────────
   stateDir,
