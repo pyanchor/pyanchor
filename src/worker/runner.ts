@@ -10,6 +10,8 @@ import {
   type AgentEvent,
   type AgentRunner
 } from "../agents";
+import { createBrief } from "../agents/openclaw/brief";
+import { extractAgentSignals, parseAgentResult } from "../agents/openclaw/parse";
 import type { AiEditMessage, AiEditMessageStatus, AiEditMode, AiEditState } from "../shared/types";
 
 const resolvedStateFile = process.env.PYANCHOR_STATE_FILE_PATH;
@@ -409,37 +411,6 @@ const runAsOpenClawInDir = (
 ) =>
   runAsOpenClaw(["bash", "-lc", 'cd "$1" && shift && exec "$@"', "--", workingDir, ...args], options);
 
-function getRouteHints(jobTargetPath: string) {
-  if (jobTargetPath === "/login" || jobTargetPath === "/signup") {
-    return [
-      "- Start with auth files only: app/(auth)/login/page.tsx, app/(auth)/signup/page.tsx, components/auth/, app/(auth)/layout.tsx, app/globals.css.",
-      "- Preserve the Korean UI copy and the existing login/signup behavior.",
-      "- Prefer a shared auth component if the change affects both login and signup tabs.",
-      "- For this route, animations should be subtle and product-like: short fade/slide transitions, tab indicator movement, no flashy motion."
-    ];
-  }
-
-  return [
-    "- Start with the target route file and the components that route imports.",
-    "- Only touch app/globals.css if the visual change needs shared styling."
-  ];
-}
-
-function formatConversationContext(messages: AiEditState["messages"]) {
-  if (messages.length === 0) {
-    return "- No prior conversation.";
-  }
-
-  return messages
-    .slice(-6)
-    .map((message) => {
-      const label =
-        message.role === "assistant" ? "Assistant" : message.role === "system" ? "System" : "User";
-      return `- ${label} [${message.mode}]${message.status ? ` (${message.status})` : ""}: ${message.text}`;
-    })
-    .join("\n");
-}
-
 async function prepareWorkspace() {
   await runCommand(sudoBin, ["rm", "-rf", pyanchorConfig.workspaceDir]);
   await runCommand(sudoBin, ["mkdir", "-p", pyanchorConfig.workspaceDir]);
@@ -469,58 +440,6 @@ async function prepareWorkspace() {
     `${pyanchorConfig.openClawUser}:${pyanchorConfig.openClawUser}`,
     pyanchorConfig.workspaceDir
   ]);
-}
-
-function createBrief(
-  jobPrompt: string,
-  jobTargetPath: string,
-  mode: AiEditMode,
-  messages: AiEditState["messages"]
-) {
-  return [
-    "# AI UI Request",
-    "",
-    `Mode: ${mode}`,
-    `Target page: ${jobTargetPath || "not specified"}`,
-    "",
-    "## Current request",
-    jobPrompt,
-    "",
-    "## Recent conversation",
-    formatConversationContext(messages),
-    "",
-    "## Constraints",
-    "- This project uses custom CSS, not Tailwind.",
-    "- Keep Korean UI copy unless the request explicitly asks for text changes.",
-    "- Stay focused on the current page and the components it directly uses.",
-    ...(mode === "edit"
-      ? [
-          "- Preserve route flow, API logic, and data behavior.",
-          "- Prefer production-ready UI changes over placeholder landing-page styling.",
-          "- Do not create unrelated files or refactor unrelated areas."
-        ]
-      : [
-          "- Do not modify files unless the user explicitly asked for a code change.",
-          "- Answer clearly in Korean, based on the actual code and structure you inspected.",
-          "- If you infer something, say that it is an inference."
-        ]),
-    "",
-    "## Project hints",
-    ...getRouteHints(jobTargetPath),
-    "",
-    "## Output",
-    ...(mode === "edit"
-      ? [
-          "- Implement the requested UI change completely in this workspace.",
-          "- Review modified files for obvious TypeScript or JSX mistakes before finishing.",
-          "- Keep the final response to 2 or 3 concise lines."
-        ]
-      : [
-          "- Explain the answer directly and concisely.",
-          "- If no code change is required, do not change files.",
-          "- Keep the final response to 3 to 6 concise sentences."
-        ])
-  ].join("\n");
 }
 
 async function writeBrief(
@@ -568,47 +487,6 @@ function installWorkspaceDependencies() {
       onStderrChunk: (text) => queueLog([`[install] ${text}`])
     }
   );
-}
-
-function extractAgentSignals(node: unknown, bucket: { texts: string[]; thinkings: string[]; logs: string[] }) {
-  if (!node || typeof node !== "object") {
-    return;
-  }
-
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      extractAgentSignals(item, bucket);
-    }
-    return;
-  }
-
-  const record = node as Record<string, unknown>;
-
-  if (record.type === "thinking" && typeof record.thinking === "string") {
-    bucket.thinkings.push(record.thinking);
-  }
-
-  if (typeof record.text === "string" && record.text.trim()) {
-    bucket.texts.push(record.text.trim());
-  }
-
-  if (typeof record.message === "string" && record.message.trim()) {
-    bucket.logs.push(record.message.trim());
-  }
-
-  if (typeof record.event === "string" && record.event.trim()) {
-    bucket.logs.push(`event: ${record.event.trim()}`);
-  }
-
-  if (typeof record.status === "string" && record.status.trim()) {
-    bucket.logs.push(`status: ${record.status.trim()}`);
-  }
-
-  for (const value of Object.values(record)) {
-    if (value && typeof value === "object") {
-      extractAgentSignals(value, bucket);
-    }
-  }
 }
 
 function processAgentChunk(chunk: string, channel: "stdout" | "stderr") {
@@ -725,70 +603,6 @@ function runAgent(agentId: string, jobId: string, jobTargetPath: string, mode: A
   ).finally(() => {
     flushAgentChunkRemainders();
   });
-}
-
-function collectTextPayloads(payloads: Array<{ text?: string; thinking?: string; type?: string }>) {
-  const summaryParts: string[] = [];
-  const thinkingParts: string[] = [];
-
-  for (const item of payloads) {
-    if (item.type === "thinking" && item.thinking) {
-      thinkingParts.push(item.thinking);
-      continue;
-    }
-
-    if (typeof item.text === "string" && item.text.trim()) {
-      summaryParts.push(item.text);
-    }
-  }
-
-  return {
-    summary: summaryParts.join("\n").trim(),
-    thinking: thinkingParts.join("\n\n").trim() || null
-  };
-}
-
-function detectAgentFailure(rawOutput: string, summary: string) {
-  const haystack = `${rawOutput}\n${summary}`.toLowerCase();
-
-  if (haystack.includes("request timed out before a response was generated")) {
-    return "Agent response timed out. Try narrowing the request and retry.";
-  }
-
-  if (haystack.includes("timed out") && haystack.includes("response")) {
-    return "Agent response timed out. Try again shortly.";
-  }
-
-  if (haystack.includes("unauthorized") || haystack.includes("401")) {
-    return "Agent authentication failed.";
-  }
-
-  return null;
-}
-
-function parseAgentResult(stdout: string) {
-  try {
-    const payload = JSON.parse(stdout) as {
-      content?: Array<{ text?: string; thinking?: string; type?: string }>;
-      result?: { payloads?: Array<{ text?: string; thinking?: string; type?: string }> };
-    };
-    const payloads = payload?.result?.payloads ?? payload?.content ?? [];
-    const { summary, thinking } = collectTextPayloads(Array.isArray(payloads) ? payloads : []);
-    const failure = detectAgentFailure(stdout, summary);
-
-    return {
-      summary: summary || "Edit complete.",
-      thinking,
-      failure
-    };
-  } catch {
-    const failure = detectAgentFailure(stdout, stdout);
-    return {
-      summary: stdout.trim() || "Edit complete.",
-      thinking: null,
-      failure
-    };
-  }
 }
 
 function buildWorkspace() {
