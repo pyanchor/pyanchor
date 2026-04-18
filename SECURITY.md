@@ -44,10 +44,14 @@ in-page bootstrap injection on a domain that anonymous users can reach.
    to reject `/api/edit` and `/api/cancel` requests whose `Origin` (or
    `Referer`) header is not in the list. When unset, every origin
    presenting a valid token is accepted (v0.1.0 compatibility).
-6. **Rate limits.** The sidecar applies a per-IP token bucket on
-   `POST /api/edit` (default: 6 requests / minute). Tune via fork or
-   PR. Cancel and status calls are not rate-limited; protect them with
-   network ACLs if needed.
+6. **Rate limits.** The sidecar applies per-IP token-bucket limiters
+   on the write APIs:
+   - `POST /api/edit`: 6 requests / minute (default)
+   - `POST /api/cancel`: 30 requests / minute (default, since v0.2.5)
+
+   `GET /api/status` and `/api/admin/*` reads are not rate-limited;
+   protect them with network ACLs if your reverse proxy is exposed.
+   Tune the limiter capacities via fork or PR.
 
 ## Token transport
 
@@ -64,9 +68,11 @@ The sidecar accepts the token via three transports:
   revoked via `DELETE /api/session` (or by restarting the sidecar,
   which wipes all sessions). The bootstrap script POSTs to
   `/api/session` automatically on first load.
-- `?token=<token>` — accepted for cases where setting headers is hard
-  (e.g. an `<img>` ping). Be aware that query-string tokens can leak via
-  proxy logs and browser history; prefer the header when possible.
+- `?token=<token>` — **rejected by default since v0.2.6.** Opt in
+  with `PYANCHOR_ALLOW_QUERY_TOKEN=true` only if you have legacy
+  callers that can't set headers (e.g. an `<img>` ping). Query-string
+  tokens leak via reverse-proxy access logs and browser history;
+  prefer the header or the session cookie.
 
 ### CSRF caveat for cookie auth
 

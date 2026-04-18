@@ -55,16 +55,31 @@ const isTrustedHost = (hostname: string, allowList: string[]): boolean => {
 
   window.__PyanchorConfig = { baseUrl, token };
 
-  // Best-effort: exchange the Bearer token for an HttpOnly session cookie
-  // so subsequent same-origin API calls authenticate via cookie and the
-  // token doesn't have to ride in JS-readable headers. Silent on failure
-  // (the overlay still falls back to the Bearer header in window config).
+  // Exchange the Bearer token for an HttpOnly session cookie so
+  // subsequent same-origin API calls authenticate via cookie. After a
+  // successful exchange we ALSO blank the token field on
+  // window.__PyanchorConfig — the overlay's fetch helper conditionally
+  // omits the Authorization header when the field is empty, so the
+  // raw bearer token stops sitting in JS-readable global state. This
+  // is a defense-in-depth measure against XSS / third-party-script
+  // exfiltration; it doesn't replace the existing hostname allowlist
+  // and Origin allowlist defenses, it complements them.
+  //
+  // Silent on failure: if the exchange POST errors, we leave the
+  // bearer token in place so the overlay can still authenticate via
+  // the Authorization header.
   if (token) {
     void fetch(`${baseUrl}/api/session`, {
       method: "POST",
       credentials: "same-origin",
       headers: { Authorization: `Bearer ${token}` }
-    }).catch(() => undefined);
+    })
+      .then((response) => {
+        if (response.ok && window.__PyanchorConfig) {
+          window.__PyanchorConfig.token = "";
+        }
+      })
+      .catch(() => undefined);
   }
 
   if (document.querySelector("script[data-pyanchor-overlay='1']")) {

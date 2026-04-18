@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-04-19
+
+Codex review pass on v0.5.0 surfaced four findings — three doc/security
+items addressed in this release, one (overlay/runner integration tests)
+deferred to v0.6.0 with the rest of the e2e surface.
+
+### Security
+- **Reduce in-page bearer-token surface.** `src/runtime/bootstrap.ts`
+  now blanks `window.__PyanchorConfig.token` after the
+  `POST /api/session` exchange resolves successfully. The overlay's
+  fetch helper already conditionally omits the `Authorization` header
+  when that field is empty, so subsequent calls authenticate via the
+  HttpOnly session cookie alone. The raw bearer token no longer sits
+  in JS-readable global state past the first 200ms of page load.
+  Defense-in-depth against XSS / third-party script exfiltration; the
+  hostname allowlist and Origin allowlist defenses still apply.
+- **Loud startup warning for the empty Origin allowlist.** When
+  `PYANCHOR_ALLOWED_ORIGINS` is unset, the sidecar logs a one-shot
+  warning at boot pointing out that the cookie session path makes
+  `/api/edit` and `/api/cancel` CSRF-prone. `SameSite=Strict` on the
+  cookie blocks the common browser cases, but the explicit allowlist
+  is the recommended setup. Empty stays the default for v0.x to
+  preserve compatibility — the warning makes it impossible to ship
+  the unsafe combination silently.
+
+### Documentation
+- **`SECURITY.md` rate-limit drift fixed.** The "Required hardening"
+  list said "Cancel and status calls are not rate-limited"; the code
+  has actually applied a per-IP cancel limiter (30 / min default)
+  since v0.2.5. Doc now reflects both limiters and clarifies what
+  remains unlimited (status reads, admin GETs).
+- **`SECURITY.md` query-token drift fixed.** The "Token transport"
+  section described `?token=<token>` as unconditionally accepted; it
+  has been opt-in via `PYANCHOR_ALLOW_QUERY_TOKEN=true` since v0.2.6.
+  Doc now states the default-rejected behavior up front.
+- **`README.md`** picks up the cancel rate-limit line for symmetry
+  with the edit limit.
+
+### Compatibility
+No breaking changes. The bootstrap behavior is strictly additive —
+clients without the new bootstrap.js (e.g. legacy embeds) continue to
+authenticate via the Bearer header as before.
+
 ## [0.5.0] - 2026-04-19
 
 ### Added

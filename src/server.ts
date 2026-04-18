@@ -21,6 +21,23 @@ if (pyanchorConfig.fastReload) {
   );
 }
 
+// Cookie-auth path (POST /api/session) makes /api/edit and /api/cancel
+// CSRF-prone from any origin presenting a valid token. SameSite=Strict
+// blocks most browser-driven cross-site requests, but defense in depth
+// requires the explicit allowlist. Warn loudly so operators don't ship
+// the default-empty config alongside the cookie path.
+if (pyanchorConfig.allowedOrigins.length === 0) {
+  console.warn(
+    "[pyanchor] PYANCHOR_ALLOWED_ORIGINS is empty. The cookie session path " +
+      "(POST /api/session, used by the in-page bootstrap) accepts /api/edit " +
+      "and /api/cancel from any origin presenting a valid token or session " +
+      "cookie. Set PYANCHOR_ALLOWED_ORIGINS to a CSV of trusted origins " +
+      "(e.g. https://app.example.com,https://stage.example.com) for CSRF " +
+      "defense in depth. SameSite=Strict on the cookie blocks the common " +
+      "browser cases, but the allowlist is the recommended setup."
+  );
+}
+
 const app = express();
 
 // Apply the configured trust-proxy preset. Express accepts:

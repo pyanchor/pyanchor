@@ -231,7 +231,8 @@ Defaults that protect you out of the box:
 - Sidecar binds to `127.0.0.1` — front it with nginx/Caddy + TLS.
 - Every `/api/*` route and the admin index require `PYANCHOR_TOKEN`.
   `/healthz` and the static runtime bundles stay public.
-- Per-IP token-bucket rate limit on `POST /api/edit` (6 / min default).
+- Per-IP token-bucket rate limits on the write APIs:
+  `POST /api/edit` (6 / min default), `POST /api/cancel` (30 / min default).
 - Bootstrap injection is opt-in via your own env flag (the example
   above uses `NEXT_PUBLIC_PYANCHOR_DEVTOOLS_ENABLED`).
 - **Bootstrap self-disables on untrusted hosts.** By default it only
