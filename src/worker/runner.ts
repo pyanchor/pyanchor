@@ -80,7 +80,10 @@ async function readState() {
 
 async function writeStateUnlocked(state: AiEditState) {
   const next = { ...state, updatedAt: new Date().toISOString() };
-  await fs.writeFile(stateFile, JSON.stringify(next, null, 2), "utf8");
+  // Atomic write: tmp file + rename, same pattern as src/state.ts.
+  const tmp = `${stateFile}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(next, null, 2), "utf8");
+  await fs.rename(tmp, stateFile);
   return next;
 }
 

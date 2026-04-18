@@ -123,6 +123,21 @@ export const pyanchorConfig = {
     .map((value) => value.trim())
     .filter(Boolean),
 
+  // Express trust-proxy preset. Default "loopback" trusts only
+  // 127.0.0.0/8 and ::1 — safe when pyanchor is behind nginx on the
+  // same host. Use "uniquelocal" for private LAN proxies, a CSV of
+  // CIDRs for explicit lists, or "true"/"false" for the all-or-none
+  // extremes. v0.2.5 used true unconditionally, which trusted any
+  // upstream X-Forwarded-* header — exploitable if the sidecar was
+  // ever exposed to the open internet.
+  trustProxy: optionalEnv("PYANCHOR_TRUST_PROXY", "loopback"),
+
+  // Accept the deprecated `?token=<...>` query param (true) or reject
+  // it (false, default since v0.2.6). Query tokens leak via proxy
+  // logs and browser history; prefer the Authorization header or the
+  // session cookie. Flip this on only for legacy callers you control.
+  allowQueryToken: optionalBool("PYANCHOR_ALLOW_QUERY_TOKEN", false),
+
   // ─── paths (derived / overridable) ─────────────────────────────
   stateDir,
   stateFile: path.join(stateDir, "state.json"),

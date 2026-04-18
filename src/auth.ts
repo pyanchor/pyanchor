@@ -36,9 +36,14 @@ function extractToken(request: Request): string {
     return cookieValue.trim();
   }
 
-  const queryToken = request.query.token;
-  if (typeof queryToken === "string") {
-    return queryToken.trim();
+  // Query-string tokens are accepted only when explicitly opted in.
+  // They leak via proxy logs / browser history; the header or cookie
+  // path is always preferable.
+  if (pyanchorConfig.allowQueryToken) {
+    const queryToken = request.query.token;
+    if (typeof queryToken === "string") {
+      return queryToken.trim();
+    }
   }
 
   return "";

@@ -21,7 +21,22 @@ if (pyanchorConfig.fastReload) {
 }
 
 const app = express();
-app.set("trust proxy", true);
+
+// Apply the configured trust-proxy preset. Express accepts:
+//   "loopback" / "linklocal" / "uniquelocal" — preset CIDRs
+//   "true" / "false"                          — all-or-none
+//   numeric string                            — hop count
+//   CSV of IPs/CIDRs                          — explicit allowlist
+const trustProxyValue = pyanchorConfig.trustProxy.toLowerCase();
+if (trustProxyValue === "true") {
+  app.set("trust proxy", true);
+} else if (trustProxyValue === "false") {
+  app.set("trust proxy", false);
+} else if (/^\d+$/.test(trustProxyValue)) {
+  app.set("trust proxy", Number(trustProxyValue));
+} else {
+  app.set("trust proxy", pyanchorConfig.trustProxy);
+}
 
 const runtimeBases = Array.from(new Set([pyanchorConfig.runtimeBasePath, pyanchorConfig.runtimeAliasPath]));
 
@@ -49,9 +64,12 @@ const asyncRoute =
     void handler(request, response, next).catch(next);
   };
 
-// Per-IP token bucket for write-side endpoints (edit/cancel).
-// 6 requests per minute, burst up to 6.
+// Per-IP token bucket for write-side endpoints.
+// edit: 6/min — bounded since each call kicks off an agent run.
+// cancel: 30/min — looser; cancel is cheap but can spam the
+// activity log if unbounded.
 const editLimiter = tokenBucketMiddleware({ capacity: 6, refillPerSecond: 6 / 60 });
+const cancelLimiter = tokenBucketMiddleware({ capacity: 30, refillPerSecond: 30 / 60 });
 
 app.disable("x-powered-by");
 app.use(cookieParser());
@@ -116,6 +134,7 @@ for (const basePath of runtimeBases) {
     `${basePath}/api/cancel`,
     requireAllowedOrigin,
     requireToken,
+    cancelLimiter,
     asyncRoute(async (request, response) => {
       setNoStore(response);
       response.json(await cancelAiEdit(request.body as AiEditCancelInput));

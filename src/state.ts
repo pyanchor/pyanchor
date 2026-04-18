@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 
 import { pyanchorConfig, isPyanchorConfigured } from "./config";
 import type {
@@ -226,7 +226,13 @@ export async function ensureStateDir() {
 export async function writeAiEditState(next: AiEditState) {
   await ensureStateDir();
   const payload = normalizeState({ ...next, updatedAt: new Date().toISOString() });
-  await writeFile(pyanchorConfig.stateFile, JSON.stringify(payload, null, 2), "utf8");
+  // Atomic write: tmp file + rename. Crash mid-write leaves the old
+  // state.json intact instead of producing a half-written JSON the
+  // worker can't parse on restart.
+  const target = pyanchorConfig.stateFile;
+  const tmp = `${target}.tmp`;
+  await writeFile(tmp, JSON.stringify(payload, null, 2), "utf8");
+  await rename(tmp, target);
   return payload;
 }
 

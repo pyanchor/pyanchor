@@ -162,8 +162,24 @@ describe("requireToken", () => {
     expect(res.statusCode).toBe(200); // unchanged
   });
 
-  it("calls next() when correct token is supplied via ?token= query", async () => {
+  it("rejects ?token= by default (v0.2.6+; query tokens deprecated)", async () => {
     process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    delete process.env.PYANCHOR_ALLOW_QUERY_TOKEN;
+    const { requireToken } = await import("../src/auth");
+
+    const req = makeRequest({ queryToken: "supersecret-token-value-12345678" });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireToken(req, res, next);
+
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("accepts ?token= when PYANCHOR_ALLOW_QUERY_TOKEN=true (legacy opt-in)", async () => {
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    process.env.PYANCHOR_ALLOW_QUERY_TOKEN = "true";
     const { requireToken } = await import("../src/auth");
 
     const req = makeRequest({ queryToken: "supersecret-token-value-12345678" });

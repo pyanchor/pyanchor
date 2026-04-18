@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-04-19
+
+### Security
+- **Query-string tokens disabled by default.** `?token=<...>` was
+  always documented as a footgun (leaks via proxy logs / browser
+  history) but `requireToken` accepted it unconditionally. Now
+  rejected unless `PYANCHOR_ALLOW_QUERY_TOKEN=true` is set
+  explicitly. Header (`Authorization: Bearer ...`) and cookie
+  paths are unchanged.
+- **`PYANCHOR_TRUST_PROXY` env added; default flips from `true` to
+  `loopback`.** v0.2.5 unconditionally `app.set('trust proxy',
+  true)`, which trusted any upstream `X-Forwarded-*` header — fine
+  behind a single nginx hop, exploitable if the sidecar was ever
+  misconfigured to listen on a public interface. Default
+  `loopback` trusts only `127.0.0.0/8` and `::1`. Accepts the full
+  Express trust-proxy vocabulary (presets, booleans, hop counts,
+  CSV CIDR lists).
+- **`POST /api/cancel` now rate-limited.** v0.2.5 gated only
+  `/api/edit`. Cancel was unbounded — cheap in itself but easy to
+  abuse to fill the activity log. Default: 30/min per IP (looser
+  than edit's 6/min since cancel is non-mutating).
+
+### Fixed
+- **Atomic `state.json` writes.** Both `src/state.ts` and
+  `src/worker/runner.ts` now write to `state.json.tmp` and rename
+  on top, so a crash mid-write leaves the previous state intact
+  instead of producing half-written JSON the worker can't parse on
+  restart.
+- **Locale-agnostic timestamps in the overlay too.** `src/state.ts`
+  and `src/worker/runner.ts` got the locale fix in v0.1.1, but
+  `src/runtime/overlay.ts:602` still used `Intl.DateTimeFormat("ko-KR", ...)`.
+  Replaced with the same manual `HH:MM:SS` formatter so all three
+  call sites match.
+
+### Notes
+- All five fixes surfaced from an external code review pass after
+  v0.2.5. Two independent reviews flagged the same set, which is
+  the credible signal that this batch was worth shipping fast.
+- v0.2.6 is the first release whose publish was gated by the
+  `pnpm test` step added in v0.2.5. CI ran tests across Node
+  18/20/22 before npm push.
+
 ## [0.2.5] - 2026-04-19
 
 ### Fixed

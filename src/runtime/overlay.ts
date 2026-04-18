@@ -599,11 +599,12 @@ const formatTime = (iso: string | null) => {
     return null;
   }
 
-  return new Intl.DateTimeFormat("ko-KR", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit"
-  }).format(value);
+  // Locale-agnostic HH:MM:SS — same shape regardless of viewer locale,
+  // matches the worker's stampLogLine format.
+  const hh = String(value.getHours()).padStart(2, "0");
+  const mm = String(value.getMinutes()).padStart(2, "0");
+  const ss = String(value.getSeconds()).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
 };
 
 const takeFirstLine = (value: string | null) => {
