@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -12,6 +12,17 @@ import {
 import { selectFramework } from "../frameworks";
 import type { AiEditMessage, AiEditMessageStatus, AiEditMode, AiEditState } from "../shared/types";
 
+import { cancelActiveChildren, runCommand, type RunCommandOptions } from "./child-process";
+import {
+  buildWorkspace,
+  installWorkspaceDependencies,
+  prepareWorkspace,
+  restartFrontend,
+  syncToAppDir,
+  type WorkspaceConfig,
+  type WorkspaceDeps
+} from "./workspace";
+
 const resolvedStateFile = process.env.PYANCHOR_STATE_FILE_PATH;
 
 if (!resolvedStateFile) {
@@ -20,11 +31,23 @@ if (!resolvedStateFile) {
 }
 
 const stateFile = resolvedStateFile;
-const sudoBin = "/usr/bin/sudo";
-const flockBin = "/usr/bin/flock";
 const framework = selectFramework(pyanchorConfig.framework);
 const installCommandShell = pyanchorConfig.installCommand || framework.installCommand;
 const buildCommandShell = pyanchorConfig.buildCommand || framework.buildCommand;
+
+const workspaceConfig: WorkspaceConfig = {
+  workspaceDir: pyanchorConfig.workspaceDir,
+  appDir: pyanchorConfig.appDir,
+  appDirLock: pyanchorConfig.appDirLock,
+  appDirOwner: pyanchorConfig.appDirOwner,
+  openClawUser: pyanchorConfig.openClawUser,
+  freshWorkspace: pyanchorConfig.freshWorkspace,
+  installCommand: installCommandShell,
+  buildCommand: buildCommandShell,
+  installTimeoutMs: pyanchorConfig.installTimeoutMs,
+  buildTimeoutMs: pyanchorConfig.buildTimeoutMs,
+  restartFrontendScript: pyanchorConfig.restartFrontendScript
+};
 const MAX_MESSAGES = pyanchorConfig.maxMessages;
 const MAX_ACTIVITY_LOG = pyanchorConfig.maxActivityLog;
 const MAX_THINKING_CHARS = 8000;
@@ -252,29 +275,6 @@ async function withHeartbeat<T>(
   }
 }
 
-function killChild(child: ChildProcess, signal: NodeJS.Signals) {
-  if (!child.pid) {
-    return;
-  }
-
-  try {
-    child.kill(signal);
-  } catch {}
-}
-
-async function cancelActiveChildren() {
-  const children = Array.from(activeChildren);
-  for (const child of children) {
-    killChild(child, "SIGTERM");
-  }
-
-  await new Promise((resolve) => setTimeout(resolve, 200));
-
-  for (const child of children) {
-    killChild(child, "SIGKILL");
-  }
-}
-
 async function finalizeCancellation(signal: NodeJS.Signals) {
   if (cancelHandled) {
     return;
@@ -285,7 +285,7 @@ async function finalizeCancellation(signal: NodeJS.Signals) {
   cancelController.abort();
   queueLog([`Cancel signal received. (${signal})`, "Tearing down active children."]);
   await flushRuntimeBuffers();
-  await cancelActiveChildren();
+  await cancelActiveChildren(activeChildren);
 
   const state = await readState();
 
@@ -319,207 +319,22 @@ async function finalizeCancellation(signal: NodeJS.Signals) {
   process.exit(0);
 }
 
-function runCommand(
-  command: string,
-  args: string[],
-  options: {
-    cwd?: string;
-    env?: NodeJS.ProcessEnv;
-    input?: string;
-    timeoutMs?: number;
-    onStdoutChunk?: (text: string) => void;
-    onStderrChunk?: (text: string) => void;
-  } = {}
-) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      env: { ...process.env, ...(options.env ?? {}) },
-      stdio: ["pipe", "pipe", "pipe"]
-    });
+// Caller-side options shared with every runCommand call: the worker's
+// activeChildren set + cancel flag, so cancelActiveChildren() and the
+// "rejected with CANCELED_ERROR on close" path keep working after the
+// child-process module became dependency-injected.
+const baseExecOptions = (): Pick<RunCommandOptions, "activeChildren" | "isCancelled" | "canceledError"> => ({
+  activeChildren,
+  isCancelled: () => cancelRequested,
+  canceledError: CANCELED_ERROR
+});
 
-    activeChildren.add(child);
-
-    let stdout = "";
-    let stderr = "";
-    let timeoutId: NodeJS.Timeout | null = null;
-
-    if (options.timeoutMs) {
-      timeoutId = setTimeout(() => {
-        killChild(child, "SIGTERM");
-        setTimeout(() => killChild(child, "SIGKILL"), 5000).unref();
-      }, options.timeoutMs);
-    }
-
-    child.stdout.on("data", (chunk) => {
-      const text = chunk.toString();
-      stdout += text;
-      options.onStdoutChunk?.(text);
-    });
-
-    child.stderr.on("data", (chunk) => {
-      const text = chunk.toString();
-      stderr += text;
-      options.onStderrChunk?.(text);
-    });
-
-    child.on("error", (error) => {
-      activeChildren.delete(child);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      reject(error);
-    });
-
-    child.on("close", (code, signal) => {
-      activeChildren.delete(child);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-
-      if (cancelRequested) {
-        reject(new Error(CANCELED_ERROR));
-        return;
-      }
-
-      if (code === 0) {
-        resolve({ stdout, stderr });
-        return;
-      }
-
-      if (signal) {
-        reject(new Error(`${command} was terminated by ${signal}`));
-        return;
-      }
-
-      reject(new Error(stderr.trim() || stdout.trim() || `${command} exited with ${code}`));
-    });
-
-    if (options.input) {
-      child.stdin.write(options.input);
-    }
-
-    child.stdin.end();
-  });
-}
-
-const runAsOpenClaw = (args: string[], options: Parameters<typeof runCommand>[2] = {}) =>
-  runCommand(sudoBin, ["-u", pyanchorConfig.openClawUser, ...args], options);
-
-const runAsOpenClawInDir = (
-  workingDir: string,
-  args: string[],
-  options: Parameters<typeof runCommand>[2] = {}
-) =>
-  runAsOpenClaw(["bash", "-lc", 'cd "$1" && shift && exec "$@"', "--", workingDir, ...args], options);
-
-// .git and node_modules are always excluded (huge / not source); the
-// framework profile adds its own cache/output dirs (.next for nextjs,
-// dist + .vite for vite).
-const baseRsyncExcludes = [".git", "node_modules"];
-const workspaceRsyncExcludes = [...baseRsyncExcludes, ...framework.workspaceExcludes];
-const buildRsyncExcludeArgs = (excludes: string[]): string[] =>
-  excludes.flatMap((entry) => ["--exclude", entry]);
-
-async function prepareWorkspace() {
-  // Persistent-workspace path (default since v0.2.3) preserves the
-  // workspace's node_modules and framework cache dirs (.next, dist, ...)
-  // across jobs so install and build stay incremental. rsync still
-  // mirrors source files from the app dir with --delete, scoped to
-  // non-excluded paths.
-  if (pyanchorConfig.freshWorkspace) {
-    await runCommand(sudoBin, ["rm", "-rf", pyanchorConfig.workspaceDir]);
-  }
-  await runCommand(sudoBin, ["mkdir", "-p", pyanchorConfig.workspaceDir]);
-
-  await runCommand(flockBin, [
-    "-s",
-    "-w",
-    "60",
-    pyanchorConfig.appDirLock,
-    sudoBin,
-    "rsync",
-    "-a",
-    "--delete",
-    ...buildRsyncExcludeArgs(workspaceRsyncExcludes),
-    `${pyanchorConfig.appDir}/`,
-    `${pyanchorConfig.workspaceDir}/`
-  ]);
-
-  // chown is idempotent on persistent workspaces; the agent user owning
-  // unchanged hardlinks is fine because rsync (without --link-dest)
-  // doesn't create cross-tree hardlinks.
-  await runCommand(sudoBin, [
-    "chown",
-    "-R",
-    `${pyanchorConfig.openClawUser}:${pyanchorConfig.openClawUser}`,
-    pyanchorConfig.workspaceDir
-  ]);
-}
-
-function installWorkspaceDependencies() {
-  return runAsOpenClawInDir(
-    pyanchorConfig.workspaceDir,
-    ["bash", "-lc", installCommandShell],
-    {
-      timeoutMs: pyanchorConfig.installTimeoutMs,
-      onStdoutChunk: (text) => queueLog([`[install] ${text}`]),
-      onStderrChunk: (text) => queueLog([`[install] ${text}`])
-    }
-  );
-}
-
-function buildWorkspace() {
-  return runAsOpenClawInDir(
-    pyanchorConfig.workspaceDir,
-    ["bash", "-lc", buildCommandShell],
-    {
-      timeoutMs: pyanchorConfig.buildTimeoutMs,
-      onStdoutChunk: (text) => queueLog([`[build] ${text}`]),
-      onStderrChunk: (text) => queueLog([`[build] ${text}`])
-    }
-  );
-}
-
-// Agent scratch artifacts that must NEVER reach the app dir on sync-back.
-// OpenClaw drops these into the workspace root; other adapters add
-// nothing here. Keep this list narrow — anything else lives in the
-// framework profile's workspaceExcludes.
-const agentScratchExcludes = [
-  ".openclaw",
-  "AGENTS.md",
-  "BOOTSTRAP.md",
-  "EDIT_BRIEF.md",
-  "HEARTBEAT.md",
-  "IDENTITY.md",
-  "SOUL.md",
-  "TOOLS.md",
-  "USER.md"
-];
-
-async function syncToAppDir() {
-  await runCommand(flockBin, [
-    "-x",
-    "-w",
-    "60",
-    pyanchorConfig.appDirLock,
-    sudoBin,
-    "rsync",
-    "-a",
-    "--delete",
-    ...buildRsyncExcludeArgs([...workspaceRsyncExcludes, ...agentScratchExcludes]),
-    `${pyanchorConfig.workspaceDir}/`,
-    `${pyanchorConfig.appDir}/`
-  ]);
-
-  if (process.platform === "linux") {
-    await runCommand(sudoBin, ["chown", "-R", pyanchorConfig.appDirOwner, pyanchorConfig.appDir]);
-  }
-}
-
-function restartFrontend() {
-  return runCommand(pyanchorConfig.restartFrontendScript, []);
-}
+const workspaceDeps: WorkspaceDeps = {
+  runCommand,
+  framework,
+  baseExecOptions,
+  log: (lines) => queueLog(lines)
+};
 
 async function dequeueNext() {
   const state = await readState();
@@ -711,7 +526,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
       step: "Preparing workspace.",
       label: "Preparing"
     },
-    () => prepareWorkspace()
+    () => prepareWorkspace(workspaceConfig, workspaceDeps)
   );
 
   if (mode === "edit" && !pyanchorConfig.fastReload) {
@@ -720,7 +535,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
         step: "Installing workspace dependencies.",
         label: "Install"
       },
-      () => installWorkspaceDependencies()
+      () => installWorkspaceDependencies(workspaceConfig, workspaceDeps)
     );
   }
 
@@ -758,7 +573,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
         step: "Validating with a workspace build.",
         label: "Build"
       },
-      () => buildWorkspace()
+      () => buildWorkspace(workspaceConfig, workspaceDeps)
     );
   }
 
@@ -767,7 +582,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
       step: "Syncing edits back to the app dir.",
       label: "Syncing"
     },
-    () => syncToAppDir()
+    () => syncToAppDir(workspaceConfig, workspaceDeps)
   );
 
   if (shouldRestartAfterEdit && !pyanchorConfig.fastReload) {
@@ -794,7 +609,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
       )
     );
 
-    await restartFrontend();
+    await restartFrontend(workspaceConfig, workspaceDeps);
     return false;
   }
 

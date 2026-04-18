@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-04-19
+
+First slice of the deferred `worker/runner.ts` decomposition tracked
+since v0.5.0. Two pure I/O modules carved out, each tested to 100%.
+
+### Added
+- **`src/worker/child-process.ts`** — `runCommand`, `killChild`,
+  `cancelActiveChildren`. Pure helpers around `node:child_process`
+  with NO module-level state. The runner injects its own
+  `Set<ChildProcess>` and a cancel-flag callback (`isCancelled`)
+  via `RunCommandOptions` instead of the helpers reading runner
+  globals. This is the seam that makes the cancel-on-SIGTERM and
+  process-tracking behavior unit-testable.
+- **`src/worker/workspace.ts`** — `prepareWorkspace`,
+  `installWorkspaceDependencies`, `buildWorkspace`, `syncToAppDir`,
+  `restartFrontend`, plus the `runAsOpenClaw` / `runAsOpenClawInDir`
+  sudo wrappers and the rsync-exclude helpers. Operations take
+  `(WorkspaceConfig, WorkspaceDeps)` rather than reading
+  `pyanchorConfig` directly, so tests can assert exact rsync /
+  install / build argv against any framework profile and any
+  freshWorkspace value.
+
+  Exposed constants for downstream introspection:
+  `BASE_RSYNC_EXCLUDES` (`.git`, `node_modules`, always on),
+  `AGENT_SCRATCH_EXCLUDES` (`.openclaw`, `EDIT_BRIEF.md`, …, only on
+  sync-back), and the helpers `buildRsyncExcludeArgs(excludes)` /
+  `workspaceRsyncExcludes(framework)`.
+
+### Changed
+- **`src/worker/runner.ts`** went from **860 → 675 LOC** (-22%).
+  The remaining file is now lifecycle orchestration (state I/O,
+  log/heartbeat buffering, dequeue, finalize, processJob, main).
+  Behavior is bit-identical: every previously-inlined call site now
+  delegates to the extracted module with the same arguments.
+
+### Tests
+- `tests/worker/child-process.test.ts` — **16 tests** covering
+  exit-code paths, stdin forwarding, env injection, abort/timeout
+  kill, child tracking, and the cancel-on-close error.
+- `tests/worker/workspace.test.ts` — **23 tests** covering rsync
+  exclude composition (nextjs vs vite), sudo wrapping, freshWorkspace
+  branching, install/build command + timeout forwarding, sync-back
+  excludes including agent scratch, linux-only chown, and restart
+  script invocation. Uses a mocked `runCommand` to assert exact argv.
+- Total: **205 passing tests** across 16 files (was 166 / 14).
+
+### Coverage
+- Whole-repo: 39.5% → **45.3%** (+5.8 pp).
+- `src/worker/child-process.ts`: **100% statements / 94% branches**.
+- `src/worker/workspace.ts`: **100% statements / 91% branches**.
+- `src/worker/runner.ts` itself stays at 0% (lifecycle orchestration
+  needs sandboxed integration tests, slated for v0.6.2).
+
+### Compatibility
+No runtime behavior change. The runner spawns the same processes,
+runs the same rsync commands with the same excludes, and observes
+the same cancel signals. The refactor is structurally invasive but
+behaviorally surgical — verified by all 166 pre-existing tests
+remaining green throughout the diff.
+
+### Roadmap
+- **v0.6.1**: extract `worker/state-io.ts` + `worker/runtime-buffer.ts`
+  from runner.ts (state read/write helpers, log/thinking flush queue).
+- **v0.6.2**: extract `worker/lifecycle.ts` (dequeue, finalize,
+  runAdapterAgent) and add integration tests with a stubbed
+  AgentRunner.
+- **v0.6.3** (separate): `runtime/overlay.ts` decomposition (1074 LOC)
+  + Playwright e2e for the in-page overlay. Bigger lift; tracked
+  as its own initiative.
+
 ## [0.5.1] - 2026-04-19
 
 Codex review pass on v0.5.0 surfaced four findings — three doc/security
