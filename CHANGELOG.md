@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-04-19
+
+### Added
+- **Test coverage push.** Total tests went from 94 → 166 (+72) across
+  14 files. Statement coverage on the `src/` core (sidecar process,
+  excluding the browser overlay and the side-effect-heavy worker
+  process) jumped from 26% → **70.7%**. Whole-repo coverage including
+  the deferred browser / worker modules: 18.4% → **39.5%**.
+
+  New test files in this release:
+
+  | File | Tests | Covers |
+  | --- | --- | --- |
+  | `tests/state.test.ts` | 17 | atomic write, normalizer, queue, cancel, prompt-length cap, dead-pid recovery |
+  | `tests/sessions.test.ts` | 11 | createSession, validateSession (including expiry eviction), revoke, prune-when-full + drop-oldest fallback |
+  | `tests/agents/openclaw-exec.test.ts` | 13 | streamSpawn (stdout/stderr/exit/abort/timeout/env/stdin), execBuffered |
+  | `tests/agents/adapter-briefs.test.ts` | 15 | codex / aider / claude-code prompt construction; framework hint splicing across nextjs and vite profiles |
+  | `tests/admin.test.ts` | 10 | renderAdminHtml structure + HTML-escape behavior (path injection, JSON pre escaping) |
+  | `tests/agents/registry.test.ts` | 6 | selectAgent factory across all four built-in adapters + unknown-agent error |
+
+  After this release the per-module breakdown is:
+
+  | Module | Coverage |
+  | --- | --- |
+  | `admin.ts` | 100% |
+  | `auth.ts` | 100% |
+  | `sessions.ts` | 100% |
+  | `frameworks/index.ts` + `nextjs.ts` | 100% |
+  | `agents/openclaw/brief.ts` | 100% |
+  | `agents/openclaw/parse.ts` | 100% |
+  | `agents/index.ts` | 100% |
+  | `agents/openclaw/exec.ts` | 95% |
+  | `origin.ts` | 93% |
+  | `frameworks/vite.ts` | 89% |
+  | `rate-limit.ts` | 88% |
+  | `state.ts` | 82% |
+  | `config.ts` | 75% |
+
+### Changed
+- **`buildBrief` exported** from `src/agents/codex.ts`, `src/agents/aider.ts`,
+  and `src/agents/claude-code.ts`. These were previously module-local;
+  they're stable pure functions that benefit from direct unit tests
+  without spawn mocking. No runtime behavior change.
+
+### Deferred
+Two large surfaces are intentionally still at 0% coverage and tracked
+for v0.5.1 / v0.6.0:
+- `src/runtime/overlay.ts` (1074 LOC) and `src/runtime/bootstrap.ts`
+  (79 LOC) — DOM code that needs Playwright e2e against a real page.
+- `src/worker/runner.ts` (860 LOC) — heavy `sudo` / `rsync` / `flock`
+  side effects; needs a sandboxed integration test (likely a Docker
+  scratch workspace) rather than the unit-mocking style the rest of
+  the suite uses.
+
 ## [0.4.0] - 2026-04-19
 
 ### Added

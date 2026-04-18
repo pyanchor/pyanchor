@@ -22,7 +22,7 @@ function formatRecent(messages: AgentRunInput["recentMessages"]): string {
     .join("\n");
 }
 
-function buildBrief(input: AgentRunInput): string {
+export function buildBrief(input: AgentRunInput): string {
   const sections: string[] = [];
 
   if (input.targetPath) {
