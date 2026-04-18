@@ -7,9 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-19
+
 ### Added
-- `codex` adapter (shells out to the OpenAI Codex CLI)
-- `aider` adapter (shells out to aider-chat)
+- **`codex` adapter** (`src/agents/codex.ts`, ~225 LOC) — shells out to
+  the OpenAI Codex CLI (`codex exec --json --skip-git-repo-check
+  --full-auto --cd <workspace> [-m <model>] "<prompt>"`). Parses JSONL
+  events for `agent_message` (summary) and `reasoning` (thinking).
+  Helpful `ENOENT` error pointing at `npm i -g @openai/codex`.
+- **`aider` adapter** (`src/agents/aider.ts`, ~232 LOC) — shells out to
+  aider-chat (`aider --no-stream --yes --message <prompt> [files...]`).
+  Includes a `guessFilesForRoute` heuristic that maps `/login` →
+  `app/login/page.tsx`, `app/(auth)/login/page.tsx`, `pages/login.tsx`,
+  etc. `--dry-run` for chat mode. Helpful `ENOENT` error pointing at
+  `pip install aider-chat`.
+- **Vitest test scaffold** + 15 smoke tests covering `auth.ts` (100%),
+  `origin.ts` (93.1%), `rate-limit.ts` (81.1%). `pnpm test` and
+  `pnpm test:coverage` scripts. Pinned to `vitest@^2.1.9` so Node 18
+  stays supported (vitest@4 requires Node 22+).
+- **`docs/roadmap.md`** — multi-release plan for v0.2.0 → v0.3.0 with
+  effort/risk/dependency for every item, plus a parallel-execution map
+  for which tasks can run in worktrees concurrently.
+- `PYANCHOR_CODEX_BIN` and `PYANCHOR_AIDER_BIN` env overrides (default
+  `codex` / `aider` resolved via PATH).
+
+### Changed
+- README + `docs/adapters.md` flip both new adapter rows from 🟡 v0.2.0
+  to ✅ shipped, with one-line install hints.
+- `docs/adapters.md` now links each backend's source file from the
+  built-in matrix.
+
+### Notes
+- The OpenClaw flow is **still inline** in `src/worker/runner.ts` and
+  selected via the `OPENCLAW_INLINE` marker. Extracting it behind the
+  `AgentRunner` interface (Tier S-2, ~14h) is the next focus and lands
+  in the upcoming v0.2.1 patch.
+- Three minor source-code rough edges surfaced by the test pass and
+  flagged for v0.2.1 patches: `rate-limit.ts:34` (X-Forwarded-For
+  fallback unreachable when `req.ip` is set), `rate-limit.ts:47`
+  (Retry-After computed against just-refilled bucket — minor in
+  practice), `auth.ts:51` (redundant guard after `extractToken`).
+- vitest@4 has the right shape but uses `node:util.styleText` (Node 22+).
+  Pinning at v2.1.9 buys us full Node 18 support; we'll bump when we
+  raise `engines.node` to 20.
 
 ## [0.1.1] - 2026-04-19
 
