@@ -17,6 +17,8 @@
   },
   "include": [
     "src/**/*.ts",
-    "build.mjs"
+    "tests/**/*.ts",
+    "build.mjs",
+    "vitest.config.ts"
   ]
 }
