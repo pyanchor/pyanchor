@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-04-19
+
+Second slice of the worker decomposition. Two more pure modules
+carved out of `worker/runner.ts`, both tested to 100% statement
+coverage.
+
+### Added
+- **`src/worker/state-io.ts`** — `createStateIO({ stateFile })`
+  factory returning `{ readState, writeState, updateState }`. The
+  promise-chain serializer (`stateLock`) lives inside the closure
+  so each call to `createStateIO()` gets an independent instance,
+  which is what makes the locking and atomic-write semantics
+  unit-testable. Atomic write pattern (tmp + rename) preserved
+  bit-identical from runner.ts.
+- **`src/worker/runtime-buffer.ts`** — `createRuntimeBuffer({ updateState,
+  maxActivityLog, maxThinkingChars, flushIntervalMs? })` factory
+  returning `{ queueLog, queueThinking, flushRuntimeBuffers,
+  pulseState, withHeartbeat, ... }`. The 500ms coalesce timer and
+  the pending-line / pending-thinking queues are closure-private,
+  so each instance has its own flush state and tests can use fake
+  timers to drive the coalesce window deterministically. Pure
+  helpers (`stampLogLine`, `trimLogWithCap`, `mergeThinkingWithCap`)
+  exposed as standalone exports for direct unit testing.
+
+### Changed
+- **`src/worker/runner.ts`** went from **675 → 530 LOC** (-145 / -22%).
+  Combined with v0.6.0 the decomposition has now removed **38%** of
+  the original 860-LOC file. What remains is lifecycle orchestration:
+  cancel handling, dequeueNext, finalizeSuccess/Failure, runAdapterAgent,
+  processJob, main. That's the v0.6.2 target.
+
+### Tests
+- `tests/worker/state-io.test.ts` — **9 tests** covering atomic
+  round-trip, missing-array repair on read, mutator clone-on-throw
+  isolation, lock-chain serialization (20 concurrent updateState
+  calls observe each other in order), async mutator support.
+- `tests/worker/runtime-buffer.test.ts` — **20 tests** covering
+  the pure helpers (stamp/trim/merge with cap dedupe), coalesce
+  behavior with `vi.useFakeTimers()`, multi-line splitting,
+  whitespace dropping, log cap enforcement, thinking merge,
+  pulseState heartbeat write, and `withHeartbeat` cleanup on
+  task throw.
+- Total: **234 passing tests** across 18 files (was 205 / 16).
+
+### Coverage
+- Whole-repo: 45.3% → **49.4%** (+4.1 pp).
+- `src/worker/` directory: 27.5% → **44.5%**.
+- All four extracted worker modules now at **100% statements**:
+  child-process, workspace, state-io, runtime-buffer.
+- `src/worker/runner.ts` itself stays at 0% (lifecycle orchestration
+  needs sandboxed integration tests, slated for v0.6.2).
+
+### Compatibility
+No runtime behavior change. The runner reads/writes state with the
+same atomic pattern, coalesces logs at the same 500ms cadence, and
+fires heartbeats at the same default 8s interval. The constants
+`MAX_ACTIVITY_LOG` and `MAX_THINKING_CHARS` (8000) moved into the
+runtime-buffer factory but are sourced from the same env-driven
+defaults.
+
 ## [0.6.0] - 2026-04-19
 
 First slice of the deferred `worker/runner.ts` decomposition tracked

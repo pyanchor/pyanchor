@@ -1,5 +1,4 @@
 import { type ChildProcess } from "node:child_process";
-import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import { randomUUID } from "node:crypto";
 
@@ -13,6 +12,8 @@ import { selectFramework } from "../frameworks";
 import type { AiEditMessage, AiEditMessageStatus, AiEditMode, AiEditState } from "../shared/types";
 
 import { cancelActiveChildren, runCommand, type RunCommandOptions } from "./child-process";
+import { createRuntimeBuffer } from "./runtime-buffer";
+import { createStateIO } from "./state-io";
 import {
   buildWorkspace,
   installWorkspaceDependencies,
@@ -35,6 +36,25 @@ const framework = selectFramework(pyanchorConfig.framework);
 const installCommandShell = pyanchorConfig.installCommand || framework.installCommand;
 const buildCommandShell = pyanchorConfig.buildCommand || framework.buildCommand;
 
+const stateIO = createStateIO({ stateFile });
+const { readState, writeState, updateState } = stateIO;
+
+const runtimeBuffer = createRuntimeBuffer({
+  updateState,
+  maxActivityLog: pyanchorConfig.maxActivityLog,
+  maxThinkingChars: 8000
+});
+const {
+  queueLog,
+  queueThinking,
+  flushRuntimeBuffers,
+  pulseState,
+  withHeartbeat,
+  stampLogLine,
+  trimLog,
+  mergeThinking
+} = runtimeBuffer;
+
 const workspaceConfig: WorkspaceConfig = {
   workspaceDir: pyanchorConfig.workspaceDir,
   appDir: pyanchorConfig.appDir,
@@ -48,9 +68,10 @@ const workspaceConfig: WorkspaceConfig = {
   buildTimeoutMs: pyanchorConfig.buildTimeoutMs,
   restartFrontendScript: pyanchorConfig.restartFrontendScript
 };
+// MAX_ACTIVITY_LOG and MAX_THINKING_CHARS now live inside the
+// runtime-buffer factory below; only message-list trimming stays
+// here (used by pushMessage in the lifecycle path).
 const MAX_MESSAGES = pyanchorConfig.maxMessages;
-const MAX_ACTIVITY_LOG = pyanchorConfig.maxActivityLog;
-const MAX_THINKING_CHARS = 8000;
 const CANCELED_ERROR = "Job canceled by user.";
 
 const shouldRestartAfterEdit =
@@ -59,8 +80,6 @@ const shouldRestartAfterEdit =
     process.platform === "linux" &&
     fsSync.existsSync(pyanchorConfig.restartFrontendScript));
 
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
-
 const activeJob = {
   jobId: process.env.PYANCHOR_JOB_ID || "",
   prompt: process.env.PYANCHOR_JOB_PROMPT || "",
@@ -68,92 +87,10 @@ const activeJob = {
   mode: process.env.PYANCHOR_JOB_MODE === "chat" ? "chat" : "edit"
 } as const;
 
-let stateLock = Promise.resolve();
 let cancelRequested = false;
 let cancelHandled = false;
 const cancelController = new AbortController();
-let pendingLogLines: string[] = [];
-let pendingThinkingSegments: string[] = [];
-let flushTimer: NodeJS.Timeout | null = null;
-
 const activeChildren = new Set<ChildProcess>();
-
-const withStateLock = async <T>(task: () => Promise<T>) => {
-  const next = stateLock.then(task, task);
-  stateLock = next.then(
-    () => undefined,
-    () => undefined
-  );
-  return next;
-};
-
-async function readStateUnlocked() {
-  const raw = JSON.parse(await fs.readFile(stateFile, "utf8")) as AiEditState;
-  if (!Array.isArray(raw.queue)) {
-    raw.queue = [];
-  }
-  if (!Array.isArray(raw.messages)) {
-    raw.messages = [];
-  }
-  if (!Array.isArray(raw.activityLog)) {
-    raw.activityLog = [];
-  }
-  return raw;
-}
-
-async function readState() {
-  return withStateLock(() => readStateUnlocked());
-}
-
-async function writeStateUnlocked(state: AiEditState) {
-  const next = { ...state, updatedAt: new Date().toISOString() };
-  // Atomic write: tmp file + rename, same pattern as src/state.ts.
-  const tmp = `${stateFile}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(next, null, 2), "utf8");
-  await fs.rename(tmp, stateFile);
-  return next;
-}
-
-async function writeState(state: AiEditState) {
-  return withStateLock(() => writeStateUnlocked(state));
-}
-
-async function updateState(mutator: (state: AiEditState) => AiEditState | Promise<AiEditState>) {
-  return withStateLock(async () => {
-    const current = await readStateUnlocked();
-    const next = await mutator(clone(current));
-    return writeStateUnlocked(next);
-  });
-}
-
-const trimLog = (lines: string[]) => lines.filter(Boolean).slice(-MAX_ACTIVITY_LOG);
-
-const mergeThinking = (current: string | null, incoming: string | null) => {
-  const next = incoming?.trim();
-  if (!next) {
-    return current;
-  }
-
-  if (!current) {
-    return next.slice(-MAX_THINKING_CHARS);
-  }
-
-  if (next.includes(current)) {
-    return next.slice(-MAX_THINKING_CHARS);
-  }
-
-  if (current.includes(next)) {
-    return current.slice(-MAX_THINKING_CHARS);
-  }
-
-  return `${current}\n\n${next}`.slice(-MAX_THINKING_CHARS);
-};
-
-const stampLogLine = (message: string) => {
-  const now = new Date();
-  const time = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-  return `[${time}] ${message}`;
-};
 
 const createMessage = ({
   jobId,
@@ -192,88 +129,6 @@ const pushMessage = (state: AiEditState, message: AiEditMessage) => ({
   ...state,
   messages: [...state.messages, message].slice(-MAX_MESSAGES)
 });
-
-function queueLog(lines: string[]) {
-  const next = lines
-    .flatMap((line) => line.split(/\r?\n/g))
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map(stampLogLine);
-
-  if (next.length === 0) {
-    return;
-  }
-
-  pendingLogLines.push(...next);
-  scheduleRuntimeFlush();
-}
-
-function queueThinking(text: string) {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return;
-  }
-
-  pendingThinkingSegments.push(trimmed);
-  scheduleRuntimeFlush();
-}
-
-function scheduleRuntimeFlush() {
-  if (flushTimer) {
-    return;
-  }
-
-  flushTimer = setTimeout(() => {
-    flushTimer = null;
-    void flushRuntimeBuffers();
-  }, 500);
-}
-
-async function flushRuntimeBuffers() {
-  const logLines = pendingLogLines;
-  const thinkingSegments = pendingThinkingSegments;
-  pendingLogLines = [];
-  pendingThinkingSegments = [];
-
-  if (logLines.length === 0 && thinkingSegments.length === 0) {
-    return;
-  }
-
-  await updateState((state) => ({
-    ...state,
-    activityLog: trimLog([...state.activityLog, ...logLines]),
-    thinking: thinkingSegments.reduce((acc, segment) => mergeThinking(acc, segment), state.thinking)
-  }));
-}
-
-async function pulseState({ step, label }: { step?: string | null; label?: string | null }) {
-  const timestamp = new Date().toISOString();
-  await flushRuntimeBuffers();
-  await updateState((state) => ({
-    ...state,
-    currentStep: step ?? state.currentStep,
-    heartbeatAt: timestamp,
-    heartbeatLabel: label ?? state.heartbeatLabel
-  }));
-}
-
-async function withHeartbeat<T>(
-  config: { step: string; label: string; intervalMs?: number },
-  task: () => Promise<T>
-) {
-  queueLog([config.step]);
-  await pulseState({ step: config.step, label: config.label });
-
-  const timer = setInterval(() => {
-    void pulseState({ step: config.step, label: config.label }).catch(() => undefined);
-  }, config.intervalMs ?? 8000);
-
-  try {
-    return await task();
-  } finally {
-    clearInterval(timer);
-  }
-}
 
 async function finalizeCancellation(signal: NodeJS.Signals) {
   if (cancelHandled) {
