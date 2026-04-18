@@ -1,15 +1,24 @@
+import cookieParser from "cookie-parser";
 import express, { type NextFunction, type Request, type Response } from "express";
 import path from "node:path";
 
 import { renderAdminHtml } from "./admin";
 import { pyanchorConfig, validateConfig } from "./config";
-import { requireToken } from "./auth";
+import { SESSION_COOKIE, requireToken } from "./auth";
 import { requireAllowedOrigin } from "./origin";
 import { tokenBucketMiddleware } from "./rate-limit";
 import { cancelAiEdit, getAdminHealth, readAiEditState, startAiEdit } from "./state";
 import type { AiEditCancelInput, AiEditStartInput } from "./shared/types";
 
 validateConfig();
+
+if (pyanchorConfig.fastReload) {
+  console.warn(
+    "[pyanchor] PYANCHOR_FAST_RELOAD is on — workspace install, build, and " +
+      "frontend restart are SKIPPED. This is for `next dev`-served pages only. " +
+      "Do NOT enable in production."
+  );
+}
 
 const app = express();
 app.set("trust proxy", true);
@@ -45,7 +54,10 @@ const asyncRoute =
 const editLimiter = tokenBucketMiddleware({ capacity: 6, refillPerSecond: 6 / 60 });
 
 app.disable("x-powered-by");
+app.use(cookieParser());
 app.use(express.json({ limit: "128kb" }));
+
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
 // ─── public: liveness + static runtime bundles ─────────────────────────
 app.get("/healthz", (_request, response) => {
@@ -60,6 +72,26 @@ for (const basePath of runtimeBases) {
 
 // ─── authed: runtime + admin API ───────────────────────────────────────
 for (const basePath of runtimeBases) {
+  // Exchange a Bearer header for an HttpOnly session cookie.
+  // Cookie inherits the request's secure flag (true behind a TLS proxy
+  // when `trust proxy` is on, false on plain http://localhost dev).
+  app.post(
+    `${basePath}/api/session`,
+    requireAllowedOrigin,
+    requireToken,
+    (request: Request, response: Response) => {
+      setNoStore(response);
+      response.cookie(SESSION_COOKIE, pyanchorConfig.token, {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: request.secure,
+        maxAge: SESSION_TTL_MS,
+        path: "/"
+      });
+      response.json({ ok: true, ttlMs: SESSION_TTL_MS });
+    }
+  );
+
   app.get(
     `${basePath}/api/status`,
     requireToken,

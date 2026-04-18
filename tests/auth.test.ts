@@ -27,6 +27,7 @@ interface MockResponse extends Response {
 function makeRequest(opts: {
   authorization?: string;
   queryToken?: string;
+  cookies?: Record<string, string>;
 } = {}): Request {
   const headers: Record<string, string> = {};
   if (opts.authorization !== undefined) headers.authorization = opts.authorization;
@@ -35,7 +36,8 @@ function makeRequest(opts: {
     header(name: string): string | undefined {
       return headers[name.toLowerCase()];
     },
-    query: opts.queryToken !== undefined ? { token: opts.queryToken } : {}
+    query: opts.queryToken !== undefined ? { token: opts.queryToken } : {},
+    cookies: opts.cookies
   } as unknown as Request;
 
   return req;
@@ -171,6 +173,38 @@ describe("requireToken", () => {
     requireToken(req, res, next);
 
     expect(next).toHaveBeenCalledOnce();
+  });
+
+  it("calls next() when correct token is in the pyanchor_session cookie", async () => {
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireToken, SESSION_COOKIE } = await import("../src/auth");
+
+    const req = makeRequest({
+      cookies: { [SESSION_COOKIE]: "supersecret-token-value-12345678" }
+    });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireToken(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("returns 401 when cookie holds the wrong token", async () => {
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireToken, SESSION_COOKIE } = await import("../src/auth");
+
+    const req = makeRequest({
+      cookies: { [SESSION_COOKIE]: "wrong-token-value-1234567890ab" }
+    });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireToken(req, res, next);
+
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it("rejects a wrong-length token (timing-safe compare requires equal lengths)", async () => {

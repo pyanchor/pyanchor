@@ -20,10 +20,20 @@ function safeEqual(provided: string): boolean {
   return cryptoTimingSafeEqual(providedBuf, tokenBytes);
 }
 
+/** Cookie name set by `POST /api/session` and read by requireToken. */
+export const SESSION_COOKIE = "pyanchor_session";
+
 function extractToken(request: Request): string {
   const header = request.header("authorization") ?? "";
   if (header.toLowerCase().startsWith("bearer ")) {
     return header.slice(7).trim();
+  }
+
+  // cookie-parser augments req.cookies; tolerate its absence in raw tests
+  const cookies = (request as Request & { cookies?: Record<string, unknown> }).cookies;
+  const cookieValue = cookies?.[SESSION_COOKIE];
+  if (typeof cookieValue === "string" && cookieValue.trim()) {
+    return cookieValue.trim();
   }
 
   const queryToken = request.query.token;

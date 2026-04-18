@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-04-19
+
+### Added
+- **Fast-reload mode (`PYANCHOR_FAST_RELOAD=true`).** When enabled,
+  the worker skips `installWorkspaceDependencies`, the `next build`
+  step, and the frontend restart — the rsync of the workspace back
+  into `PYANCHOR_APP_DIR` is what triggers Next.js HMR. Drops the
+  per-edit cycle from ~30s-3min to ~1-2s in dev. Sidecar logs a
+  one-line warning at startup when the flag is on; documented as
+  `next dev`-only in `.env.example`.
+- **Cookie-based session tokens.** New `POST /_pyanchor/api/session`
+  exchanges a Bearer token for an `HttpOnly` + `SameSite=Strict` +
+  conditionally `Secure` cookie (`pyanchor_session`, 24h TTL).
+  `requireToken` now accepts the cookie alongside `Authorization:
+  Bearer` and `?token=<>` (priority: header → cookie → query).
+  Bootstrap fires the exchange in the background on load, so the
+  in-page overlay's subsequent fetches authenticate via cookie
+  without needing the token in JS-readable headers.
+- `pyanchorConfig.fastReload` / `pyanchorConfig.agent` surfaced via
+  `GET /api/admin/health` (new `agent`, `fastReload` fields on
+  `AdminHealth`).
+- `optionalBool` config helper.
+- 2 new auth tests covering the cookie path.
+
+### Changed
+- `cookie-parser` added as a runtime dependency (~13 kB unpacked).
+
+### Notes
+- **Cookie-CSRF**: the cookie is auto-sent on same-origin requests,
+  which is desired but expands attack surface for misconfigured
+  deployments. SECURITY.md now explicitly recommends pairing cookie
+  auth with `PYANCHOR_ALLOWED_ORIGINS` for defense in depth, on top
+  of `SameSite=Strict`.
+- The bootstrap `data-pyanchor-token` attribute is still required —
+  the cookie can only be set by the sidecar after the first Bearer
+  exchange. v0.3.0 will explore one-shot exchange tickets that
+  remove the attribute entirely.
+
 ## [0.2.1] - 2026-04-19
 
 ### Changed

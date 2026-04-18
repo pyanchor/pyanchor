@@ -66,4 +66,6 @@ export interface AdminHealth {
   appDir: string;
   workerScript: string;
   healthcheckUrl: string;
+  agent: string;
+  fastReload: boolean;
 }

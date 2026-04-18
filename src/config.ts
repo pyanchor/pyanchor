@@ -17,6 +17,13 @@ const optionalNumber = (name: string, fallback: number): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+const optionalBool = (name: string, fallback: boolean): boolean => {
+  const value = env[name]?.trim().toLowerCase();
+  if (!value) return fallback;
+  if (value === "true" || value === "1" || value === "yes" || value === "on") return true;
+  if (value === "false" || value === "0" || value === "no" || value === "off") return false;
+  return fallback;
+};
 
 const resolveServiceRoot = () => {
   if (env.PYANCHOR_SERVICE_ROOT) {
@@ -89,6 +96,12 @@ export const pyanchorConfig = {
   agentTimeoutSeconds: optionalNumber("PYANCHOR_AGENT_TIMEOUT_S", 900),
   installTimeoutMs: optionalNumber("PYANCHOR_INSTALL_TIMEOUT_MS", 600_000),
   buildTimeoutMs: optionalNumber("PYANCHOR_BUILD_TIMEOUT_MS", 900_000),
+
+  // ─── dev ergonomics ────────────────────────────────────────────
+  // When true: skip workspace install + next build + frontend restart;
+  // rsync alone triggers Next.js HMR. Drops edit cycle from ~30s-3min
+  // to ~1-2s. ONLY safe when the host page is `next dev`-served.
+  fastReload: optionalBool("PYANCHOR_FAST_RELOAD", false),
 
   // ─── server ────────────────────────────────────────────────────
   port: optionalNumber("PYANCHOR_PORT", 3010),

@@ -699,7 +699,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
     () => prepareWorkspace()
   );
 
-  if (mode === "edit") {
+  if (mode === "edit" && !pyanchorConfig.fastReload) {
     await withHeartbeat(
       {
         step: "Installing workspace dependencies.",
@@ -737,13 +737,15 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
     return true;
   }
 
-  await withHeartbeat(
-    {
-      step: "Validating with a workspace build.",
-      label: "Build"
-    },
-    () => buildWorkspace()
-  );
+  if (!pyanchorConfig.fastReload) {
+    await withHeartbeat(
+      {
+        step: "Validating with a workspace build.",
+        label: "Build"
+      },
+      () => buildWorkspace()
+    );
+  }
 
   await withHeartbeat(
     {
@@ -753,7 +755,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
     () => syncToAppDir()
   );
 
-  if (shouldRestartAfterEdit) {
+  if (shouldRestartAfterEdit && !pyanchorConfig.fastReload) {
     await updateState((state) =>
       pushMessage(
         {

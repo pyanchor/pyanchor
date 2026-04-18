@@ -55,6 +55,18 @@ const isTrustedHost = (hostname: string, allowList: string[]): boolean => {
 
   window.__PyanchorConfig = { baseUrl, token };
 
+  // Best-effort: exchange the Bearer token for an HttpOnly session cookie
+  // so subsequent same-origin API calls authenticate via cookie and the
+  // token doesn't have to ride in JS-readable headers. Silent on failure
+  // (the overlay still falls back to the Bearer header in window config).
+  if (token) {
+    void fetch(`${baseUrl}/api/session`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(() => undefined);
+  }
+
   if (document.querySelector("script[data-pyanchor-overlay='1']")) {
     return;
   }

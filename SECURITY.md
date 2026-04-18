@@ -51,12 +51,29 @@ in-page bootstrap injection on a domain that anonymous users can reach.
 
 ## Token transport
 
-The sidecar accepts the token via:
+The sidecar accepts the token via three transports:
 
-- `Authorization: Bearer <token>` — preferred for API calls.
+- `Authorization: Bearer <token>` — preferred for explicit API calls.
+- **`pyanchor_session` cookie** (since v0.2.2) — set by
+  `POST /api/session` after a successful Bearer authentication. The
+  cookie is `HttpOnly`, `SameSite=Strict`, and `Secure` when the request
+  arrived over TLS. The bootstrap script POSTs to `/api/session`
+  automatically on first load, so the in-page overlay can keep working
+  while the JS-readable token attribute can eventually be dropped.
 - `?token=<token>` — accepted for cases where setting headers is hard
   (e.g. an `<img>` ping). Be aware that query-string tokens can leak via
   proxy logs and browser history; prefer the header when possible.
+
+### CSRF caveat for cookie auth
+
+Cookie-based auth is auto-sent on cross-origin requests, which expands
+the CSRF surface compared to a Bearer header. **If you rely on the
+session cookie path, you should also set
+`PYANCHOR_ALLOWED_ORIGINS=https://your-app.example.com,...`** so the
+`requireAllowedOrigin` middleware rejects edit/cancel calls coming from
+unrelated origins. The `SameSite=Strict` flag we set on the cookie
+already blocks most browser-driven cross-site requests, but defense in
+depth via the origin allowlist is the recommended setup.
 
 ## Reporting a vulnerability
 

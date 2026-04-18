@@ -520,6 +520,8 @@ export async function getAdminHealth(): Promise<AdminHealth> {
     workspaceDir: pyanchorConfig.workspaceDir,
     appDir: pyanchorConfig.appDir,
     workerScript: pyanchorConfig.workerScript,
-    healthcheckUrl: pyanchorConfig.healthcheckUrl
+    healthcheckUrl: pyanchorConfig.healthcheckUrl,
+    agent: pyanchorConfig.agent,
+    fastReload: pyanchorConfig.fastReload
   };
 }
