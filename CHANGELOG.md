@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-04-19
+
+### Changed
+- **OpenClaw moved behind the `AgentRunner` interface.** The
+  `OPENCLAW_INLINE` sentinel is gone; `selectAgent()` now always
+  returns an `AgentRunner` instance. The OpenClaw flow lives in
+  `src/agents/openclaw/` (split into `brief.ts`, `parse.ts`,
+  `exec.ts`, `index.ts`), tested in isolation, and is selected the
+  same way as every other backend. End-user behavior unchanged —
+  `PYANCHOR_AGENT=openclaw` still routes to the same CLI calls under
+  sudo as before.
+- `src/worker/runner.ts` shrunk **1212 → 843 LOC** (-369). The
+  inline `writeBrief`, `ensureAgent`, `runAgent`,
+  `processAgentChunk`, `flushAgentChunkRemainders` functions and
+  the `stdoutBuffer` / `stderrBuffer` module-level state are gone;
+  `processJob` is now a single linear path that calls
+  `runAdapterAgent(agent, ...)` for every backend.
+
+### Added
+- `src/agents/openclaw/exec.ts` — `streamSpawn` async-iterator and
+  `execBuffered` helper. Independent of the worker's `runCommand`
+  because the adapter observes `ctx.signal` instead of the worker's
+  module-level `cancelRequested` flag.
+- 45 new unit tests across `tests/agents/openclaw-{brief,parse,runner}.test.ts`
+  covering the extracted helpers and the line-to-event parser.
+
+### Notes
+- v0.1.0 deployments that pinned `PYANCHOR_AGENT=openclaw` (the
+  default) keep working with no changes. The shell command pyanchor
+  invokes is byte-identical to the inline path.
+
 ## [0.2.0] - 2026-04-19
 
 ### Added

@@ -8,14 +8,13 @@ Built-in backends:
 
 | `PYANCHOR_AGENT` | Status | Notes |
 |---|---|---|
-| `openclaw` | ✅ default | Inline implementation in `src/worker/runner.ts`. The OpenClaw CLI must be on `PATH` (or pointed at via `PYANCHOR_OPENCLAW_BIN`). |
+| `openclaw` | ✅ default | Source: [`src/agents/openclaw/`](../src/agents/openclaw/). The OpenClaw CLI must be on `PATH` (or pointed at via `PYANCHOR_OPENCLAW_BIN`). Runs `openclaw agent --json` under sudo as `PYANCHOR_OPENCLAW_USER` (default: current user). |
 | `claude-code` | ✅ shipped | Requires `@anthropic-ai/claude-agent-sdk` to be installed in the host project (declared as an optional peer dep). Source: [`src/agents/claude-code.ts`](../src/agents/claude-code.ts). |
 | `codex` | ✅ shipped | Shells out to the OpenAI Codex CLI (`codex exec --json`). Install: `npm i -g @openai/codex`. Override binary with `PYANCHOR_CODEX_BIN`. Source: [`src/agents/codex.ts`](../src/agents/codex.ts). |
 | `aider` | ✅ shipped | Shells out to aider-chat (`aider --no-stream --yes --message`). Install: `pip install aider-chat`. Workspace should be a git repo. Override binary with `PYANCHOR_AIDER_BIN`. Source: [`src/agents/aider.ts`](../src/agents/aider.ts). |
 
 Future adapters (`goose`, `cline`, custom) implement the same interface
-defined below. The OpenClaw path predates the interface and is slated to
-be moved behind it in `v0.2.0` for symmetry.
+defined below.
 
 ## The `AgentRunner` interface
 

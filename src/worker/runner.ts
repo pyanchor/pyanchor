@@ -5,13 +5,10 @@ import { randomUUID } from "node:crypto";
 
 import { pyanchorConfig } from "../config";
 import {
-  OPENCLAW_INLINE,
   selectAgent,
   type AgentEvent,
   type AgentRunner
 } from "../agents";
-import { createBrief } from "../agents/openclaw/brief";
-import { extractAgentSignals, parseAgentResult } from "../agents/openclaw/parse";
 import type { AiEditMessage, AiEditMessageStatus, AiEditMode, AiEditState } from "../shared/types";
 
 const resolvedStateFile = process.env.PYANCHOR_STATE_FILE_PATH;
@@ -51,8 +48,6 @@ const cancelController = new AbortController();
 let pendingLogLines: string[] = [];
 let pendingThinkingSegments: string[] = [];
 let flushTimer: NodeJS.Timeout | null = null;
-let stdoutBuffer = "";
-let stderrBuffer = "";
 
 const activeChildren = new Set<ChildProcess>();
 
@@ -442,41 +437,6 @@ async function prepareWorkspace() {
   ]);
 }
 
-async function writeBrief(
-  jobPrompt: string,
-  jobTargetPath: string,
-  mode: AiEditMode,
-  messages: AiEditState["messages"]
-) {
-  await runAsOpenClaw(["tee", `${pyanchorConfig.workspaceDir}/EDIT_BRIEF.md`], {
-    input: createBrief(jobPrompt, jobTargetPath, mode, messages)
-  });
-}
-
-async function ensureAgent() {
-  const result = await runAsOpenClaw([pyanchorConfig.openClawBin, "agents", "list", "--json"]);
-  const agents = JSON.parse(result.stdout || "[]") as Array<{ id?: string }>;
-
-  if (agents.some((agent) => agent.id === pyanchorConfig.agentId)) {
-    return pyanchorConfig.agentId;
-  }
-
-  await runAsOpenClaw([
-    pyanchorConfig.openClawBin,
-    "agents",
-    "add",
-    pyanchorConfig.agentId,
-    "--workspace",
-    pyanchorConfig.workspaceDir,
-    "--model",
-    pyanchorConfig.model,
-    "--non-interactive",
-    "--json"
-  ]);
-
-  return pyanchorConfig.agentId;
-}
-
 function installWorkspaceDependencies() {
   return runAsOpenClawInDir(
     pyanchorConfig.workspaceDir,
@@ -487,122 +447,6 @@ function installWorkspaceDependencies() {
       onStderrChunk: (text) => queueLog([`[install] ${text}`])
     }
   );
-}
-
-function processAgentChunk(chunk: string, channel: "stdout" | "stderr") {
-  const nextBuffer = channel === "stdout" ? stdoutBuffer + chunk : stderrBuffer + chunk;
-  const lines = nextBuffer.split(/\r?\n/g);
-  const remainder = lines.pop() ?? "";
-
-  if (channel === "stdout") {
-    stdoutBuffer = remainder;
-  } else {
-    stderrBuffer = remainder;
-  }
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line) {
-      continue;
-    }
-
-    try {
-      const parsed = JSON.parse(line) as unknown;
-      const bucket = { texts: [] as string[], thinkings: [] as string[], logs: [] as string[] };
-      extractAgentSignals(parsed, bucket);
-      if (bucket.texts.length > 0) {
-        queueLog(bucket.texts.map((text) => `[agent] ${text}`));
-      }
-      if (bucket.logs.length > 0) {
-        queueLog(bucket.logs.map((text) => `[agent] ${text}`));
-      }
-      if (bucket.thinkings.length > 0) {
-        queueThinking(bucket.thinkings.join("\n\n"));
-      }
-      continue;
-    } catch {}
-
-    const looksLikeJsonFragment =
-      /^[\[\]{},"0-9.\-]+$/.test(line) ||
-      line.includes('":') ||
-      line.endsWith(",") ||
-      line === "]";
-
-    if (channel === "stderr" || !looksLikeJsonFragment) {
-      queueLog([`[${channel}] ${line}`]);
-    }
-  }
-}
-
-function flushAgentChunkRemainders() {
-  for (const [channel, buffer] of [
-    ["stdout", stdoutBuffer],
-    ["stderr", stderrBuffer]
-  ] as const) {
-    const line = buffer.trim();
-    if (!line) {
-      continue;
-    }
-    processAgentChunk(`${line}\n`, channel);
-  }
-  stdoutBuffer = "";
-  stderrBuffer = "";
-}
-
-function runAgent(agentId: string, jobId: string, jobTargetPath: string, mode: AiEditMode) {
-  const routeFocus =
-    jobTargetPath === "/login" || jobTargetPath === "/signup"
-      ? "Focus on the auth routes, their shared auth components, and auth-related CSS only."
-      : "Focus only on the target route and the components that route directly uses.";
-
-  const agentMessage =
-    mode === "edit"
-      ? [
-          "Read EDIT_BRIEF.md first.",
-          routeFocus,
-          "Do not scan or refactor the whole repository.",
-          "Implement the requested UI change completely in this workspace.",
-          "Run a production build in this workspace and fix any issues until it passes.",
-          "Keep behavior intact, then review the modified files for obvious issues.",
-          "Respond in 2 or 3 lines summarizing the actual changes you made."
-        ].join(" ")
-      : [
-          "Read EDIT_BRIEF.md first.",
-          routeFocus,
-          "Inspect the relevant files and answer the user's question in Korean.",
-          "Do not modify files unless the request explicitly asked for a code change.",
-          "Do not run installs or builds for this answer.",
-          "Be concise, concrete, and cite file paths in the response when relevant."
-        ].join(" ");
-
-  stdoutBuffer = "";
-  stderrBuffer = "";
-
-  return runAsOpenClawInDir(
-    pyanchorConfig.workspaceDir,
-    [
-      pyanchorConfig.openClawBin,
-      "agent",
-      "--agent",
-      agentId,
-      "--session-id",
-      jobId,
-      "--thinking",
-      pyanchorConfig.thinking,
-      "--timeout",
-      String(pyanchorConfig.agentTimeoutSeconds),
-      "--json",
-      "-m",
-      agentMessage
-    ],
-    {
-      timeoutMs: (pyanchorConfig.agentTimeoutSeconds + 120) * 1000,
-      onStdoutChunk: (text) => processAgentChunk(text, "stdout"),
-      onStderrChunk: (text) => processAgentChunk(text, "stderr")
-    }
-  ).finally(() => {
-    flushAgentChunkRemainders();
-  });
 }
 
 function buildWorkspace() {
@@ -846,19 +690,13 @@ async function runAdapterAgent(
 async function processJob(jobId: string, jobPrompt: string, jobTargetPath: string, mode: AiEditMode) {
   const stateBefore = await readState();
   const agent = selectAgent();
-  const isOpenClawInline = agent === OPENCLAW_INLINE;
 
   await withHeartbeat(
     {
       step: "Preparing workspace.",
       label: "Preparing"
     },
-    async () => {
-      await prepareWorkspace();
-      if (isOpenClawInline) {
-        await writeBrief(jobPrompt, jobTargetPath, mode, stateBefore.messages);
-      }
-    }
+    () => prepareWorkspace()
   );
 
   if (mode === "edit") {
@@ -876,38 +714,17 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
     label: "Initializing"
   });
 
-  let summary: string;
-  let thinking: string | null;
-  let failure: string | null;
+  queueLog([`Agent (${agent.name}) ready.`, "Waiting for model response."]);
 
-  if (isOpenClawInline) {
-    const agentId = await ensureAgent();
-    queueLog(["Agent ready.", "Waiting for model response."]);
+  const result = await withHeartbeat(
+    {
+      step: mode === "chat" ? "Reading code and drafting an answer." : "Analyzing code and applying edits.",
+      label: "Thinking"
+    },
+    () => runAdapterAgent(agent, jobId, jobPrompt, jobTargetPath, mode, stateBefore.messages)
+  );
 
-    const agentResult = await withHeartbeat(
-      {
-        step: mode === "chat" ? "Reading code and drafting an answer." : "Analyzing code and applying edits.",
-        label: "Thinking"
-      },
-      () => runAgent(agentId, jobId, jobTargetPath, mode)
-    );
-
-    ({ summary, thinking, failure } = parseAgentResult(agentResult.stdout));
-  } else {
-    queueLog([`Agent (${agent.name}) ready.`, "Waiting for model response."]);
-
-    const result = await withHeartbeat(
-      {
-        step: mode === "chat" ? "Reading code and drafting an answer." : "Analyzing code and applying edits.",
-        label: "Thinking"
-      },
-      () => runAdapterAgent(agent, jobId, jobPrompt, jobTargetPath, mode, stateBefore.messages)
-    );
-
-    summary = result.summary;
-    thinking = result.thinking;
-    failure = result.failure;
-  }
+  const { summary, thinking, failure } = result;
 
   await flushRuntimeBuffers();
 
