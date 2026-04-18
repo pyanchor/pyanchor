@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
-import { aiEditConfig, isAiEditConfigured } from "./config";
+import { pyanchorConfig, isPyanchorConfigured } from "./config";
 import type {
   AdminHealth,
   AiEditCancelInput,
@@ -20,7 +20,7 @@ const MAX_ACTIVITY_LOG = 80;
 const CANCELED_ERROR = "사용자가 작업을 취소했습니다.";
 
 const createInitialState = (): AiEditState => ({
-  configured: isAiEditConfigured(),
+  configured: isPyanchorConfigured(),
   status: "idle",
   jobId: null,
   pid: null,
@@ -172,7 +172,7 @@ async function isFrontendHealthy() {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch(aiEditConfig.healthcheckUrl, {
+    const response = await fetch(pyanchorConfig.healthcheckUrl, {
       method: "GET",
       cache: "no-store",
       signal: controller.signal
@@ -184,13 +184,17 @@ async function isFrontendHealthy() {
   }
 }
 
-async function isWorkshopBusy() {
+async function isPeerBusy() {
+  if (!pyanchorConfig.peerStateFile) {
+    return false;
+  }
+
   try {
-    if (!existsSync(aiEditConfig.workshopStateFile)) {
+    if (!existsSync(pyanchorConfig.peerStateFile)) {
       return false;
     }
 
-    const raw = JSON.parse(await readFile(aiEditConfig.workshopStateFile, "utf8")) as {
+    const raw = JSON.parse(await readFile(pyanchorConfig.peerStateFile, "utf8")) as {
       currentPid?: number | null;
       status?: string;
     };
@@ -203,16 +207,16 @@ async function isWorkshopBusy() {
 }
 
 function spawnRunner(jobId: string, prompt: string, targetPath: string, mode: AiEditMode) {
-  const child = spawn(process.execPath, [aiEditConfig.workerScript], {
+  const child = spawn(process.execPath, [pyanchorConfig.workerScript], {
     detached: true,
     stdio: "ignore",
     env: {
       ...process.env,
-      AI_EDIT_JOB_ID: jobId,
-      AI_EDIT_PROMPT: prompt,
-      AI_EDIT_TARGET_PATH: targetPath,
-      AI_EDIT_MODE: mode,
-      AI_EDIT_STATE_FILE: aiEditConfig.stateFile
+      PYANCHOR_JOB_ID: jobId,
+      PYANCHOR_JOB_PROMPT: prompt,
+      PYANCHOR_JOB_TARGET_PATH: targetPath,
+      PYANCHOR_JOB_MODE: mode,
+      PYANCHOR_STATE_FILE_PATH: pyanchorConfig.stateFile
     }
   });
 
@@ -221,24 +225,24 @@ function spawnRunner(jobId: string, prompt: string, targetPath: string, mode: Ai
 }
 
 export async function ensureStateDir() {
-  await mkdir(aiEditConfig.stateDir, { recursive: true });
+  await mkdir(pyanchorConfig.stateDir, { recursive: true });
 }
 
 export async function writeAiEditState(next: AiEditState) {
   await ensureStateDir();
   const payload = normalizeState({ ...next, updatedAt: new Date().toISOString() });
-  await writeFile(aiEditConfig.stateFile, JSON.stringify(payload, null, 2), "utf8");
+  await writeFile(pyanchorConfig.stateFile, JSON.stringify(payload, null, 2), "utf8");
   return payload;
 }
 
 export async function readAiEditState(): Promise<AiEditState> {
   await ensureStateDir();
 
-  if (!existsSync(aiEditConfig.stateFile)) {
+  if (!existsSync(pyanchorConfig.stateFile)) {
     return writeAiEditState(createInitialState());
   }
 
-  const raw = JSON.parse(await readFile(aiEditConfig.stateFile, "utf8")) as Partial<AiEditState>;
+  const raw = JSON.parse(await readFile(pyanchorConfig.stateFile, "utf8")) as Partial<AiEditState>;
   const state = normalizeState(raw);
 
   if ((state.status === "running" || state.status === "canceling") && state.pid && !isPidAlive(state.pid)) {
@@ -319,14 +323,14 @@ export async function readAiEditState(): Promise<AiEditState> {
       state.status === "failed" ||
       state.status === "canceled") &&
     state.queue.length > 0 &&
-    !(await isWorkshopBusy())
+    !(await isPeerBusy())
   ) {
     const [next, ...remaining] = state.queue;
     const started = appendActivityLog(
       updateUserMessageStatus(
         {
           ...state,
-          configured: isAiEditConfigured(),
+          configured: isPyanchorConfigured(),
           status: "running",
           jobId: next.jobId,
           pid: null,
@@ -353,7 +357,7 @@ export async function readAiEditState(): Promise<AiEditState> {
     return writeAiEditState({ ...started, pid });
   }
 
-  const configured = isAiEditConfigured();
+  const configured = isPyanchorConfigured();
   if (state.configured !== configured) {
     return writeAiEditState({ ...state, configured });
   }
@@ -367,7 +371,7 @@ export async function startAiEdit(input: AiEditStartInput) {
     throw new Error("요청 내용을 입력해 주세요.");
   }
 
-  if (!isAiEditConfigured()) {
+  if (!isPyanchorConfigured()) {
     throw new Error("AI 수정 환경이 아직 서버에 준비되지 않았습니다.");
   }
 
@@ -375,17 +379,17 @@ export async function startAiEdit(input: AiEditStartInput) {
   const mode = input.mode === "chat" ? "chat" : "edit";
   const current = await readAiEditState();
   const isRunning = (current.status === "running" || current.status === "canceling") && isPidAlive(current.pid);
-  const workshopBusy = await isWorkshopBusy();
+  const peerBusy = await isPeerBusy();
   const jobId = randomUUID();
   const userMessage = createMessage({
     jobId,
     role: "user",
     mode,
     text: prompt,
-    status: isRunning || workshopBusy ? "queued" : "running"
+    status: isRunning || peerBusy ? "queued" : "running"
   });
 
-  if (isRunning || workshopBusy) {
+  if (isRunning || peerBusy) {
     const item: AiEditQueueItem = {
       jobId,
       prompt,
@@ -402,7 +406,7 @@ export async function startAiEdit(input: AiEditStartInput) {
             queue: [...current.queue, item],
             currentStep:
               current.currentStep ??
-              (workshopBusy
+              (peerBusy
                 ? "워크숍 작업이 끝나면 바로 처리합니다."
                 : "현재 실행 중인 작업이 끝나면 바로 처리합니다.")
           },
@@ -512,15 +516,15 @@ export async function cancelAiEdit(input: AiEditCancelInput = {}) {
 
 export async function getAdminHealth(): Promise<AdminHealth> {
   return {
-    configured: isAiEditConfigured(),
-    port: aiEditConfig.port,
-    host: aiEditConfig.host,
-    runtimeBasePath: aiEditConfig.runtimeBasePath,
-    runtimeAliasPath: aiEditConfig.runtimeAliasPath,
-    stateFile: aiEditConfig.stateFile,
-    workspaceDir: aiEditConfig.workspaceDir,
-    appDir: aiEditConfig.appDir,
-    workerScript: aiEditConfig.workerScript,
-    healthcheckUrl: aiEditConfig.healthcheckUrl
+    configured: isPyanchorConfigured(),
+    port: pyanchorConfig.port,
+    host: pyanchorConfig.host,
+    runtimeBasePath: pyanchorConfig.runtimeBasePath,
+    runtimeAliasPath: pyanchorConfig.runtimeAliasPath,
+    stateFile: pyanchorConfig.stateFile,
+    workspaceDir: pyanchorConfig.workspaceDir,
+    appDir: pyanchorConfig.appDir,
+    workerScript: pyanchorConfig.workerScript,
+    healthcheckUrl: pyanchorConfig.healthcheckUrl
   };
 }

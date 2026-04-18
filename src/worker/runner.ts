@@ -3,13 +3,13 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import { randomUUID } from "node:crypto";
 
-import { aiEditConfig } from "../config";
+import { pyanchorConfig } from "../config";
 import type { AiEditMessage, AiEditMessageStatus, AiEditMode, AiEditState } from "../shared/types";
 
-const resolvedStateFile = process.env.AI_EDIT_STATE_FILE;
+const resolvedStateFile = process.env.PYANCHOR_STATE_FILE_PATH;
 
 if (!resolvedStateFile) {
-  console.error("AI_EDIT_STATE_FILE is required.");
+  console.error("PYANCHOR_STATE_FILE_PATH is required (worker is normally spawned by the sidecar).");
   process.exit(1);
 }
 
@@ -22,18 +22,18 @@ const MAX_THINKING_CHARS = 8000;
 const CANCELED_ERROR = "사용자가 작업을 취소했습니다.";
 
 const shouldRestartAfterEdit =
-  process.env.AIG_AI_EDIT_RESTART === "true" ||
-  (!Object.prototype.hasOwnProperty.call(process.env, "AIG_AI_EDIT_RESTART") &&
+  process.env.PYANCHOR_RESTART_AFTER_EDIT === "true" ||
+  (!Object.prototype.hasOwnProperty.call(process.env, "PYANCHOR_RESTART_AFTER_EDIT") &&
     process.platform === "linux" &&
-    fsSync.existsSync(aiEditConfig.restartFrontendScript));
+    fsSync.existsSync(pyanchorConfig.restartFrontendScript));
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 const activeJob = {
-  jobId: process.env.AI_EDIT_JOB_ID || "",
-  prompt: process.env.AI_EDIT_PROMPT || "",
-  targetPath: process.env.AI_EDIT_TARGET_PATH || "",
-  mode: process.env.AI_EDIT_MODE === "chat" ? "chat" : "edit"
+  jobId: process.env.PYANCHOR_JOB_ID || "",
+  prompt: process.env.PYANCHOR_JOB_PROMPT || "",
+  targetPath: process.env.PYANCHOR_JOB_TARGET_PATH || "",
+  mode: process.env.PYANCHOR_JOB_MODE === "chat" ? "chat" : "edit"
 } as const;
 
 let stateLock = Promise.resolve();
@@ -397,7 +397,7 @@ function runCommand(
 }
 
 const runAsOpenClaw = (args: string[], options: Parameters<typeof runCommand>[2] = {}) =>
-  runCommand(sudoBin, ["-u", aiEditConfig.openClawUser, ...args], options);
+  runCommand(sudoBin, ["-u", pyanchorConfig.openClawUser, ...args], options);
 
 const runAsOpenClawInDir = (
   workingDir: string,
@@ -438,14 +438,14 @@ function formatConversationContext(messages: AiEditState["messages"]) {
 }
 
 async function prepareWorkspace() {
-  await runCommand(sudoBin, ["rm", "-rf", aiEditConfig.workspaceDir]);
-  await runCommand(sudoBin, ["mkdir", "-p", aiEditConfig.workspaceDir]);
+  await runCommand(sudoBin, ["rm", "-rf", pyanchorConfig.workspaceDir]);
+  await runCommand(sudoBin, ["mkdir", "-p", pyanchorConfig.workspaceDir]);
 
   await runCommand(flockBin, [
     "-s",
     "-w",
     "60",
-    aiEditConfig.appDirLock,
+    pyanchorConfig.appDirLock,
     sudoBin,
     "rsync",
     "-a",
@@ -456,15 +456,15 @@ async function prepareWorkspace() {
     "node_modules",
     "--exclude",
     ".next",
-    `${aiEditConfig.appDir}/`,
-    `${aiEditConfig.workspaceDir}/`
+    `${pyanchorConfig.appDir}/`,
+    `${pyanchorConfig.workspaceDir}/`
   ]);
 
   await runCommand(sudoBin, [
     "chown",
     "-R",
-    `${aiEditConfig.openClawUser}:${aiEditConfig.openClawUser}`,
-    aiEditConfig.workspaceDir
+    `${pyanchorConfig.openClawUser}:${pyanchorConfig.openClawUser}`,
+    pyanchorConfig.workspaceDir
   ]);
 }
 
@@ -526,41 +526,41 @@ async function writeBrief(
   mode: AiEditMode,
   messages: AiEditState["messages"]
 ) {
-  await runAsOpenClaw(["tee", `${aiEditConfig.workspaceDir}/EDIT_BRIEF.md`], {
+  await runAsOpenClaw(["tee", `${pyanchorConfig.workspaceDir}/EDIT_BRIEF.md`], {
     input: createBrief(jobPrompt, jobTargetPath, mode, messages)
   });
 }
 
 async function ensureAgent() {
-  const result = await runAsOpenClaw([aiEditConfig.openClawBin, "agents", "list", "--json"]);
+  const result = await runAsOpenClaw([pyanchorConfig.openClawBin, "agents", "list", "--json"]);
   const agents = JSON.parse(result.stdout || "[]") as Array<{ id?: string }>;
 
-  if (agents.some((agent) => agent.id === aiEditConfig.agentId)) {
-    return aiEditConfig.agentId;
+  if (agents.some((agent) => agent.id === pyanchorConfig.agentId)) {
+    return pyanchorConfig.agentId;
   }
 
   await runAsOpenClaw([
-    aiEditConfig.openClawBin,
+    pyanchorConfig.openClawBin,
     "agents",
     "add",
-    aiEditConfig.agentId,
+    pyanchorConfig.agentId,
     "--workspace",
-    aiEditConfig.workspaceDir,
+    pyanchorConfig.workspaceDir,
     "--model",
-    aiEditConfig.model,
+    pyanchorConfig.model,
     "--non-interactive",
     "--json"
   ]);
 
-  return aiEditConfig.agentId;
+  return pyanchorConfig.agentId;
 }
 
 function installWorkspaceDependencies() {
   return runAsOpenClawInDir(
-    aiEditConfig.workspaceDir,
+    pyanchorConfig.workspaceDir,
     ["/usr/bin/corepack", "yarn", "install", "--frozen-lockfile"],
     {
-      timeoutMs: aiEditConfig.installTimeoutMs,
+      timeoutMs: pyanchorConfig.installTimeoutMs,
       onStdoutChunk: (text) => queueLog([`[install] ${text}`]),
       onStderrChunk: (text) => queueLog([`[install] ${text}`])
     }
@@ -698,24 +698,24 @@ function runAgent(agentId: string, jobId: string, jobTargetPath: string, mode: A
   stderrBuffer = "";
 
   return runAsOpenClawInDir(
-    aiEditConfig.workspaceDir,
+    pyanchorConfig.workspaceDir,
     [
-      aiEditConfig.openClawBin,
+      pyanchorConfig.openClawBin,
       "agent",
       "--agent",
       agentId,
       "--session-id",
       jobId,
       "--thinking",
-      aiEditConfig.thinking,
+      pyanchorConfig.thinking,
       "--timeout",
-      String(aiEditConfig.agentTimeoutSeconds),
+      String(pyanchorConfig.agentTimeoutSeconds),
       "--json",
       "-m",
       agentMessage
     ],
     {
-      timeoutMs: (aiEditConfig.agentTimeoutSeconds + 120) * 1000,
+      timeoutMs: (pyanchorConfig.agentTimeoutSeconds + 120) * 1000,
       onStdoutChunk: (text) => processAgentChunk(text, "stdout"),
       onStderrChunk: (text) => processAgentChunk(text, "stderr")
     }
@@ -790,10 +790,10 @@ function parseAgentResult(stdout: string) {
 
 function buildWorkspace() {
   return runAsOpenClawInDir(
-    aiEditConfig.workspaceDir,
+    pyanchorConfig.workspaceDir,
     ["env", "NEXT_TELEMETRY_DISABLED=1", "/usr/bin/node", "./node_modules/next/dist/bin/next", "build"],
     {
-      timeoutMs: aiEditConfig.buildTimeoutMs,
+      timeoutMs: pyanchorConfig.buildTimeoutMs,
       onStdoutChunk: (text) => queueLog([`[build] ${text}`]),
       onStderrChunk: (text) => queueLog([`[build] ${text}`])
     }
@@ -805,7 +805,7 @@ async function syncToAppDir() {
     "-x",
     "-w",
     "60",
-    aiEditConfig.appDirLock,
+    pyanchorConfig.appDirLock,
     sudoBin,
     "rsync",
     "-a",
@@ -832,24 +832,17 @@ async function syncToAppDir() {
     "TOOLS.md",
     "--exclude",
     "USER.md",
-    `${aiEditConfig.workspaceDir}/`,
-    `${aiEditConfig.appDir}/`
+    `${pyanchorConfig.workspaceDir}/`,
+    `${pyanchorConfig.appDir}/`
   ]);
 
   if (process.platform === "linux") {
-    await runCommand(sudoBin, ["chown", "-R", aiEditConfig.appDirOwner, aiEditConfig.appDir]);
+    await runCommand(sudoBin, ["chown", "-R", pyanchorConfig.appDirOwner, pyanchorConfig.appDir]);
   }
 }
 
 function restartFrontend() {
-  if (process.platform === "linux") {
-    return runCommand("bash", [
-      "-lc",
-      `nohup env HOME=/home/studio PM2_HOME=/home/studio/.pm2 pm2 restart '${aiEditConfig.pm2ProcessName}' >/home/studio/logs/ai-edit/pm2-restart.log 2>&1 < /dev/null &`
-    ]);
-  }
-
-  return runCommand(aiEditConfig.restartFrontendScript, []);
+  return runCommand(pyanchorConfig.restartFrontendScript, []);
 }
 
 async function dequeueNext() {

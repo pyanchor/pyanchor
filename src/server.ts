@@ -2,12 +2,14 @@ import express, { type NextFunction, type Request, type Response } from "express
 import path from "node:path";
 
 import { renderAdminHtml } from "./admin";
-import { aiEditConfig } from "./config";
+import { pyanchorConfig, validateConfig } from "./config";
 import { cancelAiEdit, getAdminHealth, readAiEditState, startAiEdit } from "./state";
 import type { AiEditCancelInput, AiEditStartInput } from "./shared/types";
 
+validateConfig();
+
 const app = express();
-const runtimeBases = Array.from(new Set([aiEditConfig.runtimeBasePath, aiEditConfig.runtimeAliasPath]));
+const runtimeBases = Array.from(new Set([pyanchorConfig.runtimeBasePath, pyanchorConfig.runtimeAliasPath]));
 
 const setNoStore = (response: Response) => {
   response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -24,7 +26,7 @@ const handleError = (response: Response, error: unknown, status = 500) => {
 const serveRuntimeAsset = (fileName: string) => (_request: Request, response: Response) => {
   setNoStore(response);
   response.type("application/javascript");
-  response.sendFile(path.join(aiEditConfig.staticDir, fileName));
+  response.sendFile(path.join(pyanchorConfig.staticDir, fileName));
 };
 
 const asyncRoute =
@@ -98,6 +100,6 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
   handleError(response, error, 500);
 });
 
-app.listen(aiEditConfig.port, aiEditConfig.host, () => {
-  console.log(`AIG AI edit sidecar listening on http://${aiEditConfig.host}:${aiEditConfig.port}`);
+app.listen(pyanchorConfig.port, pyanchorConfig.host, () => {
+  console.log(`pyanchor sidecar listening on http://${pyanchorConfig.host}:${pyanchorConfig.port}`);
 });

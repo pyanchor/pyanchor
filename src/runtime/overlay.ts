@@ -50,8 +50,8 @@ interface RuntimeConfig {
 
 declare global {
   interface Window {
-    __AIGDevtoolsConfig?: RuntimeConfig;
-    __AIGDevtoolsOverlayLoaded?: boolean;
+    __PyanchorConfig?: RuntimeConfig;
+    __PyanchorOverlayLoaded?: boolean;
   }
 }
 
@@ -82,7 +82,7 @@ const emptyState: AiEditState = {
 const styles = `
   :host { all: initial; }
   * { box-sizing: border-box; }
-  .aig-root {
+  .pyanchor-root {
     position: fixed;
     right: clamp(12px, 2vw, 24px);
     bottom: clamp(12px, 2vh, 24px);
@@ -547,16 +547,16 @@ const typingDots = `
   </span>
 `;
 
-const config = window.__AIGDevtoolsConfig;
+const config = window.__PyanchorConfig;
 
-if (!config || window.__AIGDevtoolsOverlayLoaded) {
-  throw new Error("AIG devtools runtime is not configured.");
+if (!config || window.__PyanchorOverlayLoaded) {
+  throw new Error("Pyanchor devtools runtime is not configured.");
 }
 
-window.__AIGDevtoolsOverlayLoaded = true;
+window.__PyanchorOverlayLoaded = true;
 
 const root = document.createElement("div");
-root.id = "aig-devtools-overlay-root";
+root.id = "pyanchor-overlay-root";
 document.body.appendChild(root);
 
 const shadowRoot = root.attachShadow({ mode: "open" });
@@ -726,7 +726,7 @@ const renderMessages = () => {
       ${messages
         .map((message) => {
           const roleLabel =
-            message.role === "assistant" ? "AIG" : message.role === "system" ? "AIG" : "나";
+            message.role === "assistant" ? "Pyanchor" : message.role === "system" ? "Pyanchor" : "나";
 
           return `
             <div class="message-row message-row--${message.role}">
@@ -747,7 +747,7 @@ const renderMessages = () => {
             <div class="message-row message-row--assistant">
               <article class="message message--assistant message--pending">
                 <div class="message__head">
-                  <span class="message__name">AIG</span>
+                  <span class="message__name">Pyanchor</span>
                   <span class="message__time">${escapeHtml(formatTime(serverState.heartbeatAt) ?? formatTime(serverState.startedAt) ?? "")}</span>
                 </div>
                 <div class="message__body message__body--pending">${typingDots}<span class="message__body--pending-text">${escapeHtml(getPendingBubbleTitle())}</span></div>
@@ -761,7 +761,7 @@ const renderMessages = () => {
 };
 
 const bindHistory = () => {
-  const dispatch = () => window.dispatchEvent(new Event("aig-devtools:navigation"));
+  const dispatch = () => window.dispatchEvent(new Event("pyanchor:navigation"));
   const wrap = <T extends "pushState" | "replaceState">(method: T) => {
     const original = history[method];
     history[method] = function wrappedHistoryMethod(this: History, ...args: Parameters<History[T]>) {
@@ -838,13 +838,13 @@ const render = () => {
 
   shadowRoot.innerHTML = `
     <style>${styles}</style>
-    <div class="aig-root">
+    <div class="pyanchor-root">
       ${uiState.toast ? `<div class="toast toast--${uiState.toast.tone}">${escapeHtml(uiState.toast.message)}</div>` : ""}
       ${uiState.isOpen ? `
-        <div class="panel" role="dialog" aria-label="AIG 개발 도구">
+        <div class="panel" role="dialog" aria-label="Pyanchor 개발 도구">
           <div class="panel__header">
             <div class="panel__title">
-              <div class="panel__title-line">${sparkIcon}<span>AIG 개발 도구</span></div>
+              <div class="panel__title-line">${sparkIcon}<span>Pyanchor 개발 도구</span></div>
               <div class="panel__context">
                 <span>현재 페이지</span>
                 <code class="panel__path">${escapeHtml(currentPath())}</code>
@@ -894,7 +894,7 @@ const render = () => {
           </form>
         </div>
       ` : ""}
-      <button class="trigger ${isWorking ? "trigger--busy" : ""}" type="button" data-action="toggle" aria-label="${uiState.isOpen ? "AIG 개발 도구 닫기" : "AIG 개발 도구 열기"}" title="현재 화면에 대해 질문하거나 수정 요청">
+      <button class="trigger ${isWorking ? "trigger--busy" : ""}" type="button" data-action="toggle" aria-label="${uiState.isOpen ? "Pyanchor 개발 도구 닫기" : "Pyanchor 개발 도구 열기"}" title="현재 화면에 대해 질문하거나 수정 요청">
         ${isWorking ? typingDots : sparkIcon}
       </button>
     </div>
@@ -1036,7 +1036,7 @@ document.addEventListener("mousedown", (event) => {
   render();
 });
 
-window.addEventListener("aig-devtools:navigation", () => {
+window.addEventListener("pyanchor:navigation", () => {
   render();
 });
 

@@ -16,7 +16,7 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AIG AI Edit Sidecar</title>
+    <title>Pyanchor Sidecar</title>
     <style>
       :root { color-scheme: dark; }
       * { box-sizing: border-box; }
@@ -128,7 +128,7 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
     <main>
       <section class="hero">
         <div>
-          <h1>AIG AI Edit Sidecar</h1>
+          <h1>Pyanchor Sidecar</h1>
           <p>Next 메인 앱과 분리된 개발용 AI 수정 서비스입니다. 현재 상태, heartbeat, queue를 이 화면에서 확인하고, 런타임 오버레이는 대상 앱의 동일 origin 경로에서 동작합니다.</p>
         </div>
         <div class="badge">
