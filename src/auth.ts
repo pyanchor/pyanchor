@@ -2,6 +2,7 @@ import { timingSafeEqual as cryptoTimingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 
 import { pyanchorConfig, REQUIRED_PLACEHOLDER } from "./config";
+import { validateSession } from "./sessions";
 
 const tokenBytes = (() => {
   const value = pyanchorConfig.token;
@@ -23,17 +24,16 @@ function safeEqual(provided: string): boolean {
 /** Cookie name set by `POST /api/session` and read by requireToken. */
 export const SESSION_COOKIE = "pyanchor_session";
 
-function extractToken(request: Request): string {
+function extractCookieSessionId(request: Request): string {
+  const cookies = (request as Request & { cookies?: Record<string, unknown> }).cookies;
+  const cookieValue = cookies?.[SESSION_COOKIE];
+  return typeof cookieValue === "string" ? cookieValue.trim() : "";
+}
+
+function extractBearerOrQueryToken(request: Request): string {
   const header = request.header("authorization") ?? "";
   if (header.toLowerCase().startsWith("bearer ")) {
     return header.slice(7).trim();
-  }
-
-  // cookie-parser augments req.cookies; tolerate its absence in raw tests
-  const cookies = (request as Request & { cookies?: Record<string, unknown> }).cookies;
-  const cookieValue = cookies?.[SESSION_COOKIE];
-  if (typeof cookieValue === "string" && cookieValue.trim()) {
-    return cookieValue.trim();
   }
 
   // Query-string tokens are accepted only when explicitly opted in.
@@ -51,8 +51,17 @@ function extractToken(request: Request): string {
 
 /**
  * Express middleware that gates a route behind PYANCHOR_TOKEN.
+ *
+ * Two parallel paths, in priority order:
+ *   1. cookie session (since v0.2.7) — cookie holds an opaque session
+ *      id minted by POST /api/session, looked up server-side. Cookie
+ *      theft does NOT yield the master bearer; revocation is a single
+ *      Map.delete.
+ *   2. Bearer header / query token — direct timing-safe compare against
+ *      PYANCHOR_TOKEN. Same shape as v0.1.0+.
+ *
  * Returns 503 if the server was started without a token configured,
- * 401 if the request omits or mismatches the token.
+ * 401 if neither path validates.
  */
 export function requireToken(request: Request, response: Response, next: NextFunction): void {
   if (!isAuthConfigured) {
@@ -62,12 +71,20 @@ export function requireToken(request: Request, response: Response, next: NextFun
     return;
   }
 
-  const provided = extractToken(request);
-  if (!provided || !safeEqual(provided)) {
-    response.setHeader("WWW-Authenticate", 'Bearer realm="pyanchor"');
-    response.status(401).json({ error: "Unauthorized" });
+  // Path 1: cookie session.
+  const sessionId = extractCookieSessionId(request);
+  if (sessionId && validateSession(sessionId)) {
+    next();
     return;
   }
 
-  next();
+  // Path 2: bearer header / query token.
+  const provided = extractBearerOrQueryToken(request);
+  if (provided && safeEqual(provided)) {
+    next();
+    return;
+  }
+
+  response.setHeader("WWW-Authenticate", 'Bearer realm="pyanchor"');
+  response.status(401).json({ error: "Unauthorized" });
 }

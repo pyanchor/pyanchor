@@ -7,6 +7,7 @@ import { pyanchorConfig, validateConfig } from "./config";
 import { SESSION_COOKIE, requireToken } from "./auth";
 import { requireAllowedOrigin } from "./origin";
 import { tokenBucketMiddleware } from "./rate-limit";
+import { createSession, revokeSession } from "./sessions";
 import { cancelAiEdit, getAdminHealth, readAiEditState, startAiEdit } from "./state";
 import type { AiEditCancelInput, AiEditStartInput } from "./shared/types";
 
@@ -90,7 +91,13 @@ for (const basePath of runtimeBases) {
 
 // ─── authed: runtime + admin API ───────────────────────────────────────
 for (const basePath of runtimeBases) {
-  // Exchange a Bearer header for an HttpOnly session cookie.
+  // Exchange a Bearer header for an HttpOnly opaque-session cookie.
+  //
+  // The cookie value is a server-issued random id — NOT the bearer
+  // token. validateSession() looks it up in an in-memory map. Cookie
+  // theft no longer hands an attacker the master token; revocation is
+  // a single Map.delete on the server side.
+  //
   // Cookie inherits the request's secure flag (true behind a TLS proxy
   // when `trust proxy` is on, false on plain http://localhost dev).
   app.post(
@@ -99,14 +106,30 @@ for (const basePath of runtimeBases) {
     requireToken,
     (request: Request, response: Response) => {
       setNoStore(response);
-      response.cookie(SESSION_COOKIE, pyanchorConfig.token, {
+      const { id, ttlMs } = createSession(SESSION_TTL_MS);
+      response.cookie(SESSION_COOKIE, id, {
         httpOnly: true,
         sameSite: "strict",
         secure: request.secure,
-        maxAge: SESSION_TTL_MS,
+        maxAge: ttlMs,
         path: "/"
       });
-      response.json({ ok: true, ttlMs: SESSION_TTL_MS });
+      response.json({ ok: true, ttlMs });
+    }
+  );
+
+  // Explicit logout: clear the cookie and drop the server-side session.
+  // Idempotent — calling without a cookie is fine.
+  app.delete(
+    `${basePath}/api/session`,
+    requireAllowedOrigin,
+    (request: Request, response: Response) => {
+      setNoStore(response);
+      const cookies = (request as Request & { cookies?: Record<string, unknown> }).cookies;
+      const id = cookies?.[SESSION_COOKIE];
+      if (typeof id === "string" && id) revokeSession(id);
+      response.clearCookie(SESSION_COOKIE, { path: "/" });
+      response.json({ ok: true });
     }
   );
 

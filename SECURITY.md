@@ -54,12 +54,16 @@ in-page bootstrap injection on a domain that anonymous users can reach.
 The sidecar accepts the token via three transports:
 
 - `Authorization: Bearer <token>` — preferred for explicit API calls.
-- **`pyanchor_session` cookie** (since v0.2.2) — set by
-  `POST /api/session` after a successful Bearer authentication. The
-  cookie is `HttpOnly`, `SameSite=Strict`, and `Secure` when the request
-  arrived over TLS. The bootstrap script POSTs to `/api/session`
-  automatically on first load, so the in-page overlay can keep working
-  while the JS-readable token attribute can eventually be dropped.
+- **`pyanchor_session` cookie** (since v0.2.2; opaque session id since
+  v0.2.7) — set by `POST /api/session` after a successful Bearer
+  authentication. The cookie is `HttpOnly`, `SameSite=Strict`, and
+  `Secure` when the request arrived over TLS. **Since v0.2.7 the
+  cookie value is a server-issued random id**, not the bearer token
+  itself; cookie theft no longer hands an attacker the master token.
+  Sessions live in an in-memory map, expire after 24h, and can be
+  revoked via `DELETE /api/session` (or by restarting the sidecar,
+  which wipes all sessions). The bootstrap script POSTs to
+  `/api/session` automatically on first load.
 - `?token=<token>` — accepted for cases where setting headers is hard
   (e.g. an `<img>` ping). Be aware that query-string tokens can leak via
   proxy logs and browser history; prefer the header when possible.

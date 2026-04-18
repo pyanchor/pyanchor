@@ -191,13 +191,14 @@ describe("requireToken", () => {
     expect(next).toHaveBeenCalledOnce();
   });
 
-  it("calls next() when correct token is in the pyanchor_session cookie", async () => {
+  it("calls next() when cookie holds a valid opaque session id (v0.2.7+)", async () => {
     process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
     const { requireToken, SESSION_COOKIE } = await import("../src/auth");
+    const { createSession } = await import("../src/sessions");
 
-    const req = makeRequest({
-      cookies: { [SESSION_COOKIE]: "supersecret-token-value-12345678" }
-    });
+    const { id } = createSession(60_000);
+
+    const req = makeRequest({ cookies: { [SESSION_COOKIE]: id } });
     const res = makeResponse();
     const next = vi.fn() as NextFunction;
 
@@ -207,13 +208,48 @@ describe("requireToken", () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it("returns 401 when cookie holds the wrong token", async () => {
+  it("rejects bearer-shaped value in cookie (v0.2.7 — cookies must be opaque session ids)", async () => {
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireToken, SESSION_COOKIE } = await import("../src/auth");
+
+    // Pre-v0.2.7 the cookie WAS the bearer; v0.2.7 makes that invalid.
+    const req = makeRequest({
+      cookies: { [SESSION_COOKIE]: "supersecret-token-value-12345678" }
+    });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireToken(req, res, next);
+
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when cookie holds an unknown / made-up id", async () => {
     process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
     const { requireToken, SESSION_COOKIE } = await import("../src/auth");
 
     const req = makeRequest({
-      cookies: { [SESSION_COOKIE]: "wrong-token-value-1234567890ab" }
+      cookies: { [SESSION_COOKIE]: "deadbeef".repeat(8) }
     });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireToken(req, res, next);
+
+    expect(res.statusCode).toBe(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("rejects a session that has been revoked", async () => {
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireToken, SESSION_COOKIE } = await import("../src/auth");
+    const { createSession, revokeSession } = await import("../src/sessions");
+
+    const { id } = createSession(60_000);
+    revokeSession(id);
+
+    const req = makeRequest({ cookies: { [SESSION_COOKIE]: id } });
     const res = makeResponse();
     const next = vi.fn() as NextFunction;
 

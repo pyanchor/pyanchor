@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-04-19
+
+### Security
+- **Opaque session ids in the cookie path.** v0.2.2-v0.2.6 stored
+  the raw `PYANCHOR_TOKEN` value directly in the `pyanchor_session`
+  cookie. Cookie theft (XSS, dev-tools leak, log scrape) was
+  effectively bearer-token theft — same blast radius, same
+  impossibility-of-revocation.
+
+  v0.2.7 issues a 32-byte random id from `POST /api/session` and
+  stores it in `src/sessions.ts` (in-memory `Map<id, expiresAt>`)
+  instead. `requireToken` looks the cookie value up via
+  `validateSession()`. The cookie no longer carries any
+  exfiltrable credential.
+
+### Added
+- `DELETE /_pyanchor/api/session` — explicit logout that drops the
+  server-side session and clears the cookie. Idempotent (no cookie
+  present is a no-op).
+- `src/sessions.ts` (96 LOC) — `createSession` / `validateSession` /
+  `revokeSession` / `clearAllSessions` (test helper). Hard cap of
+  4096 active sessions with expiry-pruning + drop-oldest fallback.
+- 4 new auth tests: valid session-id accepted, bearer-shaped value
+  in cookie now rejected, made-up id rejected, revoked session
+  rejected.
+
+### Changed (breaking, behind cookie path)
+- Cookies set by previous versions become invalid after upgrade —
+  the bootstrap will simply re-issue on its next page load. Bearer
+  header / query token paths are unaffected.
+
+### Notes
+- This closes the highest-priority finding from the Codex review
+  pass that produced v0.2.6. The companion findings (atomic state
+  writes, cancel rate limit, etc.) shipped in v0.2.6; the opaque
+  session was scoped out for its own release because the auth
+  refactor warranted dedicated tests.
+- Sessions are in-memory only; sidecar restart drops them all.
+  Acceptable for a single-process self-hosted sidecar; documented
+  in SECURITY.md.
+
 ## [0.2.6] - 2026-04-19
 
 ### Security
