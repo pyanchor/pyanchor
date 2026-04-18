@@ -46,6 +46,7 @@ interface AiEditState {
 
 interface RuntimeConfig {
   baseUrl: string;
+  token: string;
 }
 
 declare global {
@@ -612,6 +613,7 @@ const fetchJson = async <T>(input: string, init?: RequestInit) => {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(config.token ? { Authorization: `Bearer ${config.token}` } : {}),
       ...(init?.headers ?? {})
     },
     cache: "no-store"

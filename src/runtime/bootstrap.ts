@@ -5,6 +5,7 @@ declare global {
     __PyanchorBootstrapLoaded?: boolean;
     __PyanchorConfig?: {
       baseUrl: string;
+      token: string;
     };
   }
 }
@@ -20,8 +21,9 @@ declare global {
   const scriptUrl = currentScript?.src ? new URL(currentScript.src, window.location.href) : null;
   const basePath = scriptUrl?.pathname.replace(/\/bootstrap\.js$/, "") ?? "/_pyanchor";
   const baseUrl = `${scriptUrl?.origin ?? window.location.origin}${basePath}`.replace(/\/+$/, "");
+  const token = currentScript?.dataset.pyanchorToken?.trim() ?? "";
 
-  window.__PyanchorConfig = { baseUrl };
+  window.__PyanchorConfig = { baseUrl, token };
 
   if (document.querySelector("script[data-pyanchor-overlay='1']")) {
     return;
