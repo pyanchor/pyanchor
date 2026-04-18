@@ -1,0 +1,61 @@
+{
+  "name": "pyanchor",
+  "version": "0.1.0",
+  "description": "Agent-agnostic AI live-edit sidecar for Next.js. Anchor edits straight into your running app.",
+  "license": "MIT",
+  "author": "PYAN <ikellllllll@users.noreply.github.com>",
+  "homepage": "https://github.com/pyanchor/pyanchor#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pyanchor/pyanchor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pyanchor/pyanchor/issues"
+  },
+  "keywords": [
+    "pyanchor",
+    "openclaw",
+    "claude-code",
+    "codex",
+    "aider",
+    "ai",
+    "agent",
+    "sidecar",
+    "nextjs",
+    "live-edit",
+    "devtools",
+    "overlay"
+  ],
+  "type": "module",
+  "main": "dist/server.cjs",
+  "bin": {
+    "pyanchor": "dist/server.cjs"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/server.cjs",
+    "dev": "node build.mjs && node dist/server.cjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.10.1",
+    "esbuild": "^0.25.3",
+    "typescript": "^5.6.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
