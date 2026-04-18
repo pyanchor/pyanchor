@@ -6,7 +6,8 @@ import path from "node:path";
 const isLinux = process.platform === "linux";
 const env = process.env;
 
-const PLACEHOLDER = "__PYANCHOR_NOT_SET__";
+export const REQUIRED_PLACEHOLDER = "__PYANCHOR_NOT_SET__";
+const PLACEHOLDER = REQUIRED_PLACEHOLDER;
 
 const requireEnv = (name: string): string => env[name]?.trim() || PLACEHOLDER;
 const optionalEnv = (name: string, fallback: string): string => env[name]?.trim() || fallback;
@@ -54,6 +55,10 @@ export const pyanchorConfig = {
 
   // ─── required: agent workspace ─────────────────────────────────
   workspaceDir: requireEnv("PYANCHOR_WORKSPACE_DIR"),
+
+  // ─── required: auth ────────────────────────────────────────────
+  // Bearer token for the runtime + admin API. Generate ≥32 random bytes.
+  token: requireEnv("PYANCHOR_TOKEN"),
 
   // ─── agent (OpenClaw default; will be plugged via AgentRunner in Phase 3) ─
   openClawBin: optionalEnv("PYANCHOR_OPENCLAW_BIN", "openclaw"),
@@ -126,21 +131,27 @@ export function validateConfig(): void {
     PYANCHOR_APP_DIR: pyanchorConfig.appDir,
     PYANCHOR_RESTART_SCRIPT: pyanchorConfig.restartFrontendScript,
     PYANCHOR_HEALTHCHECK_URL: pyanchorConfig.healthcheckUrl,
-    PYANCHOR_WORKSPACE_DIR: pyanchorConfig.workspaceDir
+    PYANCHOR_WORKSPACE_DIR: pyanchorConfig.workspaceDir,
+    PYANCHOR_TOKEN: pyanchorConfig.token
   };
 
   const missing = Object.entries(required)
     .filter(([, value]) => value === PLACEHOLDER)
     .map(([name]) => name);
 
-  if (missing.length === 0) {
-    return;
+  if (missing.length > 0) {
+    const list = missing.map((name) => `  - ${name}`).join("\n");
+    throw new Error(
+      `[pyanchor] Missing required environment variables:\n${list}\n\n` +
+      `Provide these via your shell, .env file, or process manager.\n` +
+      `See .env.example in the repository root for documented values.`
+    );
   }
 
-  const list = missing.map((name) => `  - ${name}`).join("\n");
-  throw new Error(
-    `[pyanchor] Missing required environment variables:\n${list}\n\n` +
-    `Provide these via your shell, .env file, or process manager.\n` +
-    `See .env.example in the repository root for documented values.`
-  );
+  if (pyanchorConfig.token.length < 24) {
+    console.warn(
+      `[pyanchor] PYANCHOR_TOKEN is only ${pyanchorConfig.token.length} characters. ` +
+        `Use at least 32 random bytes (e.g. \`openssl rand -hex 32\`).`
+    );
+  }
 }
