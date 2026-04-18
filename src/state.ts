@@ -17,7 +17,7 @@ import type {
 
 const MAX_MESSAGES = 24;
 const MAX_ACTIVITY_LOG = 80;
-const CANCELED_ERROR = "사용자가 작업을 취소했습니다.";
+const CANCELED_ERROR = "Job canceled by user.";
 
 const createInitialState = (): AiEditState => ({
   configured: isPyanchorConfigured(),
@@ -252,7 +252,7 @@ export async function readAiEditState(): Promise<AiEditState> {
           ...updateUserMessageStatus(state, state.jobId ?? "", "done"),
           status: "done",
           pid: null,
-          currentStep: "수정 내용을 반영하고 서비스를 다시 시작했습니다.",
+          currentStep: "Edit applied. Frontend restarted.",
           heartbeatAt: new Date().toISOString(),
           heartbeatLabel: "Done",
           error: null,
@@ -280,7 +280,7 @@ export async function readAiEditState(): Promise<AiEditState> {
             heartbeatLabel: "Canceled",
             error: CANCELED_ERROR,
             completedAt: new Date().toISOString(),
-            activityLog: [...state.activityLog, stampLogLine("작업이 취소되었습니다.")].slice(-MAX_ACTIVITY_LOG)
+            activityLog: [...state.activityLog, stampLogLine("Job canceled.")].slice(-MAX_ACTIVITY_LOG)
           },
           createMessage({
             jobId: state.jobId,
@@ -302,15 +302,15 @@ export async function readAiEditState(): Promise<AiEditState> {
           currentStep: null,
           heartbeatAt: new Date().toISOString(),
           heartbeatLabel: "Failed",
-          error: "AI 수정 작업이 비정상 종료되었습니다.",
+          error: "Edit job exited abnormally.",
           completedAt: new Date().toISOString(),
-          activityLog: [...state.activityLog, stampLogLine("작업이 비정상 종료되었습니다.")].slice(-MAX_ACTIVITY_LOG)
+          activityLog: [...state.activityLog, stampLogLine("Job exited abnormally.")].slice(-MAX_ACTIVITY_LOG)
         },
         createMessage({
           jobId: state.jobId,
           role: "system",
           mode: state.mode ?? "edit",
-          text: "AI 수정 작업이 비정상 종료되었습니다.",
+          text: "Edit job exited abnormally.",
           status: "failed"
         })
       )
@@ -337,7 +337,7 @@ export async function readAiEditState(): Promise<AiEditState> {
           prompt: next.prompt,
           targetPath: next.targetPath,
           mode: next.mode,
-          currentStep: "대기 중이던 작업을 시작합니다.",
+          currentStep: "Starting queued job.",
           heartbeatAt: null,
           heartbeatLabel: null,
           thinking: null,
@@ -349,7 +349,7 @@ export async function readAiEditState(): Promise<AiEditState> {
         next.jobId,
         "running"
       ),
-      [stampLogLine(`${next.mode === "chat" ? "대화" : "수정"} 작업을 대기열에서 시작했습니다.`)]
+      [stampLogLine(`Started queued ${next.mode} job.`)]
     );
 
     await writeAiEditState(started);
@@ -368,11 +368,11 @@ export async function readAiEditState(): Promise<AiEditState> {
 export async function startAiEdit(input: AiEditStartInput) {
   const prompt = input.prompt.trim();
   if (!prompt) {
-    throw new Error("요청 내용을 입력해 주세요.");
+    throw new Error("Prompt is required.");
   }
 
   if (!isPyanchorConfigured()) {
-    throw new Error("AI 수정 환경이 아직 서버에 준비되지 않았습니다.");
+    throw new Error("Sidecar is not fully configured yet.");
   }
 
   const targetPath = normalizeTargetPath(input.targetPath);
@@ -407,12 +407,12 @@ export async function startAiEdit(input: AiEditStartInput) {
             currentStep:
               current.currentStep ??
               (peerBusy
-                ? "워크숍 작업이 끝나면 바로 처리합니다."
-                : "현재 실행 중인 작업이 끝나면 바로 처리합니다.")
+                ? "Will run as soon as the peer job finishes."
+                : "Will run as soon as the current job finishes.")
           },
           userMessage
         ),
-        [stampLogLine(`${mode === "chat" ? "대화" : "수정"} 요청을 대기열에 추가했습니다.`)]
+        [stampLogLine(`Queued ${mode} request.`)]
       )
     );
   }
@@ -427,7 +427,7 @@ export async function startAiEdit(input: AiEditStartInput) {
         prompt,
         targetPath,
         mode,
-        currentStep: `${mode === "chat" ? "대화" : "수정"} 작업을 준비하고 있습니다.`,
+        currentStep: `Preparing ${mode} job.`,
         heartbeatAt: null,
         heartbeatLabel: null,
         thinking: null,
@@ -441,7 +441,7 @@ export async function startAiEdit(input: AiEditStartInput) {
       },
       userMessage
     ),
-    [stampLogLine(`${mode === "chat" ? "대화" : "수정"} 작업을 시작했습니다.`)]
+    [stampLogLine(`Started ${mode} job.`)]
   );
 
   await writeAiEditState(nextState);
@@ -469,12 +469,12 @@ export async function cancelAiEdit(input: AiEditCancelInput = {}) {
         {
           ...current,
           status: "canceling",
-          currentStep: "작업 취소를 요청했습니다.",
+          currentStep: "Cancel requested.",
           heartbeatAt: new Date().toISOString(),
           heartbeatLabel: "Canceling",
           error: null
         },
-        [stampLogLine("현재 실행 중인 작업에 취소 요청을 보냈습니다.")]
+        [stampLogLine("Cancel request sent to the running job.")]
       )
     );
   }
@@ -502,16 +502,16 @@ export async function cancelAiEdit(input: AiEditCancelInput = {}) {
             jobId: canceledItem.jobId,
             role: "system",
             mode: canceledItem.mode,
-            text: "대기 중이던 요청을 취소했습니다.",
+            text: "Queued request canceled.",
             status: "canceled"
           })
         ),
-        [stampLogLine("대기 중이던 요청을 취소했습니다.")]
+        [stampLogLine("Queued request canceled.")]
       )
     );
   }
 
-  throw new Error("취소할 작업이 없습니다.");
+  throw new Error("No job to cancel.");
 }
 
 export async function getAdminHealth(): Promise<AdminHealth> {

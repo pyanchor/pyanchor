@@ -40,7 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The OpenClaw flow remains inline in `src/worker/runner.ts` and is
   selected via the `OPENCLAW_INLINE` marker. Moving it behind the
   `AgentRunner` interface is tracked for v0.2.0.
+- Korean strings in user-facing surfaces (overlay, server errors,
+  worker activity log) translated to English; structured i18n shim
+  remains a v0.2.0 target.
+- README restructured to lead with a "pick an agent first" prereqs
+  section so new users don't get blocked at runtime by a missing
+  OpenClaw install or a missing `ANTHROPIC_API_KEY`.
+- Multi-user is explicitly out of scope for v0.1.0 (single token /
+  single queue / single workspace). Levels 1-2 of the multi-user
+  roadmap are documented in README; v0.3.0+ work depending on demand.
 
 ### Planned for `v0.1.0` ship
-- Full README + integration guide + minimal Next.js example.
 - GitHub Actions CI, npm publish, v0.1.0 tag/release.

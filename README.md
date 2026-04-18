@@ -56,6 +56,46 @@ your machine, this is for you.
                             └──────────────────────────────┘
 ```
 
+## Prerequisites: pick an agent first
+
+Pyanchor doesn't bring its own LLM. You wire it to an external agentic
+coding tool. **Set this up before installing pyanchor itself** — both
+backends need credentials and one of them needs a CLI install:
+
+### A) OpenClaw (default)
+
+The OpenClaw CLI must be installed and `openclaw onboard` must have run
+at least once for the user that will invoke it. The full walkthrough
+(install, dedicated agent user, sudoers, model selection, smoke test)
+is in [`docs/openclaw-setup.md`](./docs/openclaw-setup.md). Quick check:
+
+```bash
+which openclaw && openclaw --version
+ls ~/.openclaw 2>/dev/null && echo "onboarded" || echo "run: openclaw onboard"
+```
+
+You will also need an agent workspace dir owned by whichever user
+runs OpenClaw, and (in production-style setups) sudo privileges for
+pyanchor's user to invoke OpenClaw as the agent user. Worth reading
+the setup doc end-to-end.
+
+### B) Claude Code
+
+The Anthropic Agent SDK must be installed in the project that runs
+pyanchor (it's an **optional peer dep**, doesn't auto-install) and
+`ANTHROPIC_API_KEY` must be in pyanchor's process env. See
+[`docs/claude-code-setup.md`](./docs/claude-code-setup.md). Quick
+version:
+
+```bash
+pnpm add @anthropic-ai/claude-agent-sdk
+export ANTHROPIC_API_KEY=sk-ant-...
+export PYANCHOR_AGENT=claude-code
+```
+
+This path has fewer moving parts than OpenClaw — recommended if you're
+trying pyanchor for the first time.
+
 ## Quick start
 
 ```bash
@@ -71,6 +111,7 @@ export PYANCHOR_APP_DIR=/abs/path/to/your/nextjs-app
 export PYANCHOR_WORKSPACE_DIR=/abs/path/to/scratch-workspace
 export PYANCHOR_RESTART_SCRIPT=/abs/path/to/restart-frontend.sh
 export PYANCHOR_HEALTHCHECK_URL=http://127.0.0.1:3000/
+export PYANCHOR_AGENT=openclaw   # or claude-code
 
 pyanchor
 ```
@@ -120,8 +161,8 @@ Pick a backend with `PYANCHOR_AGENT`:
 
 | `PYANCHOR_AGENT` | Status | Notes |
 |---|---|---|
-| `openclaw` | ✅ default | OpenClaw CLI on `PATH`. See [`docs/openclaw-setup.md`](./docs/openclaw-setup.md). |
-| `claude-code` | ✅ shipped | install peer dep `@anthropic-ai/claude-agent-sdk` |
+| `openclaw` | ✅ default | OpenClaw CLI on `PATH` + `openclaw onboard`. Full setup: [`docs/openclaw-setup.md`](./docs/openclaw-setup.md). |
+| `claude-code` | ✅ shipped | install peer dep `@anthropic-ai/claude-agent-sdk` + `ANTHROPIC_API_KEY`. Full setup: [`docs/claude-code-setup.md`](./docs/claude-code-setup.md). |
 | `codex` | 🟡 v0.2.0 | community adapter welcome |
 | `aider` | 🟡 v0.2.0 | community adapter welcome |
 | Goose, Cline, custom | 🟡 | implement the [`AgentRunner`](./src/agents/types.ts) interface — see [`docs/adapters.md`](./docs/adapters.md) |
@@ -167,11 +208,32 @@ Full threat model and reporting policy: [`SECURITY.md`](./SECURITY.md).
 |---|---|
 | [`docs/integrate-with-nextjs.md`](./docs/integrate-with-nextjs.md) | Wire pyanchor into your existing Next.js app |
 | [`docs/openclaw-setup.md`](./docs/openclaw-setup.md) | Install OpenClaw and point pyanchor at it |
+| [`docs/claude-code-setup.md`](./docs/claude-code-setup.md) | Install the Anthropic Agent SDK and route pyanchor through Claude |
 | [`docs/adapters.md`](./docs/adapters.md) | Build your own agent adapter |
 | [`SECURITY.md`](./SECURITY.md) | Threat model + reporting |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Local dev, build, release flow |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Release notes |
 | [`examples/nextjs-minimal/`](./examples/nextjs-minimal) | A 5-file Next.js app wired to pyanchor |
+
+## Multi-user
+
+`v0.1.0` is **single-tenant by design**: one bearer token, one queue,
+one workspace, one Next.js app. Anyone holding `PYANCHOR_TOKEN` has the
+same capabilities as the maintainer. This matches the "personal /
+small-team self-hosted" use case and keeps the threat model tight.
+
+Multi-user is on the roadmap if there's demand:
+
+| Level | What it adds | Tracked for |
+|---|---|---|
+| 1 | Multiple named tokens + per-user audit log; shared workspace and queue | `v0.3.0` |
+| 2 | Per-user queues + simple route-level locking when two users target the same page | `v0.4.0` |
+| 3 | Per-user branches + PR-style approval flow (effectively a Git review platform) | likely a separate fork (`pyanchor-team`) |
+| 4 | Multi-tenant SaaS (multiple apps, multiple orgs, billing) | out of scope; that's a different product |
+
+If you need any of these, open an issue describing your workflow — the
+`v0.3.0` design will be informed by what people actually ask for, not
+by what I think the abstraction should be.
 
 ## Status
 
@@ -182,7 +244,7 @@ between minor versions until `v1.0.0`. Planned for `v0.2.0`:
 - Codex CLI and Aider reference adapters.
 - Split the >1k LOC files (`worker/runner.ts`, `runtime/overlay.ts`).
 - Test scaffold (vitest), starting with the state machine.
-- English-default UI strings + i18n shim.
+- Replace ad-hoc i18n placeholders with a real translation shim.
 
 ## License
 

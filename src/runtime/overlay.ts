@@ -620,7 +620,7 @@ const fetchJson = async <T>(input: string, init?: RequestInit) => {
   });
   const data = (await response.json()) as T & { error?: string };
   if (!response.ok) {
-    throw new Error(data.error ?? "요청을 처리하지 못했습니다.");
+    throw new Error(data.error ?? "Request failed.");
   }
   return data;
 };
@@ -655,7 +655,7 @@ const getStatusHeadline = () => {
   const thinkingPreview = shorten(takeFirstLine(serverState.thinking));
 
   if (queuePosition > 0 && serverState.status !== "running" && serverState.status !== "canceling") {
-    return `대기열 ${queuePosition}번째입니다. 앞선 요청이 끝나면 이어서 처리합니다.`;
+    return `Queued at position ${queuePosition}. Will run after the current jobs finish.`;
   }
 
   if (serverState.status === "running" || serverState.status === "canceling") {
@@ -663,20 +663,20 @@ const getStatusHeadline = () => {
       thinkingPreview ||
       serverState.heartbeatLabel ||
       serverState.currentStep ||
-      (serverState.mode === "chat" ? "질문을 확인하고 있습니다." : "화면과 코드를 살펴보고 있습니다.")
+      (serverState.mode === "chat" ? "Reading your question." : "Reading the page and the code.")
     );
   }
 
   if (serverState.status === "failed") {
-    return serverState.error ?? "작업 중 오류가 발생했습니다.";
+    return serverState.error ?? "Job failed.";
   }
 
   if (serverState.status === "canceled") {
-    return serverState.error ?? "작업이 취소되었습니다.";
+    return serverState.error ?? "Job canceled.";
   }
 
   if (serverState.status === "done") {
-    return serverState.mode === "chat" ? "답변을 남겼습니다." : "수정 작업을 마쳤습니다.";
+    return serverState.mode === "chat" ? "Answer ready." : "Edit complete.";
   }
 
   return "";
@@ -686,7 +686,7 @@ const getStatusMeta = () => {
   const pieces = [
     serverState.heartbeatLabel,
     formatTime(serverState.heartbeatAt),
-    getTrackedQueuePosition() > 0 ? `내 요청 ${getTrackedQueuePosition()}번째` : null
+    getTrackedQueuePosition() > 0 ? `Your request: position ${getTrackedQueuePosition()}` : null
   ].filter(Boolean);
 
   return pieces.join(" / ");
@@ -694,21 +694,21 @@ const getStatusMeta = () => {
 
 const getPlaceholder = () =>
   uiState.mode === "edit"
-    ? "예: 로그인/회원가입 전환을 더 부드럽게 만들고, 현재 구조와 한국어 문구는 유지해줘."
-    : "예: 이 화면이 왜 이렇게 동작하는지 설명해줘. 관련 파일도 같이 알려줘.";
+    ? "e.g. make the login/signup tab transition smoother. Keep the existing structure intact."
+    : "e.g. explain why this page behaves the way it does. Cite the files.";
 
-const getComposerTitle = () => (uiState.mode === "edit" ? "수정 요청" : "질문 보내기");
+const getComposerTitle = () => (uiState.mode === "edit" ? "Edit request" : "Send a question");
 
 const getPendingBubbleTitle = () => {
   if (serverState.status === "canceling") {
-    return "요청을 정리하는 중입니다.";
+    return "Drafting your request.";
   }
 
   if (serverState.mode === "edit" || uiState.mode === "edit") {
-    return "화면과 코드를 확인하고 있습니다.";
+    return "Reading page and code.";
   }
 
-  return "답변을 준비하고 있습니다.";
+  return "Drafting an answer.";
 };
 
 const renderMessages = () => {
@@ -720,7 +720,7 @@ const renderMessages = () => {
     queuePosition > 0;
 
   if (messages.length === 0 && !showPendingMessage) {
-    return `<div class="messages messages--empty">이 페이지에 대해 질문하거나, 수정 요청을 보내면 여기 대화가 쌓입니다.</div>`;
+    return `<div class="messages messages--empty">Ask a question or request a change. Conversation history shows up here.</div>`;
   }
 
   return `
@@ -728,7 +728,7 @@ const renderMessages = () => {
       ${messages
         .map((message) => {
           const roleLabel =
-            message.role === "assistant" ? "Pyanchor" : message.role === "system" ? "Pyanchor" : "나";
+            message.role === "assistant" ? "Pyanchor" : message.role === "system" ? "Pyanchor" : "You";
 
           return `
             <div class="message-row message-row--${message.role}">
@@ -793,15 +793,15 @@ const syncState = async (withOutcomeToast = false) => {
 
     if (withOutcomeToast && previousJobId && previousStatus !== next.status && previousJobId === next.jobId) {
       if (next.status === "done") {
-        showToast(next.mode === "chat" ? "답변을 받았습니다." : "수정 작업을 완료했습니다.", "success");
+        showToast(next.mode === "chat" ? "Answer received." : "Edit complete.", "success");
         return;
       }
       if (next.status === "failed") {
-        showToast(next.error ?? "작업이 실패했습니다.", "error");
+        showToast(next.error ?? "Job failed.", "error");
         return;
       }
       if (next.status === "canceled") {
-        showToast("요청을 취소했습니다.", "info");
+        showToast("Request canceled.", "info");
         return;
       }
     }
@@ -843,21 +843,21 @@ const render = () => {
     <div class="pyanchor-root">
       ${uiState.toast ? `<div class="toast toast--${uiState.toast.tone}">${escapeHtml(uiState.toast.message)}</div>` : ""}
       ${uiState.isOpen ? `
-        <div class="panel" role="dialog" aria-label="Pyanchor 개발 도구">
+        <div class="panel" role="dialog" aria-label="Pyanchor DevTools">
           <div class="panel__header">
             <div class="panel__title">
-              <div class="panel__title-line">${sparkIcon}<span>Pyanchor 개발 도구</span></div>
+              <div class="panel__title-line">${sparkIcon}<span>Pyanchor DevTools</span></div>
               <div class="panel__context">
-                <span>현재 페이지</span>
+                <span>Current page</span>
                 <code class="panel__path">${escapeHtml(currentPath())}</code>
               </div>
             </div>
-            <button class="icon-button" type="button" data-action="close" aria-label="닫기">${closeIcon}</button>
+            <button class="icon-button" type="button" data-action="close" aria-label="Close">${closeIcon}</button>
           </div>
 
           <div class="mode-switch">
-            <button class="mode-switch__button ${uiState.mode === "chat" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-chat">대화</button>
-            <button class="mode-switch__button ${uiState.mode === "edit" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-edit">수정</button>
+            <button class="mode-switch__button ${uiState.mode === "chat" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-chat">Chat</button>
+            <button class="mode-switch__button ${uiState.mode === "edit" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-edit">Edit</button>
           </div>
 
           ${
@@ -883,20 +883,20 @@ const render = () => {
             </div>
             <div class="composer__footer">
               <div class="composer__hint">
-                <strong>${uiState.mode === "chat" ? "질문/설명" : "화면 수정"}</strong>
-                <span>${serverState.configured ? "Ctrl/Cmd + Enter로 바로 전송" : "서버 설정이 아직 연결되지 않았습니다."}</span>
+                <strong>${uiState.mode === "chat" ? "Ask / Explain" : "Edit page"}</strong>
+                <span>${serverState.configured ? "Ctrl/Cmd + Enter to send" : "Sidecar is not fully configured yet."}</span>
               </div>
               <div class="actions">
-                ${canCancel ? `<button class="button button--danger" type="button" data-action="cancel" ${uiState.isCanceling ? "disabled" : ""}>취소</button>` : ""}
+                ${canCancel ? `<button class="button button--danger" type="button" data-action="cancel" ${uiState.isCanceling ? "disabled" : ""}>Cancel</button>` : ""}
                 <button class="button button--primary" type="submit" ${!serverState.configured || isBusy || !uiState.prompt.trim() ? "disabled" : ""}>
-                  ${uiState.isSubmitting ? "전송 중..." : uiState.mode === "chat" ? "보내기" : "요청하기"}
+                  ${uiState.isSubmitting ? "Sending…" : uiState.mode === "chat" ? "Send" : "Run"}
                 </button>
               </div>
             </div>
           </form>
         </div>
       ` : ""}
-      <button class="trigger ${isWorking ? "trigger--busy" : ""}" type="button" data-action="toggle" aria-label="${uiState.isOpen ? "Pyanchor 개발 도구 닫기" : "Pyanchor 개발 도구 열기"}" title="현재 화면에 대해 질문하거나 수정 요청">
+      <button class="trigger ${isWorking ? "trigger--busy" : ""}" type="button" data-action="toggle" aria-label="${uiState.isOpen ? "Close Pyanchor DevTools" : "Open Pyanchor DevTools"}" title="Ask about the current page or request a change">
         ${isWorking ? typingDots : sparkIcon}
       </button>
     </div>
@@ -978,9 +978,9 @@ const render = () => {
         })
       });
       serverState = next;
-      showToast("취소 요청을 보냈습니다.", "info");
+      showToast("Cancel request sent.", "info");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "취소 요청을 처리하지 못했습니다.", "error");
+      showToast(error instanceof Error ? error.message : "Cancel request failed.", "error");
     } finally {
       uiState.isCanceling = false;
       render();
@@ -1014,12 +1014,12 @@ const render = () => {
       uiState.lastSubmittedJobId = lastQueued?.jobId ?? next.jobId ?? null;
 
       if (lastQueued) {
-        showToast(`대기열에 추가했습니다. (${next.queue.length}번째)`, "info");
+        showToast(`Queued at position ${next.queue.length}.`, "info");
       } else {
-        showToast(uiState.mode === "chat" ? "질문을 보냈습니다." : "수정 요청을 시작했습니다.", "info");
+        showToast(uiState.mode === "chat" ? "Question sent." : "Edit started.", "info");
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "요청을 시작하지 못했습니다.", "error");
+      showToast(error instanceof Error ? error.message : "Failed to start the request.", "error");
     } finally {
       uiState.isSubmitting = false;
       render();

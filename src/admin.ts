@@ -12,7 +12,7 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
   const runtimeLink = `${health.runtimeBasePath}/bootstrap.js`;
 
   return `<!doctype html>
-<html lang="ko">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -129,7 +129,7 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
       <section class="hero">
         <div>
           <h1>Pyanchor Sidecar</h1>
-          <p>Next 메인 앱과 분리된 개발용 AI 수정 서비스입니다. 현재 상태, heartbeat, queue를 이 화면에서 확인하고, 런타임 오버레이는 대상 앱의 동일 origin 경로에서 동작합니다.</p>
+          <p>Pyanchor sidecar — separate from your Next.js app. View live status, heartbeat, and queue here. The runtime overlay loads on your app's origin via /_pyanchor/*.</p>
         </div>
         <div class="badge">
           <span class="dot ${health.configured ? "dot--ok" : ""}"></span>

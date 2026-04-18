@@ -25,7 +25,7 @@ const flockBin = "/usr/bin/flock";
 const MAX_MESSAGES = 24;
 const MAX_ACTIVITY_LOG = 80;
 const MAX_THINKING_CHARS = 8000;
-const CANCELED_ERROR = "사용자가 작업을 취소했습니다.";
+const CANCELED_ERROR = "Job canceled by user.";
 
 const shouldRestartAfterEdit =
   process.env.PYANCHOR_RESTART_AFTER_EDIT === "true" ||
@@ -284,7 +284,7 @@ async function finalizeCancellation(signal: NodeJS.Signals) {
   cancelHandled = true;
   cancelRequested = true;
   cancelController.abort();
-  queueLog([`취소 신호를 받았습니다. (${signal})`, "실행 중인 하위 작업을 정리합니다."]);
+  queueLog([`Cancel signal received. (${signal})`, "Tearing down active children."]);
   await flushRuntimeBuffers();
   await cancelActiveChildren();
 
@@ -302,7 +302,7 @@ async function finalizeCancellation(signal: NodeJS.Signals) {
           heartbeatLabel: "Canceled",
           error: CANCELED_ERROR,
           completedAt: new Date().toISOString(),
-          activityLog: trimLog([...state.activityLog, stampLogLine("작업이 취소되었습니다.")])
+          activityLog: trimLog([...state.activityLog, stampLogLine("Job canceled.")])
         },
         activeJob.jobId,
         "canceled"
@@ -757,15 +757,15 @@ function detectAgentFailure(rawOutput: string, summary: string) {
   const haystack = `${rawOutput}\n${summary}`.toLowerCase();
 
   if (haystack.includes("request timed out before a response was generated")) {
-    return "AI 응답 시간이 초과됐습니다. 요청 범위를 조금 좁히거나 다시 시도해 주세요.";
+    return "Agent response timed out. Try narrowing the request and retry.";
   }
 
   if (haystack.includes("timed out") && haystack.includes("response")) {
-    return "AI 응답 시간이 초과됐습니다. 잠시 후 다시 시도해 주세요.";
+    return "Agent response timed out. Try again shortly.";
   }
 
   if (haystack.includes("unauthorized") || haystack.includes("401")) {
-    return "AI 에이전트 인증에 문제가 있습니다.";
+    return "Agent authentication failed.";
   }
 
   return null;
@@ -782,14 +782,14 @@ function parseAgentResult(stdout: string) {
     const failure = detectAgentFailure(stdout, summary);
 
     return {
-      summary: summary || "변경 작업을 완료했습니다.",
+      summary: summary || "Edit complete.",
       thinking,
       failure
     };
   } catch {
     const failure = detectAgentFailure(stdout, stdout);
     return {
-      summary: stdout.trim() || "변경 작업을 완료했습니다.",
+      summary: stdout.trim() || "Edit complete.",
       thinking: null,
       failure
     };
@@ -871,7 +871,7 @@ async function dequeueNext() {
         prompt: next.prompt,
         targetPath: next.targetPath,
         mode: next.mode,
-        currentStep: `대기 중이던 ${next.mode === "chat" ? "대화" : "수정"} 작업을 시작합니다. (남은 대기 ${remaining.length}건)`,
+        currentStep: `Starting queued ${next.mode} job (${remaining.length} remaining).`,
         heartbeatAt: null,
         heartbeatLabel: null,
         thinking: null,
@@ -879,7 +879,7 @@ async function dequeueNext() {
         startedAt: new Date().toISOString(),
         completedAt: null,
         queue: remaining,
-        activityLog: trimLog([...state.activityLog, stampLogLine("다음 대기 작업을 시작합니다.")])
+        activityLog: trimLog([...state.activityLog, stampLogLine("Starting next queued job.")])
       },
       next.jobId,
       "running"
@@ -906,7 +906,7 @@ async function finalizeSuccess(summary: string, thinking: string | null, mode: A
           thinking: mergeThinking(state.thinking, thinking),
           error: null,
           completedAt: new Date().toISOString(),
-          activityLog: trimLog([...state.activityLog, stampLogLine("작업을 완료했습니다.")])
+          activityLog: trimLog([...state.activityLog, stampLogLine("Job complete.")])
         },
         activeJob.jobId,
         "done"
@@ -1029,7 +1029,7 @@ async function runAdapterAgent(
     return { summary: "", thinking: null, failure: message };
   }
 
-  summary = summaryParts.join("\n\n").trim() || (mode === "edit" ? "변경 작업을 완료했습니다." : "");
+  summary = summaryParts.join("\n\n").trim() || (mode === "edit" ? "Edit complete." : "");
   thinking = thinkingParts.join("\n\n").trim() || null;
   return { summary, thinking, failure: null };
 }
@@ -1041,7 +1041,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
 
   await withHeartbeat(
     {
-      step: "워크스페이스를 준비하고 있습니다.",
+      step: "Preparing workspace.",
       label: "Preparing"
     },
     async () => {
@@ -1055,7 +1055,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
   if (mode === "edit") {
     await withHeartbeat(
       {
-        step: "AI 작업 호환성을 준비하고 있습니다.",
+        step: "Installing workspace dependencies.",
         label: "Install"
       },
       () => installWorkspaceDependencies()
@@ -1063,7 +1063,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
   }
 
   await pulseState({
-    step: "AI 에이전트를 초기화하고 있습니다.",
+    step: "Initializing agent.",
     label: "Initializing"
   });
 
@@ -1073,11 +1073,11 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
 
   if (isOpenClawInline) {
     const agentId = await ensureAgent();
-    queueLog(["AI 에이전트를 준비했습니다.", "모델 응답을 기다리는 중입니다."]);
+    queueLog(["Agent ready.", "Waiting for model response."]);
 
     const agentResult = await withHeartbeat(
       {
-        step: mode === "chat" ? "코드를 읽고 질문에 답하는 중입니다." : "코드를 분석하고 화면을 수정하는 중입니다.",
+        step: mode === "chat" ? "Reading code and drafting an answer." : "Analyzing code and applying edits.",
         label: "Thinking"
       },
       () => runAgent(agentId, jobId, jobTargetPath, mode)
@@ -1085,11 +1085,11 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
 
     ({ summary, thinking, failure } = parseAgentResult(agentResult.stdout));
   } else {
-    queueLog([`AI 에이전트(${agent.name})를 준비했습니다.`, "모델 응답을 기다리는 중입니다."]);
+    queueLog([`Agent (${agent.name}) ready.`, "Waiting for model response."]);
 
     const result = await withHeartbeat(
       {
-        step: mode === "chat" ? "코드를 읽고 질문에 답하는 중입니다." : "코드를 분석하고 화면을 수정하는 중입니다.",
+        step: mode === "chat" ? "Reading code and drafting an answer." : "Analyzing code and applying edits.",
         label: "Thinking"
       },
       () => runAdapterAgent(agent, jobId, jobPrompt, jobTargetPath, mode, stateBefore.messages)
@@ -1113,7 +1113,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
 
   await withHeartbeat(
     {
-      step: "수정 결과를 워크스페이스에서 빌드 검증하고 있습니다.",
+      step: "Validating with a workspace build.",
       label: "Build"
     },
     () => buildWorkspace()
@@ -1121,7 +1121,7 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
 
   await withHeartbeat(
     {
-      step: "변경 사항을 서비스 코드에 반영하고 있습니다.",
+      step: "Syncing edits back to the app dir.",
       label: "Syncing"
     },
     () => syncToAppDir()
@@ -1184,7 +1184,7 @@ async function main() {
         await finalizeFailure(CANCELED_ERROR, "canceled", currentMode);
       } else {
         await finalizeFailure(
-          error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.",
+          error instanceof Error ? error.message : "Unknown error.",
           "failed",
           currentMode
         );
@@ -1210,7 +1210,7 @@ void main().catch(async (error) => {
   }
 
   await finalizeFailure(
-    error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.",
+    error instanceof Error ? error.message : "Unknown error.",
     "failed",
     activeJob.mode
   );

@@ -22,7 +22,7 @@ const setNoStore = (response: Response) => {
 };
 
 const handleError = (response: Response, error: unknown, status = 500) => {
-  const message = error instanceof Error ? error.message : "요청을 처리하지 못했습니다.";
+  const message = error instanceof Error ? error.message : "Request failed.";
   setNoStore(response);
   response.status(status).json({ error: message });
 };
