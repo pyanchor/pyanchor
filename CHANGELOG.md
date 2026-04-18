@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-04-19
+
+### Fixed
+- **`isPyanchorConfigured()` now agent-aware.** Previously hard-coded
+  the `openClawBin` presence check regardless of `PYANCHOR_AGENT`,
+  which caused `claude-code` / `codex` / `aider` deployments to
+  surface `configured: false` in the admin health endpoint even when
+  fully wired up. Now switches:
+  - `openclaw` → checks `PYANCHOR_OPENCLAW_BIN`
+  - `codex` → checks `PYANCHOR_CODEX_BIN`
+  - `aider` → checks `PYANCHOR_AIDER_BIN`
+  - `claude-code` → no binary check (uses an npm package; missing-dep
+    surfaces at run time via the dynamic import)
+- 7 new tests in `tests/config.test.ts` covering each agent path.
+
+### CI
+- **`pnpm test` now gates both PRs and releases.** Previous workflows
+  ran `typecheck` + `build` only; the 60+ tests added in v0.2.0 were
+  effectively informational. `ci.yml` runs `pnpm test` across the
+  Node 18/20/22 matrix; `release.yml` runs it once before `npm
+  publish` so a broken build can't ship to npm.
+
+### Notes
+- Spotted by an external code review pass after v0.2.4 dog-fooding.
+  The agent-aware config bug only affected admin `configured` flag
+  reporting (not actual agent execution), but it would have caused
+  confusion for anyone monitoring `/api/admin/health`.
+
 ## [0.2.4] - 2026-04-19
 
 ### Changed

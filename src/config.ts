@@ -150,16 +150,50 @@ export function pathExists(targetPath: string) {
   return spawnSync("sudo", ["test", "-e", targetPath], { stdio: "ignore" }).status === 0;
 }
 
+/**
+ * Returns the binary that the configured agent shells out to, or `null`
+ * for agents that don't need one on PATH (e.g. claude-code uses an
+ * npm package). Used by isPyanchorConfigured to skip the binary
+ * presence check for non-CLI backends.
+ */
+function getAgentBin(): string | null {
+  switch (pyanchorConfig.agent.toLowerCase()) {
+    case "openclaw":
+      return pyanchorConfig.openClawBin;
+    case "codex":
+      return pyanchorConfig.codexBin;
+    case "aider":
+      return pyanchorConfig.aiderBin;
+    case "claude-code":
+      return null;
+    default:
+      return null;
+  }
+}
+
 export function isPyanchorConfigured() {
-  return (
-    pyanchorConfig.appDir !== PLACEHOLDER &&
-    pyanchorConfig.restartFrontendScript !== PLACEHOLDER &&
-    pyanchorConfig.healthcheckUrl !== PLACEHOLDER &&
-    pyanchorConfig.workspaceDir !== PLACEHOLDER &&
-    pathExists(pyanchorConfig.appDir) &&
-    pathExists(pyanchorConfig.openClawBin) &&
-    pathExists(pyanchorConfig.restartFrontendScript)
-  );
+  if (
+    pyanchorConfig.appDir === PLACEHOLDER ||
+    pyanchorConfig.restartFrontendScript === PLACEHOLDER ||
+    pyanchorConfig.healthcheckUrl === PLACEHOLDER ||
+    pyanchorConfig.workspaceDir === PLACEHOLDER
+  ) {
+    return false;
+  }
+
+  if (!pathExists(pyanchorConfig.appDir) || !pathExists(pyanchorConfig.restartFrontendScript)) {
+    return false;
+  }
+
+  // Agent-specific binary check. claude-code uses an npm package and
+  // has no binary to verify; we trust the dynamic import to surface
+  // missing-dep errors at run time.
+  const agentBin = getAgentBin();
+  if (agentBin && !pathExists(agentBin)) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
