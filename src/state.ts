@@ -15,8 +15,8 @@ import type {
   AiEditState
 } from "./shared/types";
 
-const MAX_MESSAGES = 24;
-const MAX_ACTIVITY_LOG = 80;
+const MAX_MESSAGES = pyanchorConfig.maxMessages;
+const MAX_ACTIVITY_LOG = pyanchorConfig.maxActivityLog;
 const CANCELED_ERROR = "Job canceled by user.";
 
 const createInitialState = (): AiEditState => ({
@@ -370,6 +370,13 @@ export async function startAiEdit(input: AiEditStartInput) {
   const prompt = input.prompt.trim();
   if (!prompt) {
     throw new Error("Prompt is required.");
+  }
+
+  if (prompt.length > pyanchorConfig.promptMaxLength) {
+    throw new Error(
+      `Prompt is too long (${prompt.length} > ${pyanchorConfig.promptMaxLength} chars). ` +
+        `Raise PYANCHOR_PROMPT_MAX_LENGTH if this is expected.`
+    );
   }
 
   if (!isPyanchorConfigured()) {

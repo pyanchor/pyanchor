@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-04-19
+
+### Added
+- **`Esc` closes the in-page overlay.** `document.keydown` listener
+  in `src/runtime/overlay.ts` mirrors the existing outside-mousedown
+  close behavior. Smallest possible a11y win; full focus-trap is
+  deferred to the v0.3.0 overlay decomposition (`B-1`) where the
+  module is split into testable pieces.
+- **Three new env knobs** for retention / quotas (Codex review's
+  UX-3 finding):
+  - `PYANCHOR_MAX_MESSAGES` (default `24`) — historical message
+    window kept in `state.json`.
+  - `PYANCHOR_MAX_ACTIVITY_LOG` (default `80`) — activity-log line
+    cap.
+  - `PYANCHOR_PROMPT_MAX_LENGTH` (default `8000`) — semantic cap
+    on a single user prompt. Above this, `POST /api/edit` rejects
+    with a clear error message pointing at the env var. Below the
+    Express body-parser's 128KB JSON limit but above the typical
+    LLM context-window budget for a single turn.
+
+### Notes
+- Three Codex review items deliberately deferred:
+  - **Focus trap on the panel.** Needs a careful pass over a 1054
+    LOC overlay file; high regression risk without browser-level
+    smoke. Tracked with the v0.3.0 `B-1` decomposition + Playwright
+    e2e (`#11` in the PR backlog).
+  - **Admin absolute-path masking.** Debatable: the page is
+    token-gated, and masking obscures legitimate operator info.
+    Logged as a v0.3.x toggle (`PYANCHOR_ADMIN_MASK_PATHS=true`)
+    for screen-share scenarios, not enabled by default.
+  - **Per-job workspace / git-worktree isolation.** The
+    `freshWorkspace` flag added in v0.2.3 covers the
+    "blow-it-away-and-rebuild" case; true per-job isolation is a
+    bigger architectural change tracked under v0.3.0+ preview/undo
+    work (B-5/B-6).
+
 ## [0.2.7] - 2026-04-19
 
 ### Security

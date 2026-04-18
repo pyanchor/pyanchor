@@ -1050,6 +1050,14 @@ document.addEventListener("mousedown", (event) => {
   render();
 });
 
+// ESC closes the overlay (a11y).
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  if (!uiState.isOpen) return;
+  uiState.isOpen = false;
+  render();
+});
+
 window.addEventListener("pyanchor:navigation", () => {
   render();
 });

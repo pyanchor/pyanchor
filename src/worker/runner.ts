@@ -21,8 +21,8 @@ if (!resolvedStateFile) {
 const stateFile = resolvedStateFile;
 const sudoBin = "/usr/bin/sudo";
 const flockBin = "/usr/bin/flock";
-const MAX_MESSAGES = 24;
-const MAX_ACTIVITY_LOG = 80;
+const MAX_MESSAGES = pyanchorConfig.maxMessages;
+const MAX_ACTIVITY_LOG = pyanchorConfig.maxActivityLog;
 const MAX_THINKING_CHARS = 8000;
 const CANCELED_ERROR = "Job canceled by user.";
 

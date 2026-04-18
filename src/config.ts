@@ -97,6 +97,19 @@ export const pyanchorConfig = {
   installTimeoutMs: optionalNumber("PYANCHOR_INSTALL_TIMEOUT_MS", 600_000),
   buildTimeoutMs: optionalNumber("PYANCHOR_BUILD_TIMEOUT_MS", 900_000),
 
+  // ─── retention / quotas ────────────────────────────────────────
+  // How many recent messages and activity-log lines to keep in
+  // state.json. Old entries are dropped from the head when the
+  // limit is exceeded. Default keeps the in-page overlay snappy
+  // for short-lived dev sessions; raise if you need longer
+  // forensic context.
+  maxMessages: optionalNumber("PYANCHOR_MAX_MESSAGES", 24),
+  maxActivityLog: optionalNumber("PYANCHOR_MAX_ACTIVITY_LOG", 80),
+  // Max characters accepted in a single user prompt. The Express
+  // body parser already caps at 128KB; this is a semantic cap on
+  // top of that for cost / agent-context-window control.
+  promptMaxLength: optionalNumber("PYANCHOR_PROMPT_MAX_LENGTH", 8000),
+
   // ─── dev ergonomics ────────────────────────────────────────────
   // When true: skip workspace install + next build + frontend restart;
   // rsync alone triggers Next.js HMR. Drops edit cycle from ~30s-3min
