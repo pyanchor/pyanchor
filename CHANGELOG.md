@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-04-19
+
+### Changed
+- **Mode toggle now locks while a job is in flight.** The Chat / Edit
+  buttons are disabled (with a "Mode is locked while a job is in
+  flight" tooltip) while `serverState.status` is `running` /
+  `canceling` or while a request is mid-submit / mid-cancel. Prevents
+  switching mid-thread, which produced confusing two-mode threads in
+  dog-fooding. Once the job completes (status `done` / `failed` /
+  `canceled` / `idle`), the toggle re-enables for the next message.
+- Disabled-button styling: `cursor: not-allowed`, `opacity: 0.45`
+  (active button: `0.6`, retains a faint background tint so the user
+  can still see which mode is "current").
+
+### Notes
+- v0.2.2's `data-pyanchor-trusted-hosts` attribute and v0.2.3's
+  persistent-workspace defaults remain unchanged. This is a pure UX
+  patch.
+- Per-edit timing measured against AIG production after v0.2.3
+  deploy: `yarn install` 12s → 2s (warm node_modules), `next build`
+  unchanged at ~24s (Next 14 prod build's lint + page-data + static
+  generation are not cached). Net per-edit cycle: ~55s shorter.
+
 ## [0.2.3] - 2026-04-19
 
 ### Performance

@@ -201,6 +201,17 @@ const styles = `
     background: rgba(84, 111, 255, 0.2);
     color: #eef3ff;
   }
+  .mode-switch__button[disabled] {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .mode-switch__button[disabled]:hover {
+    background: transparent;
+  }
+  .mode-switch__button--active[disabled] {
+    background: rgba(84, 111, 255, 0.14);
+    opacity: 0.6;
+  }
   .status-line {
     margin: 12px 18px 0;
     padding: 10px 12px;
@@ -855,9 +866,9 @@ const render = () => {
             <button class="icon-button" type="button" data-action="close" aria-label="Close">${closeIcon}</button>
           </div>
 
-          <div class="mode-switch">
-            <button class="mode-switch__button ${uiState.mode === "chat" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-chat">Chat</button>
-            <button class="mode-switch__button ${uiState.mode === "edit" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-edit">Edit</button>
+          <div class="mode-switch" title="${isBusy ? "Mode is locked while a job is in flight." : ""}">
+            <button class="mode-switch__button ${uiState.mode === "chat" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-chat" ${isBusy ? "disabled" : ""}>Chat</button>
+            <button class="mode-switch__button ${uiState.mode === "edit" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-edit" ${isBusy ? "disabled" : ""}>Edit</button>
           </div>
 
           ${
