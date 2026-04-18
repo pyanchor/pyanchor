@@ -407,7 +407,13 @@ const runAsOpenClawInDir = (
   runAsOpenClaw(["bash", "-lc", 'cd "$1" && shift && exec "$@"', "--", workingDir, ...args], options);
 
 async function prepareWorkspace() {
-  await runCommand(sudoBin, ["rm", "-rf", pyanchorConfig.workspaceDir]);
+  // Persistent-workspace path (default since v0.2.3) preserves the
+  // workspace's node_modules and .next dirs across jobs so yarn install
+  // and next build stay incremental. rsync still mirrors source files
+  // from the app dir (with --delete, scoped to non-excluded paths).
+  if (pyanchorConfig.freshWorkspace) {
+    await runCommand(sudoBin, ["rm", "-rf", pyanchorConfig.workspaceDir]);
+  }
   await runCommand(sudoBin, ["mkdir", "-p", pyanchorConfig.workspaceDir]);
 
   await runCommand(flockBin, [
@@ -429,6 +435,9 @@ async function prepareWorkspace() {
     `${pyanchorConfig.workspaceDir}/`
   ]);
 
+  // chown is idempotent on persistent workspaces; the agent user owning
+  // unchanged hardlinks is fine because rsync (without --link-dest)
+  // doesn't create cross-tree hardlinks.
   await runCommand(sudoBin, [
     "chown",
     "-R",

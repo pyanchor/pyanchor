@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-04-19
+
+### Performance
+- **Persistent workspace (default).** `prepareWorkspace` no longer
+  `rm -rf`s the scratch dir before every job. Rsync still mirrors
+  source files from `PYANCHOR_APP_DIR` (with `--delete`, scoped to
+  non-excluded paths), but the workspace's `node_modules/` and
+  `.next/` directories now persist across jobs. That makes both
+  `yarn install` and `next build` incremental — typical per-edit
+  cycle drops from ~30s-3min to ~5-30s on warm workspaces.
+- New `PYANCHOR_FRESH_WORKSPACE=true` env var restores the v0.1.0
+  delete-and-recreate behavior for cases where stale workspace state
+  is suspected. Default `false`.
+
+### Fixed
+- `rate-limit.ts` IP-key resolution simplified: `request.ip` already
+  honours `X-Forwarded-For` once `app.set('trust proxy', true)` is on
+  (server.ts does this in v0.1.1+), so the explicit
+  `X-Forwarded-For` header fallback was dead code. Replaced with a
+  cleaner `req.ip || req.socket?.remoteAddress || "unknown"` chain
+  that does the same thing more legibly. No user-visible behavior
+  change. (Flagged by the test agent's v0.2.0 sweep.)
+
+### Notes
+- Dog-fooded against the AIG production sidecar (studio.pyan.kr)
+  during v0.2.2 → v0.2.3 transition; this release is the first one
+  that reflects real-world performance feedback.
+
 ## [0.2.2] - 2026-04-19
 
 ### Added

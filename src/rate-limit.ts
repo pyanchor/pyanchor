@@ -31,11 +31,12 @@ export function tokenBucketMiddleware(options: TokenBucketOptions) {
   };
 
   return (request: Request, response: Response, next: NextFunction) => {
-    const key =
-      request.ip ??
-      request.socket.remoteAddress ??
-      (request.headers["x-forwarded-for"] as string | undefined)?.split(",")[0]?.trim() ??
-      "unknown";
+    // Express's req.ip already honours X-Forwarded-For when
+    // `app.set('trust proxy', true)` is on (the sidecar sets that in
+    // server.ts). Falls back to the raw socket remoteAddress otherwise.
+    // We only need an "unknown" sentinel for the rare case both are
+    // missing (e.g. unit tests that don't pass a real Request).
+    const key = request.ip || request.socket?.remoteAddress || "unknown";
 
     const now = Date.now();
     const bucket = buckets.get(key) ?? { tokens: capacity, updatedAt: now };

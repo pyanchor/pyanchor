@@ -103,6 +103,16 @@ export const pyanchorConfig = {
   // to ~1-2s. ONLY safe when the host page is `next dev`-served.
   fastReload: optionalBool("PYANCHOR_FAST_RELOAD", false),
 
+  // ─── workspace strategy ────────────────────────────────────────
+  // When true (legacy v0.1.0 behavior): rm -rf the workspace before
+  // every job. Costs a full yarn install + next build every cycle.
+  // When false (default in v0.2.3+): keep the workspace persistent
+  // across jobs; rsync only updates changed files; node_modules and
+  // .next caches survive, making yarn install / next build incremental.
+  // Flip back to true if you suspect stale workspace state is breaking
+  // a run.
+  freshWorkspace: optionalBool("PYANCHOR_FRESH_WORKSPACE", false),
+
   // ─── server ────────────────────────────────────────────────────
   port: optionalNumber("PYANCHOR_PORT", 3010),
   host: optionalEnv("PYANCHOR_HOST", "127.0.0.1"),
