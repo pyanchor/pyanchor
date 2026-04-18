@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { pyanchorConfig } from "../config";
+import { selectFramework } from "../frameworks";
 
 import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./types";
 
@@ -39,10 +40,11 @@ function buildBrief(input: AgentRunInput): string {
   sections.push(input.prompt);
 
   if (input.mode === "edit") {
+    const framework = selectFramework(pyanchorConfig.framework);
     sections.push("");
     sections.push(
       "Apply the change to the appropriate files in the working directory. " +
-        "After the edit, run a production build (`next build`) and fix any issues until it passes. " +
+        `After the edit, ${framework.briefBuildHint.charAt(0).toLowerCase()}${framework.briefBuildHint.slice(1)} ` +
         "Do not refactor unrelated areas. Respond in 2-3 lines summarizing the changes."
     );
   } else {
@@ -58,31 +60,17 @@ function buildBrief(input: AgentRunInput): string {
 
 /**
  * Heuristically map a route hint (e.g. "/login") to candidate files in the
- * Next.js workspace. Returns the first matching path, or null if nothing
- * obvious is found — in that case aider falls back to its repomap.
+ * workspace. Returns the first matching path, or [] if nothing obvious is
+ * found — in that case aider falls back to its repomap.
+ *
+ * The framework profile owns the candidate list; this function just walks
+ * it against the filesystem.
  */
 function guessFilesForRoute(workspaceDir: string, targetPath: string): string[] {
   if (!targetPath) return [];
 
-  const route = targetPath.replace(/^\/+|\/+$/g, "");
-  if (!route) {
-    // Root route — try app/page.tsx or pages/index.tsx.
-    const roots = ["app/page.tsx", "app/page.jsx", "pages/index.tsx", "pages/index.jsx"];
-    for (const rel of roots) {
-      const abs = path.join(workspaceDir, rel);
-      if (existsSync(abs)) return [abs];
-    }
-    return [];
-  }
-
-  const candidates: string[] = [];
-  for (const ext of ["tsx", "jsx", "ts", "js"]) {
-    candidates.push(`app/${route}/page.${ext}`);
-    candidates.push(`app/(auth)/${route}/page.${ext}`);
-    candidates.push(`app/(marketing)/${route}/page.${ext}`);
-    candidates.push(`pages/${route}.${ext}`);
-    candidates.push(`pages/${route}/index.${ext}`);
-  }
+  const framework = selectFramework(pyanchorConfig.framework);
+  const candidates = framework.routeFileCandidates(targetPath);
 
   for (const rel of candidates) {
     const abs = path.join(workspaceDir, rel);

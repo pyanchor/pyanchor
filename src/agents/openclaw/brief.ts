@@ -5,27 +5,17 @@
  * be unit-tested without spinning up a worker process.
  */
 
+import type { FrameworkProfile } from "../../frameworks/types";
+import { nextjsProfile } from "../../frameworks/nextjs";
 import type { AiEditMode, AiEditState } from "../../shared/types";
 
 /**
- * Per-route guidance appended to the brief. Currently only the auth
- * routes get a special-case; everything else falls through to the
- * generic hint pair.
+ * Per-route guidance appended to the brief. Delegated to the framework
+ * profile so each stack ships its own file-path conventions; this stays
+ * a thin re-export for the existing tests and call sites.
  */
-export function getRouteHints(jobTargetPath: string): string[] {
-  if (jobTargetPath === "/login" || jobTargetPath === "/signup") {
-    return [
-      "- Start with auth files only: app/(auth)/login/page.tsx, app/(auth)/signup/page.tsx, components/auth/, app/(auth)/layout.tsx, app/globals.css.",
-      "- Preserve the Korean UI copy and the existing login/signup behavior.",
-      "- Prefer a shared auth component if the change affects both login and signup tabs.",
-      "- For this route, animations should be subtle and product-like: short fade/slide transitions, tab indicator movement, no flashy motion."
-    ];
-  }
-
-  return [
-    "- Start with the target route file and the components that route imports.",
-    "- Only touch app/globals.css if the visual change needs shared styling."
-  ];
+export function getRouteHints(jobTargetPath: string, framework: FrameworkProfile = nextjsProfile): string[] {
+  return framework.routeHints(jobTargetPath);
 }
 
 /**
@@ -55,7 +45,8 @@ export function createBrief(
   jobPrompt: string,
   jobTargetPath: string,
   mode: AiEditMode,
-  messages: AiEditState["messages"]
+  messages: AiEditState["messages"],
+  framework: FrameworkProfile = nextjsProfile
 ): string {
   return [
     "# AI UI Request",
@@ -86,7 +77,7 @@ export function createBrief(
         ]),
     "",
     "## Project hints",
-    ...getRouteHints(jobTargetPath),
+    ...getRouteHints(jobTargetPath, framework),
     "",
     "## Output",
     ...(mode === "edit"

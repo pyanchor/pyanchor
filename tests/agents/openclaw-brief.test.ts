@@ -5,6 +5,7 @@ import {
   formatConversationContext,
   getRouteHints
 } from "../../src/agents/openclaw/brief";
+import { viteProfile } from "../../src/frameworks";
 import type { AiEditMessage } from "../../src/shared/types";
 
 const message = (overrides: Partial<AiEditMessage> = {}): AiEditMessage => ({
@@ -103,5 +104,11 @@ describe("createBrief", () => {
   it("inlines the conversation context", () => {
     const brief = createBrief("p", "/x", "edit", [message({ text: "earlier turn" })]);
     expect(brief).toContain("earlier turn");
+  });
+
+  it("uses framework-specific route hints when a profile is passed", () => {
+    const brief = createBrief("p", "/dashboard", "edit", [], viteProfile);
+    expect(brief).toMatch(/no file-system router|src\/routes/);
+    expect(brief).not.toContain("app/globals.css");
   });
 });

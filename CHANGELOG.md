@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-19
+
+### Added
+- **Framework profile system.** Pyanchor is no longer Next.js-only.
+  A new `PYANCHOR_FRAMEWORK` env (default `nextjs`) selects a profile
+  that drives the default install/build commands, rsync excludes, and
+  per-route hints fed to the agent. Two profiles ship in this release:
+  - `nextjs` — preserves the existing behavior (`corepack yarn install
+    --frozen-lockfile`, `next build`, `.next` exclude, app/pages route
+    hints).
+  - `vite` — new (`npm install`, `npm run build`, `dist`/`.vite`
+    excludes, `src/routes/`/`src/pages/`/`src/components/` route
+    candidates).
+- **`PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND`.** Shell-string
+  overrides that bypass the framework profile entirely. Lets users
+  point pyanchor at Astro / Remix / SvelteKit / pnpm / bun without
+  shipping a profile — set the two commands and you're done.
+- **`examples/vite-react-minimal/`** — a 6-file Vite + React reference
+  app, mirrored on `examples/nextjs-minimal/` so the two integrations
+  can be compared side-by-side.
+
+### Changed
+- **`worker/runner.ts`**: install / build / rsync commands all derive
+  from the framework profile + env overrides instead of hardcoded
+  `corepack yarn install` and `node ./node_modules/next/dist/bin/next
+  build` strings. The `.git` and `node_modules` excludes stay always-on;
+  framework-specific cache dirs (`.next`, `.vite`, `dist`) come from
+  `framework.workspaceExcludes`.
+- **Agent briefs** (`openclaw`, `codex`, `aider`, `claude-code`) now
+  splice `framework.briefBuildHint` into their per-job instructions so
+  the agent gets the right "validate by running X" sentence regardless
+  of stack. The aider adapter's `guessFilesForRoute` heuristic now
+  delegates to `framework.routeFileCandidates` — auto-discovers Vite
+  routes the same way it auto-discovers Next.js routes.
+- **README** picks up a "Supported frameworks" table and the tagline
+  drops the Next.js exclusivity ("AI live-edit sidecar for your web
+  app — Next.js, Vite, or your own stack").
+
+### Compatibility
+- **No-op for existing Next.js users.** All defaults preserve v0.2.8
+  behavior verbatim — same install command, same build command, same
+  rsync exclude list, same route hints. Skipping `PYANCHOR_FRAMEWORK`
+  is equivalent to setting it to `nextjs`.
+- API surface (`AgentRunner`) is unchanged. The new framework system is
+  module-internal: adapters call `selectFramework(pyanchorConfig.framework)`
+  and consume the profile.
+
+### Tests
+- Added `tests/frameworks.test.ts` — 21 tests covering registry
+  fallback, both built-in profiles, and the case-insensitive lookup.
+- Extended `tests/agents/openclaw-brief.test.ts` to assert the
+  framework parameter actually swaps out the route hints.
+- Total: 94 tests across 8 files (was 72 across 7).
+
 ## [0.2.8] - 2026-04-19
 
 ### Added

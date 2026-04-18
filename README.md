@@ -2,8 +2,8 @@
 
 # Pyanchor 🦞
 
-**Agent-agnostic AI live-edit sidecar for Next.js.**
-*Anchor edits straight into your running app.*
+**Agent-agnostic AI live-edit sidecar for your web app.**
+*Anchor edits straight into your running app — Next.js, Vite, or your own stack.*
 
 [![npm version](https://img.shields.io/npm/v/pyanchor.svg?style=flat-square&color=cb3837)](https://www.npmjs.com/package/pyanchor)
 [![npm downloads](https://img.shields.io/npm/dm/pyanchor.svg?style=flat-square)](https://www.npmjs.com/package/pyanchor)
@@ -178,6 +178,29 @@ Pick a backend with `PYANCHOR_AGENT`:
 
 The interface is ~70 lines; a working adapter is typically ~100-200.
 
+## Supported frameworks
+
+Pick a framework profile with `PYANCHOR_FRAMEWORK` (default: `nextjs`).
+The profile drives default install/build commands, rsync excludes, and
+agent route hints.
+
+| `PYANCHOR_FRAMEWORK` | Status | Default install | Default build | Workspace excludes |
+| --- | --- | --- | --- | --- |
+| `nextjs` | ✅ default | `corepack yarn install --frozen-lockfile` | `next build` (telemetry off) | `.next` |
+| `vite` | ✅ shipped | `npm install` | `npm run build` | `dist`, `.vite` |
+| Astro / Remix / SvelteKit / CRA / your own | 🟡 | set explicitly | set explicitly | falls through to `nextjs` profile route hints |
+
+For frameworks we don't ship a profile for, you usually only need:
+
+```bash
+export PYANCHOR_INSTALL_COMMAND="pnpm install --frozen-lockfile"
+export PYANCHOR_BUILD_COMMAND="pnpm run build"
+```
+
+Anything more (route-hint heuristics, custom rsync excludes) lives in
+[`src/frameworks/`](./src/frameworks/) — adding a new profile is ~50 lines.
+PRs welcome.
+
 ## ⚙️ Configuration
 
 Required (sidecar refuses to start without these):
@@ -185,14 +208,16 @@ Required (sidecar refuses to start without these):
 | Variable | What it points at |
 | --- | --- |
 | `PYANCHOR_TOKEN` | Bearer token for the API. `openssl rand -hex 32`. |
-| `PYANCHOR_APP_DIR` | Your Next.js project root. |
+| `PYANCHOR_APP_DIR` | Your app's project root (Next.js / Vite / etc.). |
 | `PYANCHOR_WORKSPACE_DIR` | Scratch dir the agent mutates before sync-back. |
 | `PYANCHOR_RESTART_SCRIPT` | Executable that restarts your frontend. |
 | `PYANCHOR_HEALTHCHECK_URL` | URL that returns 2xx once the frontend is back up. |
 
-Common optional knobs: `PYANCHOR_AGENT`, `PYANCHOR_PORT` (default 3010),
-`PYANCHOR_HOST` (default 127.0.0.1), `PYANCHOR_RUNTIME_BASE_PATH`
-(default `/_pyanchor`), `PYANCHOR_ALLOWED_ORIGINS` (CSRF allowlist).
+Common optional knobs: `PYANCHOR_AGENT`, `PYANCHOR_FRAMEWORK`,
+`PYANCHOR_INSTALL_COMMAND`, `PYANCHOR_BUILD_COMMAND`, `PYANCHOR_PORT`
+(default 3010), `PYANCHOR_HOST` (default 127.0.0.1),
+`PYANCHOR_RUNTIME_BASE_PATH` (default `/_pyanchor`),
+`PYANCHOR_ALLOWED_ORIGINS` (CSRF allowlist).
 Full list in [`.env.example`](./.env.example).
 
 ## 🛡️ Security
@@ -269,20 +294,28 @@ by what I think the abstraction should be.
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Local dev, build, release flow |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Release notes |
 | [`examples/nextjs-minimal/`](./examples/nextjs-minimal) | A 5-file Next.js app wired to pyanchor |
+| [`examples/vite-react-minimal/`](./examples/vite-react-minimal) | A 6-file Vite + React app wired to pyanchor (`PYANCHOR_FRAMEWORK=vite`) |
 
 ## 🔭 Status
 
-`v0.1.x` is early. Expect API and config breaks between minor versions
-until `v1.0.0`. Planned for `v0.2.0`:
+`v0.x` is early. Expect API and config breaks between minor versions
+until `v1.0.0`.
 
-- Move OpenClaw behind the `AgentRunner` interface (currently inline).
-- Codex CLI and Aider reference adapters.
-- Split the >1k LOC files (`worker/runner.ts`, `runtime/overlay.ts`).
-- Test scaffold (vitest), starting with the state machine.
-- Cookie-based session tokens (drop the in-HTML token attribute).
-- **Fast-reload mode**: skip build/restart in dev environments and let
-  Next.js HMR pick up the rsync change. ~30s → ~2s per edit.
-- Replace ad-hoc i18n placeholders with a real translation shim.
+Shipped highlights so far:
+
+- `v0.2.x` — `AgentRunner` interface, codex / aider / claude-code adapters,
+  cookie-based sessions, atomic state writes, fast-reload mode, persistent
+  workspace caches.
+- `v0.4.0` — `PYANCHOR_FRAMEWORK` profile system + `PYANCHOR_BUILD_COMMAND` /
+  `PYANCHOR_INSTALL_COMMAND` overrides. Vite shipped as the second profile;
+  Astro / Remix / SvelteKit work today via the two command env vars.
+
+Coming:
+
+- `v0.5.0` — test coverage push (Playwright e2e for the overlay,
+  integration tests for `worker/runner.ts`, mocked adapter tests).
+- Multi-user roadmap (see [Multi-user](#-multi-user)).
+- More framework profiles (PRs welcome — `src/frameworks/` is ~50 LOC each).
 
 ## License
 

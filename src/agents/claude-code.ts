@@ -1,3 +1,6 @@
+import { pyanchorConfig } from "../config";
+import { selectFramework } from "../frameworks";
+
 import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./types";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
@@ -48,10 +51,11 @@ function buildBrief(input: AgentRunInput): string {
   sections.push(input.prompt);
 
   if (input.mode === "edit") {
+    const framework = selectFramework(pyanchorConfig.framework);
     sections.push("");
     sections.push(
       "Apply the change to the appropriate files in the working directory. " +
-        "Run a production build (`next build`) and fix any issues until it passes. " +
+        `${framework.briefBuildHint} ` +
         "Do not refactor unrelated areas. Respond in 2-3 lines summarizing the changes."
     );
   } else {

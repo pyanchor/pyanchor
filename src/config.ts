@@ -71,6 +71,31 @@ export const pyanchorConfig = {
   // Which adapter handles the AI step. Must match an entry in src/agents/.
   agent: optionalEnv("PYANCHOR_AGENT", "openclaw"),
 
+  // ─── framework profile ─────────────────────────────────────────
+  // Which framework profile drives the default install/build commands,
+  // workspace excludes, and route hints. Built-in: nextjs (default),
+  // vite. Unknown values fall back to nextjs with a warning. Override
+  // the install/build commands directly via PYANCHOR_INSTALL_COMMAND /
+  // PYANCHOR_BUILD_COMMAND if you need a third-party stack (Astro,
+  // Remix, SvelteKit, etc.) — those two envs alone are usually enough.
+  framework: optionalEnv("PYANCHOR_FRAMEWORK", "nextjs"),
+
+  // Shell command to install workspace dependencies. Empty string =
+  // use the framework profile's default. Runs in the workspace dir
+  // via `bash -lc` as the agent user. Example overrides:
+  //   "pnpm install --frozen-lockfile"
+  //   "npm ci"
+  //   "bun install --frozen-lockfile"
+  installCommand: optionalEnv("PYANCHOR_INSTALL_COMMAND", ""),
+
+  // Shell command to validate the workspace builds before sync-back.
+  // Empty string = use the framework profile's default. Runs in the
+  // workspace dir via `bash -lc`. Example overrides:
+  //   "pnpm run build"
+  //   "vite build"
+  //   "astro check && astro build"
+  buildCommand: optionalEnv("PYANCHOR_BUILD_COMMAND", ""),
+
   // ─── agent: shared knobs ───────────────────────────────────────
   agentId: optionalEnv("PYANCHOR_AGENT_ID", "pyanchor"),
   model: optionalEnv("PYANCHOR_AGENT_MODEL", "openai-codex/gpt-5.4"),

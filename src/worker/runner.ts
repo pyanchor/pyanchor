@@ -9,6 +9,7 @@ import {
   type AgentEvent,
   type AgentRunner
 } from "../agents";
+import { selectFramework } from "../frameworks";
 import type { AiEditMessage, AiEditMessageStatus, AiEditMode, AiEditState } from "../shared/types";
 
 const resolvedStateFile = process.env.PYANCHOR_STATE_FILE_PATH;
@@ -21,6 +22,9 @@ if (!resolvedStateFile) {
 const stateFile = resolvedStateFile;
 const sudoBin = "/usr/bin/sudo";
 const flockBin = "/usr/bin/flock";
+const framework = selectFramework(pyanchorConfig.framework);
+const installCommandShell = pyanchorConfig.installCommand || framework.installCommand;
+const buildCommandShell = pyanchorConfig.buildCommand || framework.buildCommand;
 const MAX_MESSAGES = pyanchorConfig.maxMessages;
 const MAX_ACTIVITY_LOG = pyanchorConfig.maxActivityLog;
 const MAX_THINKING_CHARS = 8000;
@@ -409,11 +413,20 @@ const runAsOpenClawInDir = (
 ) =>
   runAsOpenClaw(["bash", "-lc", 'cd "$1" && shift && exec "$@"', "--", workingDir, ...args], options);
 
+// .git and node_modules are always excluded (huge / not source); the
+// framework profile adds its own cache/output dirs (.next for nextjs,
+// dist + .vite for vite).
+const baseRsyncExcludes = [".git", "node_modules"];
+const workspaceRsyncExcludes = [...baseRsyncExcludes, ...framework.workspaceExcludes];
+const buildRsyncExcludeArgs = (excludes: string[]): string[] =>
+  excludes.flatMap((entry) => ["--exclude", entry]);
+
 async function prepareWorkspace() {
   // Persistent-workspace path (default since v0.2.3) preserves the
-  // workspace's node_modules and .next dirs across jobs so yarn install
-  // and next build stay incremental. rsync still mirrors source files
-  // from the app dir (with --delete, scoped to non-excluded paths).
+  // workspace's node_modules and framework cache dirs (.next, dist, ...)
+  // across jobs so install and build stay incremental. rsync still
+  // mirrors source files from the app dir with --delete, scoped to
+  // non-excluded paths.
   if (pyanchorConfig.freshWorkspace) {
     await runCommand(sudoBin, ["rm", "-rf", pyanchorConfig.workspaceDir]);
   }
@@ -428,12 +441,7 @@ async function prepareWorkspace() {
     "rsync",
     "-a",
     "--delete",
-    "--exclude",
-    ".git",
-    "--exclude",
-    "node_modules",
-    "--exclude",
-    ".next",
+    ...buildRsyncExcludeArgs(workspaceRsyncExcludes),
     `${pyanchorConfig.appDir}/`,
     `${pyanchorConfig.workspaceDir}/`
   ]);
@@ -452,7 +460,7 @@ async function prepareWorkspace() {
 function installWorkspaceDependencies() {
   return runAsOpenClawInDir(
     pyanchorConfig.workspaceDir,
-    ["/usr/bin/corepack", "yarn", "install", "--frozen-lockfile"],
+    ["bash", "-lc", installCommandShell],
     {
       timeoutMs: pyanchorConfig.installTimeoutMs,
       onStdoutChunk: (text) => queueLog([`[install] ${text}`]),
@@ -464,7 +472,7 @@ function installWorkspaceDependencies() {
 function buildWorkspace() {
   return runAsOpenClawInDir(
     pyanchorConfig.workspaceDir,
-    ["env", "NEXT_TELEMETRY_DISABLED=1", "/usr/bin/node", "./node_modules/next/dist/bin/next", "build"],
+    ["bash", "-lc", buildCommandShell],
     {
       timeoutMs: pyanchorConfig.buildTimeoutMs,
       onStdoutChunk: (text) => queueLog([`[build] ${text}`]),
@@ -472,6 +480,22 @@ function buildWorkspace() {
     }
   );
 }
+
+// Agent scratch artifacts that must NEVER reach the app dir on sync-back.
+// OpenClaw drops these into the workspace root; other adapters add
+// nothing here. Keep this list narrow — anything else lives in the
+// framework profile's workspaceExcludes.
+const agentScratchExcludes = [
+  ".openclaw",
+  "AGENTS.md",
+  "BOOTSTRAP.md",
+  "EDIT_BRIEF.md",
+  "HEARTBEAT.md",
+  "IDENTITY.md",
+  "SOUL.md",
+  "TOOLS.md",
+  "USER.md"
+];
 
 async function syncToAppDir() {
   await runCommand(flockBin, [
@@ -483,28 +507,7 @@ async function syncToAppDir() {
     "rsync",
     "-a",
     "--delete",
-    "--exclude",
-    ".git",
-    "--exclude",
-    "node_modules",
-    "--exclude",
-    ".openclaw",
-    "--exclude",
-    "AGENTS.md",
-    "--exclude",
-    "BOOTSTRAP.md",
-    "--exclude",
-    "EDIT_BRIEF.md",
-    "--exclude",
-    "HEARTBEAT.md",
-    "--exclude",
-    "IDENTITY.md",
-    "--exclude",
-    "SOUL.md",
-    "--exclude",
-    "TOOLS.md",
-    "--exclude",
-    "USER.md",
+    ...buildRsyncExcludeArgs([...workspaceRsyncExcludes, ...agentScratchExcludes]),
     `${pyanchorConfig.workspaceDir}/`,
     `${pyanchorConfig.appDir}/`
   ]);

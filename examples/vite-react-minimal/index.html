@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pyanchor vite-react example</title>
+    <!--
+      Pyanchor overlay loader. The token must match PYANCHOR_TOKEN on
+      the sidecar. Replace the inline string with a build-time injected
+      value (e.g. via define / envPrefix) for real deployments.
+    -->
+    <script
+      src="/_pyanchor/bootstrap.js"
+      defer
+      data-pyanchor-token="replace-me-with-32-random-bytes"
+      data-pyanchor-trusted-hosts="localhost,127.0.0.1"
+    ></script>
+  </head>
+  <body style="margin:0;background:#0b1020;color:#edf1ff;font-family:system-ui,sans-serif">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

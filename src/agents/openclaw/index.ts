@@ -5,6 +5,7 @@
  */
 
 import { pyanchorConfig } from "../../config";
+import { selectFramework } from "../../frameworks";
 import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "../types";
 
 import { createBrief } from "./brief";
@@ -158,7 +159,8 @@ export class OpenClawAgentRunner implements AgentRunner {
   }
 
   private async writeBrief(input: AgentRunInput, _ctx: AgentRunContext): Promise<void> {
-    const brief = createBrief(input.prompt, input.targetPath, input.mode, input.recentMessages as never);
+    const framework = selectFramework(pyanchorConfig.framework);
+    const brief = createBrief(input.prompt, input.targetPath, input.mode, input.recentMessages as never, framework);
     await this.runAsOpenClaw(
       ["tee", `${pyanchorConfig.workspaceDir}/EDIT_BRIEF.md`],
       { input: brief }
