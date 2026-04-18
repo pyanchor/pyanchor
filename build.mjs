@@ -27,7 +27,10 @@ await build({
   outfile: "dist/worker/runner.cjs",
   platform: "node",
   format: "cjs",
-  target: "node18"
+  target: "node18",
+  // Optional peer deps: leave as runtime require() so users without the
+  // adapter dep installed can still run pyanchor with PYANCHOR_AGENT=openclaw.
+  external: ["@anthropic-ai/claude-agent-sdk"]
 });
 
 await build({

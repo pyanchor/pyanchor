@@ -24,13 +24,13 @@ Designed for **self-hosted, prod-attached** workflows. Not a SaaS, not an IDE pl
 
 Plug in any agentic coding tool by implementing the `AgentRunner` interface.
 
-| Agent | Status |
-|---|---|
-| [OpenClaw](https://github.com/openclaw/openclaw) | ✅ default |
-| [Claude Code SDK](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code) | ✅ shipped in v0.1.0 |
-| OpenAI Codex CLI | 🟡 community adapter welcome |
-| [Aider](https://aider.chat/) | 🟡 community adapter welcome |
-| Goose, Cline, custom | 🟡 — see [`docs/adapters.md`](./docs/adapters.md) |
+| `PYANCHOR_AGENT` | Status | Notes |
+|---|---|---|
+| `openclaw` | ✅ default | OpenClaw CLI on `PATH` |
+| `claude-code` | ✅ shipped | install peer dep `@anthropic-ai/claude-agent-sdk` |
+| `codex` | 🟡 v0.2.0 | community adapter welcome |
+| `aider` | 🟡 v0.2.0 | community adapter welcome |
+| Goose, Cline, custom | 🟡 | see [`docs/adapters.md`](./docs/adapters.md) for the contract |
 
 ## Quick start
 

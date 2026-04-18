@@ -60,12 +60,18 @@ export const pyanchorConfig = {
   // Bearer token for the runtime + admin API. Generate ≥32 random bytes.
   token: requireEnv("PYANCHOR_TOKEN"),
 
-  // ─── agent (OpenClaw default; will be plugged via AgentRunner in Phase 3) ─
-  openClawBin: optionalEnv("PYANCHOR_OPENCLAW_BIN", "openclaw"),
-  openClawUser: optionalEnv("PYANCHOR_OPENCLAW_USER", currentUser),
+  // ─── agent backend selection ───────────────────────────────────
+  // Which adapter handles the AI step. Must match an entry in src/agents/.
+  agent: optionalEnv("PYANCHOR_AGENT", "openclaw"),
+
+  // ─── agent: shared knobs ───────────────────────────────────────
   agentId: optionalEnv("PYANCHOR_AGENT_ID", "pyanchor"),
   model: optionalEnv("PYANCHOR_AGENT_MODEL", "openai-codex/gpt-5.4"),
   thinking: optionalEnv("PYANCHOR_AGENT_THINKING", "medium"),
+
+  // ─── agent: OpenClaw-specific knobs ────────────────────────────
+  openClawBin: optionalEnv("PYANCHOR_OPENCLAW_BIN", "openclaw"),
+  openClawUser: optionalEnv("PYANCHOR_OPENCLAW_USER", currentUser),
 
   // ─── cross-user / file ownership (default: same user) ──────────
   appDirOwner: optionalEnv("PYANCHOR_APP_DIR_OWNER", `${currentUser}:${currentUser}`),

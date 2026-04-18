@@ -4,6 +4,12 @@ import fsSync from "node:fs";
 import { randomUUID } from "node:crypto";
 
 import { pyanchorConfig } from "../config";
+import {
+  OPENCLAW_INLINE,
+  selectAgent,
+  type AgentEvent,
+  type AgentRunner
+} from "../agents";
 import type { AiEditMessage, AiEditMessageStatus, AiEditMode, AiEditState } from "../shared/types";
 
 const resolvedStateFile = process.env.PYANCHOR_STATE_FILE_PATH;
@@ -39,6 +45,7 @@ const activeJob = {
 let stateLock = Promise.resolve();
 let cancelRequested = false;
 let cancelHandled = false;
+const cancelController = new AbortController();
 let pendingLogLines: string[] = [];
 let pendingThinkingSegments: string[] = [];
 let flushTimer: NodeJS.Timeout | null = null;
@@ -276,6 +283,7 @@ async function finalizeCancellation(signal: NodeJS.Signals) {
 
   cancelHandled = true;
   cancelRequested = true;
+  cancelController.abort();
   queueLog([`취소 신호를 받았습니다. (${signal})`, "실행 중인 하위 작업을 정리합니다."]);
   await flushRuntimeBuffers();
   await cancelActiveChildren();
@@ -952,8 +960,84 @@ async function finalizeFailure(message: string, status: "failed" | "canceled", m
   );
 }
 
+async function runAdapterAgent(
+  agent: AgentRunner,
+  jobId: string,
+  jobPrompt: string,
+  jobTargetPath: string,
+  mode: AiEditMode,
+  recentMessages: AiEditState["messages"]
+): Promise<{ summary: string; thinking: string | null; failure: string | null }> {
+  let summary = "";
+  let thinking: string | null = null;
+  const summaryParts: string[] = [];
+  const thinkingParts: string[] = [];
+
+  try {
+    if (agent.prepare) {
+      await agent.prepare({
+        workspaceDir: pyanchorConfig.workspaceDir,
+        timeoutMs: pyanchorConfig.agentTimeoutSeconds * 1000,
+        model: pyanchorConfig.model,
+        thinking: pyanchorConfig.thinking,
+        signal: cancelController.signal
+      });
+    }
+
+    const stream = agent.run(
+      {
+        prompt: jobPrompt,
+        targetPath: jobTargetPath,
+        mode,
+        recentMessages,
+        jobId
+      },
+      {
+        workspaceDir: pyanchorConfig.workspaceDir,
+        timeoutMs: pyanchorConfig.agentTimeoutSeconds * 1000,
+        model: pyanchorConfig.model,
+        thinking: pyanchorConfig.thinking,
+        signal: cancelController.signal
+      }
+    );
+
+    for await (const event of stream as AsyncIterable<AgentEvent>) {
+      if (cancelRequested) break;
+
+      switch (event.type) {
+        case "log":
+          queueLog([`[agent] ${event.text}`]);
+          break;
+        case "thinking":
+          queueThinking(event.text);
+          thinkingParts.push(event.text);
+          break;
+        case "step":
+          await pulseState({ step: event.description ?? event.label, label: event.label });
+          break;
+        case "result":
+          summaryParts.push(event.summary);
+          if (event.thinking) thinkingParts.push(event.thinking);
+          break;
+      }
+    }
+  } catch (error) {
+    if (cancelRequested) {
+      throw new Error(CANCELED_ERROR);
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return { summary: "", thinking: null, failure: message };
+  }
+
+  summary = summaryParts.join("\n\n").trim() || (mode === "edit" ? "변경 작업을 완료했습니다." : "");
+  thinking = thinkingParts.join("\n\n").trim() || null;
+  return { summary, thinking, failure: null };
+}
+
 async function processJob(jobId: string, jobPrompt: string, jobTargetPath: string, mode: AiEditMode) {
   const stateBefore = await readState();
+  const agent = selectAgent();
+  const isOpenClawInline = agent === OPENCLAW_INLINE;
 
   await withHeartbeat(
     {
@@ -962,7 +1046,9 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
     },
     async () => {
       await prepareWorkspace();
-      await writeBrief(jobPrompt, jobTargetPath, mode, stateBefore.messages);
+      if (isOpenClawInline) {
+        await writeBrief(jobPrompt, jobTargetPath, mode, stateBefore.messages);
+      }
     }
   );
 
@@ -981,18 +1067,39 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
     label: "Initializing"
   });
 
-  const agentId = await ensureAgent();
-  queueLog(["AI 에이전트를 준비했습니다.", "모델 응답을 기다리는 중입니다."]);
+  let summary: string;
+  let thinking: string | null;
+  let failure: string | null;
 
-  const agentResult = await withHeartbeat(
-    {
-      step: mode === "chat" ? "코드를 읽고 질문에 답하는 중입니다." : "코드를 분석하고 화면을 수정하는 중입니다.",
-      label: "Thinking"
-    },
-    () => runAgent(agentId, jobId, jobTargetPath, mode)
-  );
+  if (isOpenClawInline) {
+    const agentId = await ensureAgent();
+    queueLog(["AI 에이전트를 준비했습니다.", "모델 응답을 기다리는 중입니다."]);
 
-  const { summary, thinking, failure } = parseAgentResult(agentResult.stdout);
+    const agentResult = await withHeartbeat(
+      {
+        step: mode === "chat" ? "코드를 읽고 질문에 답하는 중입니다." : "코드를 분석하고 화면을 수정하는 중입니다.",
+        label: "Thinking"
+      },
+      () => runAgent(agentId, jobId, jobTargetPath, mode)
+    );
+
+    ({ summary, thinking, failure } = parseAgentResult(agentResult.stdout));
+  } else {
+    queueLog([`AI 에이전트(${agent.name})를 준비했습니다.`, "모델 응답을 기다리는 중입니다."]);
+
+    const result = await withHeartbeat(
+      {
+        step: mode === "chat" ? "코드를 읽고 질문에 답하는 중입니다." : "코드를 분석하고 화면을 수정하는 중입니다.",
+        label: "Thinking"
+      },
+      () => runAdapterAgent(agent, jobId, jobPrompt, jobTargetPath, mode, stateBefore.messages)
+    );
+
+    summary = result.summary;
+    thinking = result.thinking;
+    failure = result.failure;
+  }
+
   await flushRuntimeBuffers();
 
   if (failure) {

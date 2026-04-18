@@ -8,12 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Initial import of the sidecar source from the AIG project (3,267 LOC across 8 TypeScript files).
-- MIT license, project metadata, and `.gitignore`.
+- Initial import of the sidecar source from the AIG project.
+- MIT license, project metadata, `.gitignore`, README skeleton, CHANGELOG.
+- `PYANCHOR_*` env vars (replacing `AIG_*`/`AI_EDIT_*`) + `validateConfig()`
+  that throws a single grouped error listing every missing required var.
+- `.env.example` documenting all PYANCHOR_* variables, grouped by required
+  vs optional.
+- Browser-side rebrand: `__AIGDevtools*` → `__Pyanchor*`, CSS classes
+  `aig-*` → `pyanchor-*`, custom event `aig-devtools:navigation` →
+  `pyanchor:navigation`, default base path `/_aig` → `/_pyanchor`.
+- Bearer-token auth (`requireToken`) on every `/api/*` and the admin `/`
+  route. `/healthz` and the static runtime bundles stay public.
+  Timing-safe compare via `crypto.timingSafeEqual`.
+- Per-IP token-bucket rate limit on `POST /api/edit` (6 / min default).
+- `SECURITY.md` with threat model, hardening checklist, and reporting policy.
+- `AgentRunner` interface in `src/agents/types.ts`; adapter dispatcher in
+  `src/agents/index.ts` wired from `PYANCHOR_AGENT`.
+- `ClaudeCodeAgentRunner` adapter using `@anthropic-ai/claude-agent-sdk`
+  (declared as an **optional peer dependency**, dynamically imported,
+  marked `external` in the worker bundle).
+- `docs/adapters.md` documenting the interface, event types, cancellation
+  contract, and how to add new adapters.
 
-### Planned for `v0.1.0`
-- Decouple AIG-specific defaults; introduce `PYANCHOR_*` env vars and `.env.example`.
-- Bearer-token auth on runtime endpoints, basic rate limiting, threat-model doc.
-- `AgentRunner` interface; ship OpenClaw + Claude Code adapters.
-- OS-grade README, integration guide, minimal Next.js example.
-- npm publish, CI, GitHub release.
+### Changed
+- Drop hardcoded `/home/studio/...` pm2 restart fallback in
+  `restartFrontend`; always invoke the configured `PYANCHOR_RESTART_SCRIPT`.
+- Workshop-coupling (`AIG_WORKSHOP_STATE_FILE`) generalized to an opt-in
+  `PYANCHOR_PEER_STATE_FILE`. Defaults to `null` (no peer awareness).
+
+### Notes
+- The OpenClaw flow remains inline in `src/worker/runner.ts` and is
+  selected via the `OPENCLAW_INLINE` marker. Moving it behind the
+  `AgentRunner` interface is tracked for v0.2.0.
+
+### Planned for `v0.1.0` ship
+- Full README + integration guide + minimal Next.js example.
+- GitHub Actions CI, npm publish, v0.1.0 tag/release.

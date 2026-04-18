@@ -49,7 +49,16 @@
   "dependencies": {
     "express": "^4.21.2"
   },
+  "peerDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.0"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/claude-agent-sdk": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.114",
     "@types/express": "^5.0.1",
     "@types/node": "^22.10.1",
     "esbuild": "^0.25.3",
