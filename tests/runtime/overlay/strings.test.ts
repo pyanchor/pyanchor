@@ -17,14 +17,27 @@ import {
 import { koStrings } from "../../../src/runtime/overlay/locales/ko";
 import { jaStrings } from "../../../src/runtime/overlay/locales/ja";
 import { zhCNStrings } from "../../../src/runtime/overlay/locales/zh-cn";
+// v0.12.0 — Latin / SE-Asian locale expansion.
+import { esStrings } from "../../../src/runtime/overlay/locales/es";
+import { deStrings } from "../../../src/runtime/overlay/locales/de";
+import { frStrings } from "../../../src/runtime/overlay/locales/fr";
+import { ptBRStrings } from "../../../src/runtime/overlay/locales/pt-br";
+import { viStrings } from "../../../src/runtime/overlay/locales/vi";
+import { idStrings } from "../../../src/runtime/overlay/locales/id";
 
 beforeEach(() => {
-  // Re-seed the queue with all three built-in locales so the rest of
-  // the suite sees the production-like environment.
+  // Re-seed the queue with every built-in locale so the rest of the
+  // suite sees the production-like environment.
   (window as Window & { __PyanchorPendingLocales?: unknown[] }).__PyanchorPendingLocales = [
     { locale: "ko", bundle: koStrings },
     { locale: "ja", bundle: jaStrings },
-    { locale: "zh-cn", bundle: zhCNStrings }
+    { locale: "zh-cn", bundle: zhCNStrings },
+    { locale: "es", bundle: esStrings },
+    { locale: "de", bundle: deStrings },
+    { locale: "fr", bundle: frStrings },
+    { locale: "pt-br", bundle: ptBRStrings },
+    { locale: "vi", bundle: viStrings },
+    { locale: "id", bundle: idStrings }
   ];
   _clearRegistry();
 });
@@ -261,6 +274,62 @@ describe("built-in ko bundle (v0.9.4)", () => {
     expect(ko.roleYou).toBe("host-overrode");
     expect(ko.messagesEmpty).toBe(enStrings.messagesEmpty); // rest falls back
   });
+});
+
+describe("built-in Latin + SE-Asian bundles (v0.12.0)", () => {
+  it.each([
+    ["es", "Tú", "Página actual"],
+    ["de", "Du", "Aktuelle Seite"],
+    ["fr", "Vous", "Page actuelle"],
+    ["pt-br", "Você", "Página atual"],
+    ["vi", "Bạn", "Trang hiện tại"],
+    ["id", "Anda", "Halaman saat ini"]
+  ])("%s resolves to a translated bundle (roleYou=%s, panelContextLabel=%s)", (locale, roleYou, panelContextLabel) => {
+    const t = resolveStrings(locale);
+    expect(t).not.toBe(enStrings);
+    expect(t.roleYou).toBe(roleYou);
+    expect(t.panelContextLabel).toBe(panelContextLabel);
+    // Brand stays English on every locale (deliberate).
+    expect(t.panelTitle).toBe("Pyanchor DevTools");
+  });
+
+  it.each([
+    ["es", "ES"],
+    ["de", "DE"],
+    ["fr", "FR"],
+    ["pt-br", "PT-BR"],
+    ["vi", "VI"],
+    ["id", "ID"]
+  ])("%s lookup is case-insensitive (uppercase %s also works)", (locale, upper) => {
+    expect(resolveStrings(upper)).toEqual(resolveStrings(locale));
+    expect(resolveStrings(upper)).not.toBe(enStrings);
+  });
+
+  it.each([
+    ["es", "En cola, posición 2."],
+    ["de", "In der Warteschlange, Position 2."],
+    ["fr", "En file d'attente, position 2."],
+    ["pt-br", "Na fila, posição 2."],
+    ["vi", "Đang xếp hàng, vị trí 2."],
+    ["id", "Dalam antrean, posisi 2."]
+  ])("%s statusQueuedAt formats the position (%s prefix)", (locale, expectedPrefix) => {
+    expect(resolveStrings(locale).statusQueuedAt(2)).toContain(expectedPrefix);
+    expect(resolveStrings(locale).statusQueuedAt(2)).toContain("2");
+  });
+
+  it.each(["es", "de", "fr", "pt-br", "vi", "id"])(
+    "%s translates every checked surface key (no English fallthrough)",
+    (locale) => {
+      const t = resolveStrings(locale);
+      // Spot-check the diagnostic labels (newest keys are the most
+      // common to forget when translating).
+      expect(t.diagnosticsTitle).not.toBe(enStrings.diagnosticsTitle);
+      expect(t.retryLast).not.toBe(enStrings.retryLast);
+      expect(t.copyLast).not.toBe(enStrings.copyLast);
+      expect(t.statusReadingChat).not.toBe(enStrings.statusReadingChat);
+      expect(t.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
+    }
+  );
 });
 
 describe("registerStrings", () => {

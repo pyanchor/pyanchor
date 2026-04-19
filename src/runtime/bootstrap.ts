@@ -127,7 +127,17 @@ export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
   //
   // Only inject for locales we ship bundles for. Unknown locales fall
   // back to English silently (same contract as `resolveStrings`).
-  const BUILT_IN_LOCALES = new Set(["ko", "ja", "zh-cn"]);
+  const BUILT_IN_LOCALES = new Set([
+    "ko",
+    "ja",
+    "zh-cn",
+    "es",
+    "de",
+    "fr",
+    "pt-br",
+    "vi",
+    "id"
+  ]);
   const localeKey = locale?.toLowerCase();
   if (
     localeKey &&

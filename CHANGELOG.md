@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-04-19
+
+Latin + South-East Asian locale expansion. Six new built-in
+translation bundles ride on the v0.11.0 code-splitting infrastructure
+— each loads on demand, the default English path stays fetch-free,
+and the main `overlay.js` bundle is unchanged in size.
+
+### Added
+- **`src/runtime/overlay/locales/{es,de,fr,pt-br,vi,id}.ts`** — six
+  new locale modules. All translate every key in `StringTable`
+  (verified by the `(no English fallthrough)` parameterized test).
+  Bundle sizes: es 3.4KB / de 3.2KB / fr 3.3KB / pt-br 3.3KB /
+  vi 4.2KB (Vietnamese diacritics) / id 3.1KB.
+- **`build.mjs`** — extended the IIFE list to emit the six new
+  `dist/public/locales/{locale}.js` artifacts alongside the v0.11.0
+  ko/ja/zh-cn bundles.
+- **`bootstrap.ts`** — `BUILT_IN_LOCALES` set now includes the six
+  new codes, so `data-pyanchor-locale="es"` (or any of the others)
+  triggers the same auto-injection path as v0.11.0.
+- **`tests/e2e/server.mjs`** — serves the new bundles from
+  `dist/public/locales/*.js` and adds fixture pages
+  `/{es,de,fr,pt,vi,id}.html` that load the locale script before the
+  overlay (matching production loading order).
+- **`tests/e2e/i18n-v012.spec.ts`** — 12 new e2e cases (6 locales ×
+  2 assertions): each verifies the panel header / mode buttons /
+  composer headline render in the translated copy AND the toggle
+  button's `aria-label` matches the locale's `toggleClose` value.
+- **`tests/runtime/overlay/strings.test.ts`** — extended the
+  `beforeEach` queue seed with the six new bundles + added a
+  `built-in Latin + SE-Asian bundles (v0.12.0)` describe block with
+  parameterized tests covering: roleYou + panelContextLabel,
+  case-insensitive lookup, `statusQueuedAt` formatting, and the
+  no-English-fallthrough guard for diagnostic / retry / copy keys.
+
+### Translation notes
+- **fr** uses singular "Diagnostic" for `diagnosticsTitle` rather
+  than the English-collision plural "Diagnostics" — both are valid
+  French; the singular reads as a label rather than a category.
+- **pt-br** uses Brazilian conventions (Você / cadastro / "área de
+  transferência") not European Portuguese.
+- **es** is Latin-neutral / Castilian; "tú" 2sg matches the existing
+  ja / ko informal-but-respectful register.
+- Brand identifier "Pyanchor DevTools" is intentionally NOT
+  translated in any locale (same convention as v0.10.0 ja/zh-cn).
+
+### Roadmap
+Next expansion candidates if there's user demand: ar (RTL — needs
+overlay-side bidirectional layout work first), ru, hi, th. Adding a
+new locale is now a ~20-line pattern: copy `ko.ts`, translate, list
+in `build.mjs` + `bootstrap.ts` `BUILT_IN_LOCALES`, register fixture
+in `tests/e2e/server.mjs`, add to the parameterized `it.each` cases.
+
 ## [0.11.0] - 2026-04-19
 
 Locale code-splitting. Built-in translation bundles no longer ship

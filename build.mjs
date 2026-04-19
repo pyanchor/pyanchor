@@ -56,7 +56,7 @@ await build({
 // the matching one when `data-pyanchor-locale="..."` is set.
 await mkdir("dist/public/locales", { recursive: true });
 await Promise.all(
-  ["ko", "ja", "zh-cn"].map((locale) =>
+  ["ko", "ja", "zh-cn", "es", "de", "fr", "pt-br", "vi", "id"].map((locale) =>
     build({
       ...shared,
       entryPoints: [`src/runtime/overlay/locales/${locale}.ts`],
