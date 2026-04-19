@@ -11,6 +11,12 @@ import { createSession, revokeSession } from "./sessions";
 import { cancelAiEdit, getAdminHealth, readAiEditState, startAiEdit } from "./state";
 import { BUILT_IN_LOCALE_SET } from "./shared/locales";
 import type { AiEditCancelInput, AiEditStartInput } from "./shared/types";
+import {
+  FetchWebhookSink,
+  NoopWebhookSink,
+  type WebhookFormat,
+  type WebhookSink
+} from "./webhooks";
 
 validateConfig();
 
@@ -93,6 +99,18 @@ const cancelLimiter = tokenBucketMiddleware({ capacity: 30, refillPerSecond: 30 
 app.disable("x-powered-by");
 app.use(cookieParser());
 app.use(express.json({ limit: "128kb" }));
+
+// v0.20.0 — webhook sink configured at boot. The worker emits its
+// own events via a separate sink; this one only fires on
+// `edit_requested` (the API's POV — agent hasn't run yet).
+const serverWebhookSink: WebhookSink = pyanchorConfig.webhookEditRequestedUrl
+  ? new FetchWebhookSink({
+      urls: { edit_requested: pyanchorConfig.webhookEditRequestedUrl },
+      formats: {
+        edit_requested: pyanchorConfig.webhookEditRequestedFormat as WebhookFormat
+      }
+    })
+  : new NoopWebhookSink();
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
@@ -205,9 +223,23 @@ for (const basePath of runtimeBases) {
           ? rawActor.trim().slice(0, 256)
           : undefined;
       const body = request.body as AiEditStartInput;
-      response.json(
-        await startAiEdit({ ...body, ...(actor !== undefined ? { actor } : {}) })
-      );
+      const result = await startAiEdit({
+        ...body,
+        ...(actor !== undefined ? { actor } : {})
+      });
+      // v0.20.0: notify the configured edit_requested webhook. Fire
+      // and forget — never block the API response on the dispatch.
+      void serverWebhookSink.emit("edit_requested", {
+        event: "edit_requested",
+        ts: new Date().toISOString(),
+        run_id: result.jobId ?? "",
+        ...(actor ? { actor } : {}),
+        target_path: body.targetPath,
+        mode: body.mode === "chat" ? "chat" : "edit",
+        agent: pyanchorConfig.agent,
+        origin: request.header("origin") ?? undefined
+      });
+      response.json(result);
     })
   );
 

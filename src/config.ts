@@ -210,6 +210,18 @@ export const pyanchorConfig = {
   //              touching the live app.
   outputMode: optionalEnv("PYANCHOR_OUTPUT_MODE", "apply") as "apply" | "pr" | "dryrun",
 
+  // ─── webhooks (v0.20.0) ─────────────────────────────────────────
+  // Fire-and-forget POST notifications mirrored from the audit
+  // events. Empty value = no dispatch for that event. Auto-detects
+  // Slack / Discord formatting from the URL host; pass FORMAT=raw
+  // to send the generic JSON payload instead.
+  webhookEditRequestedUrl: optionalEnv("PYANCHOR_WEBHOOK_EDIT_REQUESTED_URL", ""),
+  webhookEditAppliedUrl: optionalEnv("PYANCHOR_WEBHOOK_EDIT_APPLIED_URL", ""),
+  webhookPrOpenedUrl: optionalEnv("PYANCHOR_WEBHOOK_PR_OPENED_URL", ""),
+  webhookEditRequestedFormat: optionalEnv("PYANCHOR_WEBHOOK_EDIT_REQUESTED_FORMAT", "auto"),
+  webhookEditAppliedFormat: optionalEnv("PYANCHOR_WEBHOOK_EDIT_APPLIED_FORMAT", "auto"),
+  webhookPrOpenedFormat: optionalEnv("PYANCHOR_WEBHOOK_PR_OPENED_FORMAT", "auto"),
+
   // ─── audit log (v0.18.0) ────────────────────────────────────────
   // Append-only JSON-lines log of every edit outcome. Disabled by
   // default in current ergonomics so existing setups don't grow a

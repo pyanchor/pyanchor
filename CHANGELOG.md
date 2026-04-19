@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-04-20
+
+Webhook hooks. Three event types fire fire-and-forget POST
+notifications mirrored from the audit log: `edit_requested`
+(API received the call), `edit_applied` (apply mode finished),
+`pr_opened` (pr mode finished, includes pr_url). Auto-detects
+Slack / Discord destination format from the URL host so the
+common case is zero-config.
+
+### Added
+- **`src/webhooks.ts`** — webhook infrastructure. `WebhookEvent`
+  enum, `WebhookPayload` type, `FetchWebhookSink` (the default —
+  posts JSON, swallows errors after stderr), `NoopWebhookSink`
+  (when nothing configured), `detectFormat()` (URL-host
+  heuristic), `renderSummary()` (one-line message for chat
+  sinks), `formatBody()` (per-format wrapping).
+- Six new envs:
+  - `PYANCHOR_WEBHOOK_EDIT_REQUESTED_URL`
+  - `PYANCHOR_WEBHOOK_EDIT_APPLIED_URL`
+  - `PYANCHOR_WEBHOOK_PR_OPENED_URL`
+  - `PYANCHOR_WEBHOOK_EDIT_REQUESTED_FORMAT` (`auto` | `slack` |
+    `discord` | `raw`, default `auto`)
+  - `PYANCHOR_WEBHOOK_EDIT_APPLIED_FORMAT` (same)
+  - `PYANCHOR_WEBHOOK_PR_OPENED_FORMAT` (same)
+- **Server-side dispatch**: `/api/edit` fires `edit_requested`
+  with `run_id`, optional `actor`, target_path, mode, agent,
+  origin. Wrapped in `void emit(...)` so the API response
+  never waits on the webhook.
+- **Worker-side dispatch**: `executeOutput` success paths fire
+  `edit_applied` (apply mode) or `pr_opened` (pr mode, with
+  pr_url). Same fire-and-forget semantics.
+
+### Format auto-detection
+| URL host | Default format |
+|---|---|
+| `hooks.slack.com` / `*.slack.com` | `{ text: "<summary>" }` |
+| `*.discord.com` / `*.discordapp.com` | `{ content: "<summary>" }` |
+| anything else | full JSON payload |
+
+Override via the `_FORMAT` env to force `raw` (for downstream
+that does its own transformation) or to bypass the detection.
+
+### Tests
+- **`tests/webhooks.test.ts`** (new) — 21 cases:
+  `detectFormat` (slack / discord / raw / malformed URL /
+  override / auto-fallback), `renderSummary` (actor + fallback +
+  target_path + pr_url), `formatBody` per-format wrapping,
+  `FetchWebhookSink` happy paths (Slack auto-detect, raw URL,
+  per-event format override, no-URL no-op, network failure logs
+  but doesn't throw, non-2xx response logs but doesn't throw),
+  `NoopWebhookSink` no-op.
+
+### Migration
+- Defaults unchanged. All six webhook envs default to empty
+  strings → no dispatch, no overhead.
+- Sink errors NEVER affect the worker's success path; they log
+  to stderr only.
+- Webhook timeout defaults to 5 seconds. A stuck endpoint won't
+  pile up in-flight dispatches.
+
 ## [0.19.0] - 2026-04-20
 
 PR mode + identity passthrough. v0.18.0 made room for these

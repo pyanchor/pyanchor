@@ -7,6 +7,12 @@ import { selectFramework } from "../frameworks";
 import type { AiEditMode, AiEditState } from "../shared/types";
 
 import { FileAuditSink, NoopAuditSink, sha256Hex, type AuditSink } from "../audit";
+import {
+  FetchWebhookSink,
+  NoopWebhookSink,
+  type WebhookFormat,
+  type WebhookSink
+} from "../webhooks";
 
 import { cancelActiveChildren, runCommand, type RunCommandOptions } from "./child-process";
 import { createLifecycle } from "./lifecycle";
@@ -91,6 +97,26 @@ const outputMode = resolveOutputMode(pyanchorConfig.outputMode);
 const auditSink: AuditSink = pyanchorConfig.auditLogEnabled
   ? new FileAuditSink(pyanchorConfig.auditLogFile)
   : new NoopAuditSink();
+
+// v0.20.0: webhook sink for edit_applied + pr_opened. Each URL is
+// independent — operators can wire only the events they care about.
+const webhookSink: WebhookSink =
+  pyanchorConfig.webhookEditAppliedUrl || pyanchorConfig.webhookPrOpenedUrl
+    ? new FetchWebhookSink({
+        urls: {
+          ...(pyanchorConfig.webhookEditAppliedUrl
+            ? { edit_applied: pyanchorConfig.webhookEditAppliedUrl }
+            : {}),
+          ...(pyanchorConfig.webhookPrOpenedUrl
+            ? { pr_opened: pyanchorConfig.webhookPrOpenedUrl }
+            : {})
+        },
+        formats: {
+          edit_applied: pyanchorConfig.webhookEditAppliedFormat as WebhookFormat,
+          pr_opened: pyanchorConfig.webhookPrOpenedFormat as WebhookFormat
+        }
+      })
+    : new NoopWebhookSink();
 const jobStartedAtMs = Date.now();
 const jobActor = process.env.PYANCHOR_JOB_ACTOR || undefined;
 let auditEmitted = false;
@@ -307,6 +333,33 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
   });
   if (outputResult.prUrl) {
     lastPrUrl = outputResult.prUrl;
+  }
+
+  // v0.20.0: webhook dispatch on success (apply or pr). Fire-and-
+  // forget — sink errors log to stderr and never block finalize.
+  if (outputMode === "pr" && outputResult.prUrl) {
+    void webhookSink.emit("pr_opened", {
+      event: "pr_opened",
+      ts: new Date().toISOString(),
+      run_id: jobId,
+      ...(jobActor ? { actor: jobActor } : {}),
+      target_path: process.env.PYANCHOR_JOB_TARGET_PATH || undefined,
+      mode,
+      output_mode: outputMode,
+      pr_url: outputResult.prUrl,
+      agent: pyanchorConfig.agent
+    });
+  } else if (outputMode === "apply") {
+    void webhookSink.emit("edit_applied", {
+      event: "edit_applied",
+      ts: new Date().toISOString(),
+      run_id: jobId,
+      ...(jobActor ? { actor: jobActor } : {}),
+      target_path: process.env.PYANCHOR_JOB_TARGET_PATH || undefined,
+      mode,
+      output_mode: outputMode,
+      agent: pyanchorConfig.agent
+    });
   }
 
   // For apply mode with restart, the original code used to write the
