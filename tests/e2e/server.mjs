@@ -14,6 +14,11 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 
 const overlayBundle = readFileSync(path.join(repoRoot, "dist", "public", "overlay.js"));
 const bootstrapBundle = readFileSync(path.join(repoRoot, "dist", "public", "bootstrap.js"));
+const localeBundles = {
+  ko: readFileSync(path.join(repoRoot, "dist", "public", "locales", "ko.js")),
+  ja: readFileSync(path.join(repoRoot, "dist", "public", "locales", "ja.js")),
+  "zh-cn": readFileSync(path.join(repoRoot, "dist", "public", "locales", "zh-cn.js"))
+};
 
 // Fast-path fixture: loads overlay.js directly with __PyanchorConfig
 // inlined. Skips the bootstrap → session → token-blanking flow so
@@ -60,29 +65,9 @@ const bootstrapHtml = `<!doctype html>
   </body>
 </html>`;
 
-// Korean-locale fixture: same as the overlay-direct fixture but
-// pre-seeds __PyanchorConfig.locale = "ko" so the built-in Korean
-// bundle (v0.9.4) activates. Used by the i18n e2e test to prove
-// the bundle resolves end-to-end in a real browser, not just unit.
-const koLocaleHtml = `<!doctype html>
-<html lang="ko">
-  <head>
-    <meta charset="utf-8" />
-    <title>Pyanchor e2e fixture (ko locale)</title>
-    <script>
-      window.__PyanchorConfig = {
-        baseUrl: "/_pyanchor",
-        token: "e2e-test-token-32-chars-1234567890",
-        locale: "ko"
-      };
-    </script>
-  </head>
-  <body>
-    <h1 id="page-heading">Korean locale fixture</h1>
-    <script src="/_pyanchor/overlay.js"></script>
-  </body>
-</html>`;
-
+// v0.11.0 — locale bundles ship as separate IIFE files. Fixtures
+// that bypass bootstrap need to load the locale script BEFORE the
+// overlay script (both deferred so the queue gets populated in time).
 const buildLocaleFixture = (locale, label) => `<!doctype html>
 <html lang="${locale}">
   <head>
@@ -95,13 +80,15 @@ const buildLocaleFixture = (locale, label) => `<!doctype html>
         locale: "${locale}"
       };
     </script>
+    <script src="/_pyanchor/locales/${locale}.js" defer></script>
+    <script src="/_pyanchor/overlay.js" defer></script>
   </head>
   <body>
     <h1 id="page-heading">${label} locale fixture</h1>
-    <script src="/_pyanchor/overlay.js"></script>
   </body>
 </html>`;
 
+const koLocaleHtml = buildLocaleFixture("ko", "Korean");
 const jaLocaleHtml = buildLocaleFixture("ja", "Japanese");
 const zhLocaleHtml = buildLocaleFixture("zh-cn", "Simplified Chinese");
 
@@ -151,6 +138,17 @@ const server = createServer((req, res) => {
     res.writeHead(200, { "content-type": "application/javascript; charset=utf-8" });
     res.end(bootstrapBundle);
     return;
+  }
+
+  // v0.11.0 — locale bundles (ko, ja, zh-cn)
+  const localeMatch = req.url.match(/^\/_pyanchor\/locales\/([a-z\-]+)\.js$/);
+  if (localeMatch) {
+    const bundle = localeBundles[localeMatch[1]];
+    if (bundle) {
+      res.writeHead(200, { "content-type": "application/javascript; charset=utf-8" });
+      res.end(bundle);
+      return;
+    }
   }
 
   // /_pyanchor/api/* lands here when a test forgot to install a route mock —

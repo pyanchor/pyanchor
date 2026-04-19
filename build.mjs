@@ -50,3 +50,20 @@ await build({
   format: "iife",
   target: "es2020"
 });
+
+// v0.11.0 — locale bundles ship as separate IIFEs so the main
+// overlay.js doesn't drag every translation along. Bootstrap loads
+// the matching one when `data-pyanchor-locale="..."` is set.
+await mkdir("dist/public/locales", { recursive: true });
+await Promise.all(
+  ["ko", "ja", "zh-cn"].map((locale) =>
+    build({
+      ...shared,
+      entryPoints: [`src/runtime/overlay/locales/${locale}.ts`],
+      outfile: `dist/public/locales/${locale}.js`,
+      platform: "browser",
+      format: "iife",
+      target: "es2020"
+    })
+  )
+);

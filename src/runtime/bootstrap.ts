@@ -118,6 +118,29 @@ export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
     return "loaded-overlay-already-present";
   }
 
+  // v0.11.0 — if a locale is requested, inject its bundle BEFORE the
+  // overlay script. Both are `defer`, so browsers execute them in
+  // document order; the locale pushes itself onto
+  // `window.__PyanchorPendingLocales`, and the overlay drains that
+  // queue on boot. Skipping this when there's no locale keeps the
+  // default English path fetch-free.
+  //
+  // Only inject for locales we ship bundles for. Unknown locales fall
+  // back to English silently (same contract as `resolveStrings`).
+  const BUILT_IN_LOCALES = new Set(["ko", "ja", "zh-cn"]);
+  const localeKey = locale?.toLowerCase();
+  if (
+    localeKey &&
+    BUILT_IN_LOCALES.has(localeKey) &&
+    !doc.querySelector(`script[data-pyanchor-locale-bundle='${localeKey}']`)
+  ) {
+    const localeScript = doc.createElement("script");
+    localeScript.src = `${baseUrl}/locales/${localeKey}.js`;
+    localeScript.defer = true;
+    localeScript.dataset.pyanchorLocaleBundle = localeKey;
+    doc.head.appendChild(localeScript);
+  }
+
   const overlayScript = doc.createElement("script");
   overlayScript.src = `${baseUrl}/overlay.js`;
   overlayScript.defer = true;

@@ -7,6 +7,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-04-19
+
+Locale code-splitting. Built-in translation bundles no longer ship
+inside the main `overlay.js`; each locale is a separate IIFE that
+loads only when needed. Net result: the default English bundle is
+**12.7KB smaller** (54.7KB → 42.0KB), and a locale costs ~4-5KB
+loaded in parallel with the overlay (HTTP/2 multiplexes both).
+
+### Changed
+- **`src/runtime/overlay/locales/{ko,ja,zh-cn}.ts`** — three new
+  modules, each owning its full `Partial<StringTable>` translation
+  bundle. At top-level (when run in a browser) the module pushes
+  itself onto `window.__PyanchorPendingLocales`.
+- **`src/runtime/overlay/strings.ts`** — drained the inline
+  `koStrings` / `jaStrings` / `zhCNStrings` exports + the
+  `BUILT_IN_BUNDLES` constant + `seedBuiltIns()`. Replaced with:
+  - `drainPendingQueue()` called once at module load — empties
+    `window.__PyanchorPendingLocales` into the registry.
+  - `window.__PyanchorRegisterStrings = (locale, bundle) => …`
+    exposed as a late-registration hook for locales loaded AFTER
+    the overlay (uncommon — bootstrap orders them first).
+  - `_clearRegistry()` now wipes + re-drains the pending queue,
+    so tests that re-seed the queue see a clean baseline.
+- **`build.mjs`** — three new IIFE entry points:
+  `dist/public/locales/ko.js` (4.5KB), `ja.js` (5.2KB),
+  `zh-cn.js` (3.9KB).
+- **`bootstrap.ts`** — when `data-pyanchor-locale="..."` (or
+  `__PyanchorConfig.locale`) is set AND the value is one of the
+  built-in locales, bootstrap injects
+  `<script defer src="locales/{locale}.js">` BEFORE the
+  `<script defer src="overlay.js">` tag. Browser script-execution
+  order for `defer` scripts (document order) guarantees the
+  locale registers before the overlay drains the queue. Unknown
+  locales silently fall back to English (same contract as
+  `resolveStrings`).
+- **`tests/e2e/server.mjs`** — serves `dist/public/locales/{ko,ja,zh-cn}.js`
+  via a regex route. Locale fixtures (`/ko.html`, `/ja.html`,
+  `/zh.html`) now include the locale `<script defer>` BEFORE the
+  overlay one (matching the production loading order).
+
+### Fixed
+- **`tests/runtime/overlay/strings.test.ts`** — switched to
+  `@vitest-environment happy-dom` (queue mechanism needs `window`)
+  + a `beforeEach` that re-seeds the queue with the three built-in
+  bundles (importing the locale modules from disk re-runs their
+  push side effect, but the queue is reset between tests so we
+  re-seed explicitly).
+
+### Migration
+
+**Existing users with `data-pyanchor-locale="..."` on the bootstrap
+script tag**: nothing to do. Bootstrap auto-injects the matching
+locale bundle.
+
+**Existing users loading `overlay.js` directly (no bootstrap)**:
+add the locale `<script>` BEFORE the overlay one:
+
+```html
+<!-- v0.10.0 (still works without locale script if you just want English) -->
+<script>
+  window.__PyanchorConfig = { baseUrl: "...", token: "...", locale: "ko" };
+</script>
+<script src="/_pyanchor/overlay.js"></script>
+
+<!-- v0.11.0 — add the locale script -->
+<script>
+  window.__PyanchorConfig = { baseUrl: "...", token: "...", locale: "ko" };
+</script>
+<script src="/_pyanchor/locales/ko.js" defer></script>
+<script src="/_pyanchor/overlay.js" defer></script>
+```
+
+The `defer` attribute on both is what guarantees the locale
+registers before the overlay drains. Without `defer`, the inline
+load order still works (locale runs first, queue gets populated,
+overlay runs, drains queue), but `defer` is the documented and
+tested pattern.
+
+**Existing users via `registerStrings`**: nothing to do. The API
+is unchanged — host-supplied bundles continue to work as before.
+
+### Tests
+- **Unit**: 427 (unchanged count; 9 strings tests rewired to use
+  the queue mechanism via happy-dom env + beforeEach re-seed).
+- **E2E (Playwright)**: 31 (unchanged; fixtures updated to the
+  new loading order).
+- **Total: 458 tests**.
+
+### Bundle sizes (post-v0.11.0)
+
+| File | Size | When loaded |
+|---|---:|---|
+| `dist/public/overlay.js` | **42.0KB** | always |
+| `dist/public/bootstrap.js` | 2.9KB | always |
+| `dist/public/locales/ko.js` | 4.5KB | only when locale=ko |
+| `dist/public/locales/ja.js` | 5.2KB | only when locale=ja |
+| `dist/public/locales/zh-cn.js` | 3.9KB | only when locale=zh-cn |
+
+Default English-only deployment ships **42.0KB** (was 54.7KB
+in v0.10.0 — a **23% reduction**). Worst case (a locale loaded)
+is ~46-47KB across two parallel HTTP fetches.
+
+### Roadmap
+- **v0.11.x**: more locales (es / de / fr / pt-br / vi / id) —
+  each one is now an isolated module + build entry, no main-bundle
+  cost.
+- **v0.12.x or later**: serve locale bundles via the sidecar's
+  `/_pyanchor/locales/...` route directly (currently the test
+  fixture server does this; the production sidecar treats the
+  whole `dist/public/` as static assets, so it already works
+  without code change — verified informally).
+- **Lower priority**: Docker-based runner sandbox.
+
 ## [0.10.0] - 2026-04-19
 
 Two coverage-broadening tracks land together:

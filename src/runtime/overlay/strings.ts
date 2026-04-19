@@ -207,296 +207,64 @@ export const enStrings: StringTable = {
 };
 
 /**
- * Built-in Korean bundle (v0.9.4).
+ * Locale registry. Populated by:
+ *   - host code calling `registerStrings(locale, bundle)`
+ *   - locale bundle modules (`src/runtime/overlay/locales/{ko,ja,zh-cn}.ts`)
+ *     that build into separate IIFE files (`dist/public/locales/*.js`)
+ *     and push onto `window.__PyanchorPendingLocales` at script load.
  *
- * Translation rules:
- *   - Sentence-final period preserved (matches enStrings typography)
- *   - "Pyanchor" / "DevTools" left as-is (brand names)
- *   - Conversational register matches the English source — short,
- *     directive, no honorifics ("…해주세요" omitted for compactness)
- *   - Parameterized strings keep the same placeholder semantics
+ * v0.11.0 split: built-in locale bundles no longer ship inside the
+ * main overlay.js (saves ~9KB). Bootstrap auto-injects the matching
+ * `locales/{locale}.js` script BEFORE the overlay script when
+ * `data-pyanchor-locale="..."` is set, so script ordering (defer)
+ * guarantees the bundle is in the queue when the overlay drains it.
  *
- * Activation: `window.__PyanchorConfig.locale = "ko"` or
- * `<script data-pyanchor-locale="ko">`. Registered automatically
- * at module-load — no extra import needed.
+ * For host pages that load `overlay.js` directly (no bootstrap),
+ * either include the locale `<script>` BEFORE the overlay one, OR
+ * call `window.__PyanchorRegisterStrings(locale, bundle)` after the
+ * overlay loads.
  */
-export const koStrings: Partial<StringTable> = {
-  statusReadingChat: "질문을 읽는 중입니다.",
-  statusReadingEdit: "페이지와 코드를 읽는 중입니다.",
-  statusJobFailed: "작업 실패.",
-  statusJobCanceled: "작업 취소됨.",
-  statusAnswerReady: "답변 준비됨.",
-  statusEditComplete: "편집 완료.",
-  statusQueuedAt: (n) => `대기열 ${n}번째. 현재 작업이 끝나면 실행됩니다.`,
 
-  pendingDrafting: "요청을 정리하는 중입니다.",
-  pendingReading: "페이지와 코드를 읽고 있습니다.",
-  pendingAnswering: "답변을 작성하는 중입니다.",
+interface PendingLocale {
+  locale: string;
+  bundle: Partial<StringTable>;
+}
 
-  composerEditTitle: "편집 요청",
-  composerChatTitle: "질문 보내기",
-  composerEditPlaceholder:
-    "예: 로그인/회원가입 탭 전환을 더 매끄럽게. 기존 구조는 유지.",
-  composerChatPlaceholder:
-    "예: 이 페이지가 왜 이렇게 동작하는지 설명. 파일 경로 인용.",
-  composerSendHint: "Ctrl/Cmd + Enter 로 전송",
-  composerNotConfigured: "사이드카가 아직 설정되지 않았습니다.",
-  composerSubmitSend: "전송",
-  composerSubmitRun: "실행",
-  composerSubmitSending: "전송 중\u2026",
-  composerCancelLabel: "취소",
-
-  modeAsk: "질문",
-  modeEdit: "편집",
-  modeLockedTitle: "작업이 진행 중일 때는 모드를 변경할 수 없습니다.",
-
-  toggleOpen: "Pyanchor DevTools 열기",
-  toggleClose: "Pyanchor DevTools 닫기",
-  toggleTitle: "현재 페이지에 대해 질문하거나 변경 요청",
-
-  toastAnswerReceived: "답변을 받았습니다.",
-  toastEditComplete: "편집이 완료되었습니다.",
-  toastQuestionSent: "질문을 보냈습니다.",
-  toastEditStarted: "편집을 시작했습니다.",
-  toastCancelSent: "취소 요청을 보냈습니다.",
-  toastCancelFailed: "취소 요청에 실패했습니다.",
-  toastRequestCanceled: "요청이 취소되었습니다.",
-  toastFailedToStart: "요청을 시작하지 못했습니다.",
-
-  messagesEmpty: "질문하거나 변경을 요청하면 대화 기록이 여기에 표시됩니다.",
-  roleYou: "사용자",
-  rolePyanchor: "Pyanchor",
-
-  errorRuntimeNotConfigured: "Pyanchor devtools 런타임이 설정되지 않았습니다.",
-
-  composerHeadlineChat: "질문 / 설명",
-  composerHeadlineEdit: "페이지 편집",
-
-  panelTitle: "Pyanchor DevTools",
-  panelContextLabel: "현재 페이지",
-  statusYourPosition: (n) => `내 요청: ${n}번째`,
-
-  errorRequestFailed: "요청 실패.",
-  errorJobFailed: "작업 실패.",
-
-  kbdShortcutHint: "Cmd/Ctrl + Shift + . 로 열기/닫기",
-  retryLast: "마지막 요청 다시 시도",
-  copyLast: "복사",
-  toastCopied: "클립보드에 복사됨.",
-  toastCopyFailed: "복사 실패.",
-
-  diagnosticsTitle: "진단 정보",
-  diagRuntime: "런타임",
-  diagLocale: "로케일",
-  diagAuth: "인증",
-  diagStatus: "상태",
-  diagJobId: "작업 ID",
-  diagMode: "모드",
-  diagQueue: "대기열",
-  diagLastUpdate: "마지막 갱신",
-  diagAuthCookie: "쿠키 세션",
-  diagAuthBearer: "Bearer 토큰"
-};
-
-/**
- * Built-in Japanese bundle (v0.10.0).
- *
- * Tone: concise, です/ます at instruction sentences, 体言止め at status
- * labels — same register the official Chrome / VS Code Japanese UIs use.
- * Brand "Pyanchor" / "DevTools" left as-is.
- */
-export const jaStrings: Partial<StringTable> = {
-  statusReadingChat: "質問を読み込み中。",
-  statusReadingEdit: "ページとコードを読み込み中。",
-  statusJobFailed: "ジョブ失敗。",
-  statusJobCanceled: "ジョブをキャンセルしました。",
-  statusAnswerReady: "回答の準備ができました。",
-  statusEditComplete: "編集完了。",
-  statusQueuedAt: (n) => `キュー ${n} 番目。現在のジョブ完了後に実行されます。`,
-
-  pendingDrafting: "リクエストを整理中。",
-  pendingReading: "ページとコードを読み込み中。",
-  pendingAnswering: "回答を作成中。",
-
-  composerEditTitle: "編集リクエスト",
-  composerChatTitle: "質問を送信",
-  composerEditPlaceholder:
-    "例: ログイン/サインアップのタブ切り替えを滑らかに。既存の構造は維持。",
-  composerChatPlaceholder:
-    "例: このページがなぜこう動作するのか説明。ファイルパスを引用。",
-  composerSendHint: "Ctrl/Cmd + Enter で送信",
-  composerNotConfigured: "サイドカーがまだ設定されていません。",
-  composerSubmitSend: "送信",
-  composerSubmitRun: "実行",
-  composerSubmitSending: "送信中\u2026",
-  composerCancelLabel: "キャンセル",
-
-  modeAsk: "質問",
-  modeEdit: "編集",
-  modeLockedTitle: "ジョブ実行中はモードを変更できません。",
-
-  toggleOpen: "Pyanchor DevTools を開く",
-  toggleClose: "Pyanchor DevTools を閉じる",
-  toggleTitle: "現在のページに質問する、または変更をリクエスト",
-
-  toastAnswerReceived: "回答を受信しました。",
-  toastEditComplete: "編集が完了しました。",
-  toastQuestionSent: "質問を送信しました。",
-  toastEditStarted: "編集を開始しました。",
-  toastCancelSent: "キャンセルリクエストを送信しました。",
-  toastCancelFailed: "キャンセルリクエストに失敗しました。",
-  toastRequestCanceled: "リクエストをキャンセルしました。",
-  toastFailedToStart: "リクエストの開始に失敗しました。",
-
-  messagesEmpty: "質問または変更をリクエストすると、ここに会話履歴が表示されます。",
-  roleYou: "あなた",
-  rolePyanchor: "Pyanchor",
-
-  errorRuntimeNotConfigured: "Pyanchor devtools ランタイムが設定されていません。",
-
-  composerHeadlineChat: "質問 / 説明",
-  composerHeadlineEdit: "ページ編集",
-
-  panelTitle: "Pyanchor DevTools",
-  panelContextLabel: "現在のページ",
-  statusYourPosition: (n) => `あなたのリクエスト: ${n} 番目`,
-
-  errorRequestFailed: "リクエスト失敗。",
-  errorJobFailed: "ジョブ失敗。",
-
-  kbdShortcutHint: "Cmd/Ctrl + Shift + . で開閉",
-  retryLast: "前回のリクエストを再実行",
-  copyLast: "コピー",
-  toastCopied: "クリップボードにコピーしました。",
-  toastCopyFailed: "コピーに失敗しました。",
-
-  diagnosticsTitle: "診断情報",
-  diagRuntime: "ランタイム",
-  diagLocale: "ロケール",
-  diagAuth: "認証",
-  diagStatus: "ステータス",
-  diagJobId: "ジョブ ID",
-  diagMode: "モード",
-  diagQueue: "キュー",
-  diagLastUpdate: "最終更新",
-  diagAuthCookie: "Cookie セッション",
-  diagAuthBearer: "Bearer トークン"
-};
-
-/**
- * Built-in Simplified Chinese bundle (v0.10.0).
- *
- * Tone: direct + concise, matching the English source. Half-width
- * punctuation in technical contexts (e.g. "Cmd/Ctrl + Shift + .").
- * Brand "Pyanchor" / "DevTools" left as-is.
- */
-export const zhCNStrings: Partial<StringTable> = {
-  statusReadingChat: "正在阅读问题。",
-  statusReadingEdit: "正在阅读页面和代码。",
-  statusJobFailed: "任务失败。",
-  statusJobCanceled: "任务已取消。",
-  statusAnswerReady: "回答已就绪。",
-  statusEditComplete: "编辑完成。",
-  statusQueuedAt: (n) => `队列第 ${n} 位。当前任务结束后开始执行。`,
-
-  pendingDrafting: "正在整理请求。",
-  pendingReading: "正在阅读页面和代码。",
-  pendingAnswering: "正在撰写回答。",
-
-  composerEditTitle: "编辑请求",
-  composerChatTitle: "发送问题",
-  composerEditPlaceholder:
-    "示例：让登录/注册标签页切换更流畅。保留现有结构。",
-  composerChatPlaceholder:
-    "示例：解释为什么这个页面会这样表现。引用文件路径。",
-  composerSendHint: "Ctrl/Cmd + Enter 发送",
-  composerNotConfigured: "Sidecar 尚未完全配置。",
-  composerSubmitSend: "发送",
-  composerSubmitRun: "执行",
-  composerSubmitSending: "发送中\u2026",
-  composerCancelLabel: "取消",
-
-  modeAsk: "提问",
-  modeEdit: "编辑",
-  modeLockedTitle: "任务进行中无法切换模式。",
-
-  toggleOpen: "打开 Pyanchor DevTools",
-  toggleClose: "关闭 Pyanchor DevTools",
-  toggleTitle: "对当前页面提问或请求更改",
-
-  toastAnswerReceived: "已收到回答。",
-  toastEditComplete: "编辑已完成。",
-  toastQuestionSent: "问题已发送。",
-  toastEditStarted: "编辑已开始。",
-  toastCancelSent: "已发送取消请求。",
-  toastCancelFailed: "取消请求失败。",
-  toastRequestCanceled: "请求已取消。",
-  toastFailedToStart: "请求启动失败。",
-
-  messagesEmpty: "提问或请求更改后，对话历史将显示在这里。",
-  roleYou: "你",
-  rolePyanchor: "Pyanchor",
-
-  errorRuntimeNotConfigured: "Pyanchor devtools 运行时未配置。",
-
-  composerHeadlineChat: "提问 / 解释",
-  composerHeadlineEdit: "编辑页面",
-
-  panelTitle: "Pyanchor DevTools",
-  panelContextLabel: "当前页面",
-  statusYourPosition: (n) => `你的请求：第 ${n} 位`,
-
-  errorRequestFailed: "请求失败。",
-  errorJobFailed: "任务失败。",
-
-  kbdShortcutHint: "Cmd/Ctrl + Shift + . 切换",
-  retryLast: "重试上次请求",
-  copyLast: "复制",
-  toastCopied: "已复制到剪贴板。",
-  toastCopyFailed: "复制失败。",
-
-  diagnosticsTitle: "诊断",
-  diagRuntime: "运行时",
-  diagLocale: "区域",
-  diagAuth: "认证",
-  diagStatus: "状态",
-  diagJobId: "任务 ID",
-  diagMode: "模式",
-  diagQueue: "队列",
-  diagLastUpdate: "最近更新",
-  diagAuthCookie: "Cookie 会话",
-  diagAuthBearer: "Bearer 令牌"
-};
-
-/**
- * Built-in locale registry. Bundles registered here ship in the
- * runtime; host apps add more via the public `registerStrings`.
- * Reset by `_clearRegistry()` in tests, then re-registered in the
- * test setup.
- *
- * Locale code policy:
- *   - "ko" — single Korean variant (no -KP / -KR distinction needed)
- *   - "ja" — single Japanese variant
- *   - "zh-cn" — Simplified Chinese (matched lowercased; "zh" alone
- *     does NOT auto-resolve to zh-CN to keep the contract explicit)
- */
-const BUILT_IN_BUNDLES: ReadonlyArray<readonly [string, Partial<StringTable>]> = [
-  ["ko", koStrings],
-  ["ja", jaStrings],
-  ["zh-cn", zhCNStrings]
-];
+declare global {
+  interface Window {
+    __PyanchorPendingLocales?: PendingLocale[];
+    /**
+     * Late-registration hook exposed by the overlay bundle. Locale
+     * scripts loaded AFTER the overlay (uncommon — bootstrap orders
+     * them first) call this instead of pushing to the queue.
+     */
+    __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
+  }
+}
 
 const registry = new Map<string, Partial<StringTable>>();
 
-const seedBuiltIns = () => {
-  for (const [locale, bundle] of BUILT_IN_BUNDLES) {
-    registry.set(locale, bundle);
+const drainPendingQueue = () => {
+  if (typeof window === "undefined") return;
+  const pending = window.__PyanchorPendingLocales;
+  if (!pending || pending.length === 0) return;
+  for (const { locale, bundle } of pending) {
+    registry.set(locale.toLowerCase(), bundle);
   }
+  // Replace with a fresh array; locale scripts loaded later push
+  // onto the new one. (Using length=0 would mutate observably.)
+  window.__PyanchorPendingLocales = [];
 };
 
-// Seed on module load — overlay.ts (and downstream) sees ko available
-// without needing an explicit import.
-seedBuiltIns();
+drainPendingQueue();
+
+if (typeof window !== "undefined") {
+  // Late-registration: locales loaded AFTER the overlay can call
+  // this directly. Same merge semantics as `registerStrings`.
+  window.__PyanchorRegisterStrings = (locale, bundle) => {
+    registry.set(locale.toLowerCase(), bundle);
+  };
+}
 
 /**
  * Register a locale bundle. Partial overrides merge over the English
@@ -522,11 +290,12 @@ export function resolveStrings(locale?: string | null): StringTable {
 }
 
 /**
- * For tests — wipes the registry then re-seeds the built-in bundles
- * so production-like behavior survives the reset. Tests that want a
- * truly empty registry should call this AND not rely on built-ins.
+ * For tests — wipes the registry AND re-drains any locale bundles
+ * the test has loaded into `window.__PyanchorPendingLocales`. Lets
+ * tests reset to a clean state while preserving locales that the
+ * test fixture script-loaded itself.
  */
 export function _clearRegistry(): void {
   registry.clear();
-  seedBuiltIns();
+  drainPendingQueue();
 }

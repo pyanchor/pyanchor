@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from "vitest";
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   _clearRegistry,
@@ -7,6 +8,26 @@ import {
   resolveStrings,
   type StringTable
 } from "../../../src/runtime/overlay/strings";
+// v0.11.0 — locale bundles ship as separate modules. Importing them
+// from this test re-runs their top-level "push to
+// window.__PyanchorPendingLocales" side effect; calling
+// `_clearRegistry()` then drains the queue back into the registry,
+// reproducing the production loading order (locale script before
+// overlay script, both deferred).
+import { koStrings } from "../../../src/runtime/overlay/locales/ko";
+import { jaStrings } from "../../../src/runtime/overlay/locales/ja";
+import { zhCNStrings } from "../../../src/runtime/overlay/locales/zh-cn";
+
+beforeEach(() => {
+  // Re-seed the queue with all three built-in locales so the rest of
+  // the suite sees the production-like environment.
+  (window as Window & { __PyanchorPendingLocales?: unknown[] }).__PyanchorPendingLocales = [
+    { locale: "ko", bundle: koStrings },
+    { locale: "ja", bundle: jaStrings },
+    { locale: "zh-cn", bundle: zhCNStrings }
+  ];
+  _clearRegistry();
+});
 
 afterEach(() => {
   _clearRegistry();
