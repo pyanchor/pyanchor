@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-19
+
+Playwright e2e harness lands. The overlay's Shadow DOM mount,
+polling cycle, and error tolerance are now smoke-tested against
+a real Chromium browser with mocked sidecar APIs.
+
+### Added
+- **Playwright dev dependency** (`@playwright/test@^1.59`) — the
+  browser binary (`chromium`) is downloaded into the local
+  `~/.cache/ms-playwright/` cache via `pnpm exec playwright install
+  chromium`. CI workflow update slated for v0.7.3 with the runner
+  smoke harness.
+- **`playwright.config.ts`** — chromium-only project, parallel
+  enabled, retain-trace on failure, and a `webServer` block that
+  spawns the e2e fixture server on port 4173.
+- **`tests/e2e/server.mjs`** — a 60-LOC static server that serves
+  a fixture HTML page with `window.__PyanchorConfig` inlined plus
+  the freshly-built `dist/public/{overlay,bootstrap}.js`. NO API
+  routes — each test mocks `/_pyanchor/api/*` via
+  Playwright's `page.route()` so the e2e suite has zero coupling
+  to the real sidecar. Missing-mock requests return 500 with a
+  diagnostic body so test gaps fail loud instead of hanging.
+- **`tests/e2e/overlay.spec.ts`** — 4 smoke tests:
+  - mounts the `#pyanchor-overlay-root` host with an open Shadow
+    DOM containing a toggle button
+  - shadow root content is reachable via DOM piercing
+  - polling renders the `running` status received from
+    `/api/status` (heartbeat label / current step / generic fallback
+    surface in the panel)
+  - a 500 on `/api/status` does NOT throw a page-error and the
+    overlay host stays alive (proves the v0.6.3 syncState
+    try/catch hasn't regressed across the v0.7.x decomposition)
+- **`pnpm test:e2e`** + **`pnpm test:e2e:ui`** scripts. Both
+  invoke `node build.mjs` first so the served bundle is always
+  fresh.
+
+### Changed
+- **`.gitignore`**: ignore `test-results/`, `playwright-report/`,
+  and `.playwright/` to keep e2e artifacts out of the repo.
+- **`vitest.config.ts`**: e2e specs use `*.spec.ts` (Playwright
+  convention); vitest's `*.test.ts` glob already excludes them, so
+  no change to the include/exclude lists was needed — verified by
+  the 351 unit tests staying isolated from the 4 Playwright tests.
+
+### Tests
+- **Unit**: 351 (unchanged from v0.7.1).
+- **E2E (Playwright)**: 4 — total run time ~2.3s on a warm
+  chromium cache.
+- Total: **355 across 27 files** (26 unit + 1 e2e spec).
+
+### Compatibility
+No runtime change. The e2e suite is opt-in via `pnpm test:e2e` —
+the default `pnpm test` continues to run only the vitest unit
+suite, so contributors without chromium installed aren't blocked.
+
+### How to run locally
+
+```bash
+# one-time
+pnpm install
+pnpm exec playwright install chromium
+
+# every run
+pnpm test:e2e          # headless
+pnpm test:e2e:ui       # Playwright UI mode (debugger)
+```
+
+### Roadmap
+- **v0.7.3**: sandboxed integration tests for `worker/runner.ts`
+  (the runner-smoke item Codex round-5 noted) + GitHub Actions
+  workflow that runs both the unit suite and the Playwright job.
+
 ## [0.7.1] - 2026-04-19
 
 Second slice of the overlay decomposition. Two more submodules
