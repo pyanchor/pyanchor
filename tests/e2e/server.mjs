@@ -15,11 +15,14 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const overlayBundle = readFileSync(path.join(repoRoot, "dist", "public", "overlay.js"));
 const bootstrapBundle = readFileSync(path.join(repoRoot, "dist", "public", "bootstrap.js"));
 
-const fixtureHtml = `<!doctype html>
+// Fast-path fixture: loads overlay.js directly with __PyanchorConfig
+// inlined. Skips the bootstrap → session → token-blanking flow so
+// mount / polling / templates can be smoke-tested in isolation.
+const overlayDirectHtml = `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Pyanchor e2e fixture</title>
+    <title>Pyanchor e2e fixture (overlay-direct)</title>
     <script>
       window.__PyanchorConfig = {
         baseUrl: "/_pyanchor",
@@ -34,6 +37,29 @@ const fixtureHtml = `<!doctype html>
   </body>
 </html>`;
 
+// Bootstrap-full-path fixture: loads bootstrap.js the way a real
+// host page would. The bootstrap script reads data-pyanchor-token,
+// runs the trusted-host check, calls /api/session, blanks the
+// in-memory token on a 2xx, and lazy-loads overlay.js. Used by the
+// v0.7.4 token-surface e2e test to verify the cookie-only path
+// engages end-to-end in a real browser.
+const bootstrapHtml = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pyanchor e2e fixture (bootstrap)</title>
+  </head>
+  <body>
+    <h1 id="page-heading">Pyanchor e2e fixture (bootstrap path)</h1>
+    <script
+      src="/_pyanchor/bootstrap.js"
+      defer
+      data-pyanchor-token="e2e-test-token-32-chars-1234567890"
+      data-pyanchor-trusted-hosts="127.0.0.1,localhost"
+    ></script>
+  </body>
+</html>`;
+
 const server = createServer((req, res) => {
   if (!req.url) {
     res.writeHead(400).end();
@@ -42,7 +68,13 @@ const server = createServer((req, res) => {
 
   if (req.url === "/" || req.url === "/index.html") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-    res.end(fixtureHtml);
+    res.end(overlayDirectHtml);
+    return;
+  }
+
+  if (req.url === "/bootstrap.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(bootstrapHtml);
     return;
   }
 

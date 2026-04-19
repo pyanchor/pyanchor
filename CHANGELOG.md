@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-04-19
+
+Codex round-6 verification gap closure. The review confirmed v0.7.0–
+v0.7.3 had no code-level regressions, but flagged that the v0.5.1
+token-surface fix — the security feature this project cares most
+about — was NOT actually verified by the e2e suite because the fixture
+loaded `overlay.js` directly and skipped `bootstrap.js`. v0.7.4
+closes that gap with 21 new bootstrap unit tests (under happy-dom)
+and 3 new e2e tests covering the full `bootstrap → session →
+token-blanking → cookie-only` flow plus submit + cancel user paths.
+
+### Changed
+- **`src/runtime/bootstrap.ts`** refactored to expose
+  `runBootstrap({ window, document, fetch?, currentScript })` as a
+  pure callable. The browser entrypoint at the bottom of the file
+  invokes it with the real globals (`window`, `document`,
+  `document.currentScript`). Tests inject fakes / fetch mocks so the
+  trusted-host check, token-blanking, idempotency, and overlay-script
+  dedup paths are individually verifiable. Also re-exports
+  `isTrustedHost` and `DEFAULT_TRUSTED_HOSTS` for direct testing.
+  No runtime behavior change for the browser path — the IIFE-shaped
+  invocation became a function call with the same arguments.
+- **`tests/e2e/server.mjs`** now serves a second fixture at
+  `/bootstrap.html` that loads `bootstrap.js` the way a real host
+  page would (with `data-pyanchor-token` and
+  `data-pyanchor-trusted-hosts="127.0.0.1,localhost"` attributes).
+  The original `/` fixture stays as the fast-path overlay-direct
+  loader. Each test picks the fixture that matches its surface.
+
+### Added
+- **`tests/runtime/bootstrap.test.ts`** (`@vitest-environment happy-dom`)
+  — **21 tests** across 5 describe blocks:
+  - `isTrustedHost`: exact match, rejection, wildcard subdomain
+    (NOT bare domain), `.local` suffix, whitespace trim, empty
+    hostname → false, DEFAULT_TRUSTED_HOSTS coverage
+  - `runBootstrap` idempotency: first call → "loaded", second →
+    "skipped-already-loaded"
+  - trusted host allowlist: untrusted → "skipped-untrusted-host"
+    + console.warn + no fetch / no config; custom override via
+    `data-pyanchor-trusted-hosts` lets staging hosts through
+  - config wiring: `baseUrl` derived from script src by stripping
+    `/bootstrap.js`, fallback to `/_pyanchor` when no currentScript,
+    token trimmed from `data-pyanchor-token`, empty-string when
+    absent
+  - **session exchange + token blanking (v0.5.1)**: POSTs
+    `/api/session` with the bearer; does NOT post when no token;
+    blanks `window.__PyanchorConfig.token` on 2xx; PRESERVES the
+    token on non-2xx; PRESERVES the token on network throw
+  - overlay script injection: appends
+    `<script data-pyanchor-overlay='1' defer>`; dedups when one
+    already exists → "loaded-overlay-already-present"
+- **`tests/e2e/bootstrap-and-flows.spec.ts`** — **3 tests**:
+  1. **v0.5.1 token surface (the headline fix)**: loads
+     `/bootstrap.html` so the real bootstrap runs, asserts
+     `/api/session` carries `Authorization: Bearer ...`, waits for
+     `__PyanchorConfig.token` to blank, then asserts the
+     LAST `/api/status` request has no `Authorization` header (the
+     overlay's lazy `getToken()` reads empty → omits the header,
+     proving the cookie-only path engaged in a real browser).
+  2. **submit smoke**: opens the panel via the toggle button,
+     types into the textarea, clicks submit, asserts
+     `/api/edit` POST body matches `{ prompt, mode, targetPath }`.
+  3. **cancel smoke**: opens the panel while server reports
+     running, clicks cancel, asserts `/api/cancel` was called
+     (and if the payload includes `jobId`, that it matches the
+     active job).
+
+### Tests
+- **Unit**: 357 → **378** (+21 bootstrap tests).
+- **E2E (Playwright)**: 4 → **7** (+3 bootstrap-flow tests).
+- **Total**: **385** across 29 files (28 unit + 1 e2e directory
+  with 2 spec files).
+
+### Coverage
+- `src/runtime/bootstrap.ts`: 0% → **100%** statements (was a
+  testing dead zone since v0.1.0; now fully covered).
+
+### Compatibility
+No runtime behavior change. The bootstrap IIFE became a
+`runBootstrap()` invocation with identical arguments; the
+overlay-direct fixture path still works for the original 4 e2e
+tests; the new `/bootstrap.html` fixture is opt-in per test.
+
+### Roadmap (post-v0.7.x)
+- **v0.8.0**: docker-based runner sandbox for the real-spawn /
+  real-sudo / real-rsync paths (Codex round-5 #4, the runner-level
+  integration coverage gap).
+- **v0.8.x or v0.9.x**: overlay accessibility (focus trap, aria-live,
+  keyboard navigation) + i18n shim. Codex round-3 #6.
+- **Optional v0.7.5** (if Codex round-7 surfaces anything): the
+  remaining "있으면 좋은 것" items — queuePosition pending bubble e2e,
+  navigation event currentPath update, mode lock during running,
+  template snapshot for the three message roles.
+
 ## [0.7.3] - 2026-04-19
 
 Closes the v0.7.x decomposition track with the worker-assembly
