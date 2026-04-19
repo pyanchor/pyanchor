@@ -34,6 +34,9 @@ import { nlStrings } from "../../../src/runtime/overlay/locales/nl";
 import { plStrings } from "../../../src/runtime/overlay/locales/pl";
 import { svStrings } from "../../../src/runtime/overlay/locales/sv";
 import { itStrings } from "../../../src/runtime/overlay/locales/it";
+// v0.15.0 — first RTL locale.
+import { arStrings } from "../../../src/runtime/overlay/locales/ar";
+import { isRtlLocale, RTL_LOCALES } from "../../../src/runtime/overlay/strings";
 
 beforeEach(() => {
   // Re-seed the queue with every built-in locale so the rest of the
@@ -55,7 +58,8 @@ beforeEach(() => {
     { locale: "nl", bundle: nlStrings },
     { locale: "pl", bundle: plStrings },
     { locale: "sv", bundle: svStrings },
-    { locale: "it", bundle: itStrings }
+    { locale: "it", bundle: itStrings },
+    { locale: "ar", bundle: arStrings }
   ];
   _clearRegistry();
 });
@@ -428,6 +432,51 @@ describe("built-in Turkish + Dutch + Polish + Swedish + Italian bundles (v0.14.0
       expect(t.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
     }
   );
+});
+
+describe("built-in Arabic bundle + RTL locale set (v0.15.0)", () => {
+  it("ar resolves to a translated bundle (roleYou=أنت, panelContextLabel=الصفحة الحالية)", () => {
+    const t = resolveStrings("ar");
+    expect(t).not.toBe(enStrings);
+    expect(t.roleYou).toBe("أنت");
+    expect(t.panelContextLabel).toBe("الصفحة الحالية");
+    expect(t.panelTitle).toBe("Pyanchor DevTools");
+  });
+
+  it("ar lookup is case-insensitive (uppercase AR also works)", () => {
+    expect(resolveStrings("AR")).toEqual(resolveStrings("ar"));
+  });
+
+  it("ar statusQueuedAt formats the position", () => {
+    expect(resolveStrings("ar").statusQueuedAt(2)).toContain("الموضع 2");
+  });
+
+  it("ar translates every checked surface key (no English fallthrough)", () => {
+    const t = resolveStrings("ar");
+    expect(t.diagnosticsTitle).not.toBe(enStrings.diagnosticsTitle);
+    expect(t.retryLast).not.toBe(enStrings.retryLast);
+    expect(t.copyLast).not.toBe(enStrings.copyLast);
+    expect(t.statusReadingChat).not.toBe(enStrings.statusReadingChat);
+    expect(t.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
+  });
+
+  it("RTL_LOCALES contains 'ar' and is the source of truth for direction", () => {
+    expect(RTL_LOCALES.has("ar")).toBe(true);
+    // Other built-ins must be LTR until they get explicit RTL audit.
+    expect(RTL_LOCALES.has("ko")).toBe(false);
+    expect(RTL_LOCALES.has("ja")).toBe(false);
+    expect(RTL_LOCALES.has("en")).toBe(false);
+  });
+
+  it("isRtlLocale handles case + null + unknown", () => {
+    expect(isRtlLocale("ar")).toBe(true);
+    expect(isRtlLocale("AR")).toBe(true);
+    expect(isRtlLocale("ko")).toBe(false);
+    expect(isRtlLocale(null)).toBe(false);
+    expect(isRtlLocale(undefined)).toBe(false);
+    expect(isRtlLocale("")).toBe(false);
+    expect(isRtlLocale("klingon")).toBe(false);
+  });
 });
 
 describe("late-register hook (v0.12.1 \u2014 round-11 #2 fix)", () => {

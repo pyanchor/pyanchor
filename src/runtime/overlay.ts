@@ -16,7 +16,7 @@ import {
   type AiEditMode,
   type AiEditState
 } from "./overlay/state";
-import { LOCALE_REGISTERED_EVENT, resolveStrings } from "./overlay/strings";
+import { LOCALE_REGISTERED_EVENT, isRtlLocale, resolveStrings } from "./overlay/strings";
 import { renderMessagesTemplate } from "./overlay/templates";
 
 interface RuntimeConfig {
@@ -43,7 +43,9 @@ const styles = `
   * { box-sizing: border-box; }
   .pyanchor-root {
     position: fixed;
-    right: clamp(12px, 2vw, 24px);
+    /* v0.15.0: logical inline-end so [dir="rtl"] (Arabic) flips the
+       trigger to the bottom-LEFT corner without a separate stylesheet. */
+    inset-inline-end: clamp(12px, 2vw, 24px);
     bottom: clamp(12px, 2vh, 24px);
     z-index: 2147483000;
     font-family: "IBM Plex Sans KR", system-ui, sans-serif;
@@ -74,7 +76,7 @@ const styles = `
   }
   .panel {
     position: absolute;
-    right: 0;
+    inset-inline-end: 0;
     bottom: 74px;
     width: min(420px, calc(100vw - 24px));
     max-width: calc(100vw - 24px);
@@ -283,7 +285,7 @@ const styles = `
     color: #eef3ff;
   }
   .message__time {
-    margin-left: auto;
+    margin-inline-start: auto;
   }
   .message__body {
     white-space: pre-wrap;
@@ -427,13 +429,24 @@ const styles = `
   .diagnostics > summary::before {
     content: "▶";
     display: inline-block;
-    margin-right: 6px;
+    margin-inline-end: 6px;
     font-size: 0.6rem;
     transform: translateY(-1px);
     transition: transform 120ms ease;
   }
   .diagnostics[open] > summary::before {
     transform: translateY(-1px) rotate(90deg);
+  }
+  /* v0.15.0: under [dir="rtl"] the ▶ glyph points the wrong way; flip
+     it horizontally so the disclosure arrow always points "into" the
+     summary. The 90deg rotation when [open] still works since it
+     compounds onto the mirror. The dir attribute is set on
+     .pyanchor-root by render(), so this descendant selector matches. */
+  [dir="rtl"] .diagnostics > summary::before {
+    transform: scaleX(-1) translateY(-1px);
+  }
+  [dir="rtl"] .diagnostics[open] > summary::before {
+    transform: scaleX(-1) translateY(-1px) rotate(-90deg);
   }
   .diagnostics__grid {
     margin: 10px 0 0;
@@ -453,7 +466,7 @@ const styles = `
   }
   .toast {
     position: absolute;
-    right: 0;
+    inset-inline-end: 0;
     bottom: calc(100% + 12px);
     min-width: 220px;
     max-width: 320px;
@@ -481,8 +494,8 @@ const styles = `
     .status-line,
     .messages,
     .composer {
-      margin-left: 16px;
-      margin-right: 16px;
+      margin-inline-start: 16px;
+      margin-inline-end: 16px;
     }
     .composer {
       margin-bottom: 16px;
@@ -508,8 +521,8 @@ const styles = `
     .messages,
     .composer {
       margin-top: 10px;
-      margin-left: 14px;
-      margin-right: 14px;
+      margin-inline-start: 14px;
+      margin-inline-end: 14px;
     }
     .composer {
       margin-bottom: 14px;
@@ -789,7 +802,7 @@ const render = () => {
 
   shadowRoot.innerHTML = `
     <style>${styles}</style>
-    <div class="pyanchor-root">
+    <div class="pyanchor-root" dir="${isRtlLocale(activeLocale) ? "rtl" : "ltr"}">
       ${uiState.toast ? `<div class="toast toast--${uiState.toast.tone}">${escapeHtml(uiState.toast.message)}</div>` : ""}
       ${uiState.isOpen ? `
         <div class="panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(s.panelTitle)}" aria-describedby="pyanchor-status-line">

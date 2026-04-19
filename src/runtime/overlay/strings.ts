@@ -253,6 +253,26 @@ declare global {
  */
 export const LOCALE_REGISTERED_EVENT = "pyanchor:locale-registered";
 
+/**
+ * Locales that render right-to-left. The overlay reads this set to
+ * decide whether to set `dir="rtl"` on its root, which (combined with
+ * the v0.15.0 CSS logical-properties migration) flips the trigger
+ * to the bottom-LEFT corner and mirrors the panel layout.
+ *
+ * Currently only `ar`. Adding he / fa / ur is a one-line addition
+ * once those bundles ship — the layout work is already done.
+ */
+export const RTL_LOCALES = new Set<string>(["ar"]);
+
+/**
+ * @returns true if the locale code (case-insensitive) is in the
+ * RTL set. Pass null/undefined → false (LTR default).
+ */
+export const isRtlLocale = (locale: string | null | undefined): boolean => {
+  if (!locale) return false;
+  return RTL_LOCALES.has(locale.toLowerCase());
+};
+
 const registry = new Map<string, Partial<StringTable>>();
 
 const drainPendingQueue = () => {

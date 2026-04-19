@@ -98,7 +98,8 @@ describe("server locale routes (round-11 #1 regression guard)", () => {
     "nl",
     "pl",
     "sv",
-    "it"
+    "it",
+    "ar"
   ];
 
   it.each(BUILT_INS)("serves /locales/%s.js with 200 + JS content type", async (locale) => {

@@ -73,7 +73,8 @@ await Promise.all(
     "nl",
     "pl",
     "sv",
-    "it"
+    "it",
+    "ar"
   ].map((locale) =>
     build({
       ...shared,

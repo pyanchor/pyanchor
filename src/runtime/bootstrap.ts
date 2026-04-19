@@ -144,7 +144,8 @@ export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
     "nl",
     "pl",
     "sv",
-    "it"
+    "it",
+    "ar"
   ]);
   const localeKey = locale?.toLowerCase();
   if (

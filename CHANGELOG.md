@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-04-20
+
+First RTL locale (Arabic). The big work was the layout flip,
+not the translation: every physical CSS property the overlay
+used is migrated to its logical equivalent so a single
+`dir="rtl"` attribute on the root mirrors the trigger position,
+panel alignment, toast position, and the diagnostics disclosure
+arrow. Eighteen built-in locales total (17 LTR + 1 RTL).
+
+### Added
+- **`src/runtime/overlay/locales/ar.ts`** — Arabic bundle (MSA
+  register). Self-registers like every other v0.11.0+ bundle.
+- **`src/runtime/overlay/strings.ts`** — `RTL_LOCALES = new
+  Set(["ar"])` + `isRtlLocale(code)` helper. Adding he / fa /
+  ur later is a one-line change once those bundles ship; the
+  layout work is now permanent.
+- **`build.mjs`** + **`bootstrap.ts`** + **`server.ts`** —
+  `BUILT_IN_LOCALES` set extended to 18.
+- **`tests/e2e/server.mjs`** — `/ar.html` fixture + bundle
+  served from `dist/public/locales/ar.js`.
+- **`tests/e2e/i18n-v015-rtl.spec.ts`** — three new e2e cases:
+  Arabic copy + `dir="rtl"`, trigger lands on the LEFT visual
+  edge under RTL (mirror of the LTR layout), and an LTR
+  regression guard (Korean still gets `dir="ltr"`).
+- **`tests/runtime/overlay/strings.test.ts`** — 6 new cases:
+  ar bundle resolution + parameterized format + no-fallthrough
+  + `RTL_LOCALES` membership + `isRtlLocale` edge handling.
+- **`tests/runtime/bootstrap.test.ts`** + **`tests/subprocess-smoke/server-locale-routes.test.ts`**
+  — `builtIns` arrays extended to 18, so the auto-inject
+  ordering test + the production-route smoke automatically
+  cover the new locale.
+
+### Changed
+- **`src/runtime/overlay.ts`** — CSS migration from physical
+  to logical properties:
+  - `right: clamp(...)` on `.pyanchor-root` →
+    `inset-inline-end: clamp(...)`
+  - `right: 0` on `.panel` and `.toast` → `inset-inline-end: 0`
+  - `margin-left: auto` on `.message__time` → `margin-inline-start: auto`
+  - `margin-right: 6px` on the diagnostics disclosure arrow →
+    `margin-inline-end: 6px`
+  - `margin-left/right: 16px` and `14px` in the responsive
+    media queries → `margin-inline-start/end`
+- **`src/runtime/overlay.ts`** — `.pyanchor-root` now renders
+  `dir="${isRtlLocale(activeLocale) ? "rtl" : "ltr"}"`. Combined
+  with the logical-properties migration, this is the only
+  RTL-specific runtime branch the layout needs.
+- **`src/runtime/overlay.ts`** — diagnostics disclosure arrow
+  flips horizontally under `[dir="rtl"]` so the ▶ glyph still
+  points "into" the summary; the 90deg `[open]` rotation
+  compounds onto the mirror to land at the right open angle.
+
+### Translation notes
+- `ar` uses Modern Standard Arabic (MSA), formal but not
+  stiff. `أنت` for "You", `جارٍ` (haal) for "currently
+  ...ing" status verbs.
+- Brand "Pyanchor DevTools" stays in Latin script (same
+  convention as ko / ja / zh-cn / etc.).
+- `Cmd/Ctrl + Shift + .` is kept Latin since the user sees
+  those exact glyphs on their keyboard.
+- Bundle size: 4.7KB built (Arabic script is more compact than
+  Devanagari/Thai because Unicode codepoints + UTF-8 weights
+  land favorably).
+
+### Roadmap
+- More RTL locales (he / fa / ur) are now a one-line
+  `RTL_LOCALES.add(code)` addition + a translation pass per
+  locale. The layout work doesn't need to be redone.
+- A future single-source-of-truth for `BUILT_IN_LOCALES`
+  (currently maintained in three files: `bootstrap.ts`,
+  `server.ts`, and the e2e fixture) would eliminate the
+  manual sync risk Codex round-12 flagged. Tracked.
+
 ## [0.14.0] - 2026-04-20
 
 Five new built-in locales (tr / nl / pl / sv / it) bringing the
