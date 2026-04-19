@@ -16,7 +16,7 @@ import {
   type AiEditMode,
   type AiEditState
 } from "./overlay/state";
-import { resolveStrings } from "./overlay/strings";
+import { LOCALE_REGISTERED_EVENT, resolveStrings } from "./overlay/strings";
 import { renderMessagesTemplate } from "./overlay/templates";
 
 interface RuntimeConfig {
@@ -555,7 +555,13 @@ const overlayScriptTag = document.querySelector<HTMLScriptElement>(
   "script[data-pyanchor-overlay='1']"
 );
 const localeFromScript = overlayScriptTag?.dataset.pyanchorLocale?.trim();
-const s = resolveStrings(config?.locale ?? localeFromScript ?? null);
+// Round-12 #1: track the active locale request so the
+// late-register listener can re-resolve only when a bundle matching
+// the overlay's requested locale arrives. `s` is mutable so the
+// listener can swap it in-place; render() reads `s` lazily via
+// closure, so the next render picks up the new strings.
+const activeLocale = (config?.locale ?? localeFromScript ?? null)?.toLowerCase() ?? null;
+let s = resolveStrings(activeLocale);
 
 if (!config || window.__PyanchorOverlayLoaded) {
   throw new Error(s.errorRuntimeNotConfigured);
@@ -1116,6 +1122,21 @@ shadowRoot.addEventListener("keydown", (event: Event) => {
 window.addEventListener("pyanchor:navigation", () => {
   render();
 });
+
+// Round-12 #1: if the overlay booted before the requested locale
+// bundle loaded, re-resolve + re-render when the bundle eventually
+// arrives and fires the registration event. Only match the active
+// locale so other hosts registering unrelated locales don't thrash
+// the UI.
+if (activeLocale) {
+  window.addEventListener(LOCALE_REGISTERED_EVENT, (event: Event) => {
+    const registered = (event as CustomEvent<{ locale?: string }>).detail?.locale;
+    if (registered && registered === activeLocale) {
+      s = resolveStrings(activeLocale);
+      render();
+    }
+  });
+}
 
 bindHistory();
 render();

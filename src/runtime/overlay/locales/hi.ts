@@ -14,8 +14,8 @@ declare global {
 }
 
 export const hiStrings: Partial<StringTable> = {
-  statusReadingChat: "आपका प्रश्न पढ़ रहा हूँ।",
-  statusReadingEdit: "पेज और कोड पढ़ रहा हूँ।",
+  statusReadingChat: "आपका प्रश्न पढ़ा जा रहा है।",
+  statusReadingEdit: "पेज और कोड पढ़े जा रहे हैं।",
   statusJobFailed: "कार्य विफल।",
   statusJobCanceled: "कार्य रद्द किया गया।",
   statusAnswerReady: "उत्तर तैयार।",
@@ -23,16 +23,16 @@ export const hiStrings: Partial<StringTable> = {
   statusQueuedAt: (n) =>
     `कतार में, स्थान ${n}। मौजूदा कार्यों के पूरा होने के बाद चलेगा।`,
 
-  pendingDrafting: "आपका अनुरोध तैयार कर रहा हूँ।",
-  pendingReading: "पेज और कोड पढ़ रहा हूँ।",
-  pendingAnswering: "उत्तर लिख रहा हूँ।",
+  pendingDrafting: "आपका अनुरोध तैयार किया जा रहा है।",
+  pendingReading: "पेज और कोड पढ़े जा रहे हैं।",
+  pendingAnswering: "उत्तर लिखा जा रहा है।",
 
   composerEditTitle: "संपादन अनुरोध",
   composerChatTitle: "प्रश्न भेजें",
   composerEditPlaceholder:
-    "उदा. लॉगिन / साइनअप टैब के बीच परिवर्तन को सहज बनाओ। मौजूदा संरचना बनाए रखो।",
+    "उदा. लॉगिन / साइनअप टैब के बीच परिवर्तन को सहज बनाइए। मौजूदा संरचना बनाए रखें।",
   composerChatPlaceholder:
-    "उदा. समझाओ कि यह पेज इस तरह क्यों व्यवहार करता है। फाइलें उद्धृत करो।",
+    "उदा. समझाइए कि यह पेज इस तरह क्यों व्यवहार करता है। फ़ाइलों का उल्लेख करें।",
   composerSendHint: "भेजने के लिए Ctrl/Cmd + Enter",
   composerNotConfigured: "साइडकार अभी पूरी तरह कॉन्फ़िगर नहीं है।",
   composerSubmitSend: "भेजें",

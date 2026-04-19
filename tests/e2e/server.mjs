@@ -98,6 +98,30 @@ const buildLocaleFixture = (locale, label) => `<!doctype html>
 </html>`;
 
 const koLocaleHtml = buildLocaleFixture("ko", "Korean");
+
+// v0.13.1 reverse-order fixture: overlay boots with locale="ko"
+// requested BUT the locale bundle is NOT preloaded. The test then
+// injects /_pyanchor/locales/ko.js late and asserts the UI
+// re-renders into Korean (round-12 #1 — late-register CustomEvent
+// re-render path).
+const reverseOrderKoHtml = `<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pyanchor e2e fixture (reverse-order ko)</title>
+    <script>
+      window.__PyanchorConfig = {
+        baseUrl: "/_pyanchor",
+        token: "e2e-test-token-32-chars-1234567890",
+        locale: "ko"
+      };
+    </script>
+    <script src="/_pyanchor/overlay.js" defer></script>
+  </head>
+  <body>
+    <h1 id="page-heading">Reverse-order locale fixture</h1>
+  </body>
+</html>`;
 const jaLocaleHtml = buildLocaleFixture("ja", "Japanese");
 const zhLocaleHtml = buildLocaleFixture("zh-cn", "Simplified Chinese");
 const esLocaleHtml = buildLocaleFixture("es", "Spanish");
@@ -125,6 +149,12 @@ const server = createServer((req, res) => {
   if (req.url === "/bootstrap.html") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(bootstrapHtml);
+    return;
+  }
+
+  if (req.url === "/reverse-ko.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(reverseOrderKoHtml);
     return;
   }
 

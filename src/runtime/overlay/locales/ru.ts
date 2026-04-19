@@ -33,9 +33,9 @@ export const ruStrings: Partial<StringTable> = {
   composerEditTitle: "Запрос на редактирование",
   composerChatTitle: "Задать вопрос",
   composerEditPlaceholder:
-    "напр. сделай переход между вкладками входа / регистрации плавнее. Сохрани существующую структуру.",
+    "напр. сделайте переход между вкладками входа / регистрации плавнее. Сохраните существующую структуру.",
   composerChatPlaceholder:
-    "напр. объясни, почему эта страница так себя ведёт. Укажи файлы.",
+    "напр. объясните, почему эта страница так себя ведёт. Укажите файлы.",
   composerSendHint: "Ctrl/Cmd + Enter — отправить",
   composerNotConfigured: "Сайдкар ещё не полностью настроен.",
   composerSubmitSend: "Отправить",

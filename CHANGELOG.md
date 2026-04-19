@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-04-20
+
+Round-12 Codex patches. The high-severity round-11 finding closed
+cleanly in v0.12.1, but round-12 reproduced the medium issue:
+the late-register hook was being called, but the documented
+"load locale after overlay" path still rendered English because
+the overlay captured its string table once at boot. Plus ru/hi
+register inconsistencies and CHANGELOG bundle-size drift.
+
+### Fixed
+- **`src/runtime/overlay/strings.ts`** — `__PyanchorRegisterStrings`
+  now dispatches a `pyanchor:locale-registered` CustomEvent
+  (exported as `LOCALE_REGISTERED_EVENT`) after the registry
+  set. Listeners on `window` see the new locale code in
+  `event.detail.locale`. **Round-12 #1 (medium).**
+- **`src/runtime/overlay.ts`** — `s` (string table) is now a `let`
+  so the late-register listener can swap it in-place. New
+  `activeLocale` tracking variable + `addEventListener` for
+  `LOCALE_REGISTERED_EVENT`: when a bundle matching the overlay's
+  requested locale arrives post-boot, the listener re-resolves `s`
+  and calls `render()`. The match is exact (lowercased) so unrelated
+  registrations don't thrash unrelated overlays.
+- **Known limitation** (intentionally scoped out of this patch): the
+  `fetchJson` factory captures `defaultErrorMessage` at construction,
+  so a fetch error during a late-registered locale window will toast
+  the English fallback while the rest of the UI is translated.
+  Negligible in practice (post-boot late-loads are rare and toasts
+  are short-lived); if it becomes user-visible, swap `defaultError`
+  for a getter in `fetch-helper.ts`.
+
+### Translation polish (round-12 #2)
+- **ru** — `composerEditPlaceholder` / `composerChatPlaceholder`
+  now match the formal `Вы` register used everywhere else: `сделай`
+  / `объясни` / `укажи` → `сделайте` / `объясните` / `укажите`.
+- **hi** — register parity:
+  - status / pending strings switched from first-person masculine
+    `पढ़ रहा हूँ` / `तैयार कर रहा हूँ` to gender-neutral passive
+    `पढ़ा जा रहा है` / `तैयार किया जा रहा है`. Removes implicit
+    masculine speaker.
+  - placeholder imperatives now formal: `बनाओ` / `समझाओ` /
+    `उद्धृत करो` → `बनाइए` / `समझाइए` / `उल्लेख करें`. Matches
+    the `आप` register used in labels.
+
+### Tests
+- **`tests/e2e/i18n-late-register.spec.ts`** (new) — overlay-first
+  reverse-order fixture proves the round-12 #1 fix works end-to-end:
+  boot overlay with `locale="ko"` but no preloaded bundle (English
+  UI), inject `locales/ko.js` late, assert UI re-renders to Korean.
+  Without the CustomEvent + listener path, this would fail.
+- **`tests/e2e/server.mjs`** — new `/reverse-ko.html` fixture
+  (config + overlay only, no locale script), used by the new spec.
+
+### Documentation (round-12 #3)
+- **CHANGELOG v0.13.0 entry** — bundle sizes corrected from the
+  prompt-time estimates to actuals: ru 4.2 → **8.3KB**, hi 6.8 →
+  **7.5KB**, th 6.9KB ✓.
+
 ## [0.13.0] - 2026-04-20
 
 Slavic / Indic / SE-Asian locale expansion. Three new built-in
@@ -18,9 +75,10 @@ they ship cleanly. Twelve total built-in locales.
 
 ### Added
 - **`src/runtime/overlay/locales/{ru,hi,th}.ts`** — three new locale
-  modules. All translate every key in `StringTable`. Bundle sizes:
-  ru 4.2KB / hi 6.8KB (Devanagari) / th 6.9KB (Thai script + no
-  spaces). Each follows the v0.12.1 dynamic activation path
+  modules. All translate every key in `StringTable`. Bundle sizes
+  (round-12 #3 actuals): ru 8.3KB (Cyrillic) / hi 7.5KB
+  (Devanagari) / th 6.9KB (Thai script + no spaces). Each follows
+  the v0.12.1 dynamic activation path
   (`__PyanchorRegisterStrings` if present, else queue push).
 - **`build.mjs`** — IIFE list extended to 12 entries.
 - **`src/runtime/bootstrap.ts`** — `BUILT_IN_LOCALES` set now 12

@@ -242,6 +242,17 @@ declare global {
   }
 }
 
+/**
+ * Event fired whenever a locale bundle is registered via the
+ * late-register hook. The overlay listens for this so that hosts
+ * that load `overlay.js` BEFORE the locale bundle still get a
+ * translated UI once the bundle arrives — without this event, the
+ * overlay captures its string table at boot and never re-resolves.
+ * Round-12 #1: closes the gap between "hook called" and "UI
+ * actually localized".
+ */
+export const LOCALE_REGISTERED_EVENT = "pyanchor:locale-registered";
+
 const registry = new Map<string, Partial<StringTable>>();
 
 const drainPendingQueue = () => {
@@ -262,7 +273,14 @@ if (typeof window !== "undefined") {
   // Late-registration: locales loaded AFTER the overlay can call
   // this directly. Same merge semantics as `registerStrings`.
   window.__PyanchorRegisterStrings = (locale, bundle) => {
-    registry.set(locale.toLowerCase(), bundle);
+    const key = locale.toLowerCase();
+    registry.set(key, bundle);
+    // Notify any overlay currently running so it can re-resolve its
+    // string table and re-render. Fires AFTER the registry set so
+    // listeners see the update.
+    window.dispatchEvent(
+      new CustomEvent(LOCALE_REGISTERED_EVENT, { detail: { locale: key } })
+    );
   };
 }
 
