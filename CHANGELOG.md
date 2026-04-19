@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-04-19
+
+Closes the v0.7.x decomposition track with the worker-assembly
+smoke (Codex round-5 deferred item) and a Playwright job in CI.
+
+### Added
+- **`tests/worker/integration.test.ts`** — **6 tests** that wire
+  ALL six extracted worker factories (`createStateIO` →
+  `createRuntimeBuffer` → `createLifecycle` plus the workspace
+  module + the cancel/activeChildren shared state) into one
+  end-to-end harness with a stubbed `runCommand`. Exercises:
+  - happy-path edit flow: prepare → install → agent → build →
+    sync → finalizeSuccess, with state.json updated through the
+    real `createStateIO` lock chain
+  - the `baseExecOptions` propagation: every workspace runCommand
+    call receives the same `activeChildren` Set + the same
+    `isCancelled` callback the lifecycle reads
+  - cancel boundary: `cancelActiveChildren` walks the same Set
+    the workspace ops point at, runAdapterAgent throws
+    `canceledError` while `isCancelled` is true (not silently
+    swallowed), and `finalizeFailure('canceled')` is a no-op
+    when `isCancelHandled()` returns true
+  - runtime-buffer + state-io coalesce: 50 burst log lines
+    flushed through the lock chain land in order without torn
+    writes
+
+  This is the smoke Codex round-5 noted before greenlighting
+  v0.7.0. Real-spawn / sudo coverage stays out of scope —
+  documented for a v0.8.x Docker-based harness.
+
+- **GitHub Actions: e2e job in `.github/workflows/ci.yml`**.
+  Runs after the matrix `build` job on Node 22 only (chromium is
+  heavy and the overlay bundle is identical across Node versions).
+  Caches `~/.cache/ms-playwright` keyed on `pnpm-lock.yaml`,
+  installs OS deps when the cache hits but the binaries don't,
+  uploads `test-results/` + `playwright-report/` as artifacts on
+  failure for 7 days.
+
+### Tests
+- **Unit**: 351 → **357** (+6 integration tests).
+- **E2E (Playwright)**: 4 (unchanged from v0.7.2).
+- **Total**: **361 across 28 files** (27 unit + 1 e2e spec).
+
+### Compatibility
+No runtime change. The integration test consumes the existing
+factory exports without modification; the CI workflow adds a job
+without changing the existing matrix. PRs that fail the e2e job
+won't merge — same gate model as the existing build job.
+
+### v0.7.x track summary
+
+| Slice | What landed | overlay.ts LOC | Tests | Coverage |
+|---|---|---:|---:|---:|
+| v0.7.0 | format / elements / fetch-helper / state extraction | 1074 → 887 | 266 → 328 | 55.1% → 59.3% |
+| v0.7.1 | templates / polling extraction | 887 → 837 | 328 → 351 | 59.3% → 60.9% |
+| v0.7.2 | Playwright e2e harness + 4 chromium smoke tests | 837 | 351 + 4e2e | 60.9% |
+| v0.7.3 | worker integration smoke + CI Playwright job | 837 | 357 + 4e2e | 60.9% |
+
+The pre-v0.6.0 `worker/runner.ts` was 860 LOC with 0% coverage. After
+the v0.6.x track it's 348 LOC with the side-effectful orchestration
+remaining at 0% (the seven extracted worker modules cover 100% of the
+displaced code). After the v0.7.x track the pre-v0.7.0 1074-LOC
+`runtime/overlay.ts` is 837 LOC with six pure submodules at ≥98%
+coverage and a Playwright smoke verifying the mount + polling +
+error-tolerance contracts hold against a real browser.
+
+### Roadmap (post-v0.7.x)
+- **v0.8.x**: docker-based runner sandbox for the real-spawn /
+  real-sudo paths, replacing the integration smoke with full
+  end-to-end coverage of `worker/runner.ts`'s orchestration.
+- **v0.8.x or v0.9.x**: overlay accessibility (focus trap, aria-live,
+  keyboard navigation) + i18n shim for the status copy. Codex
+  round-3 #6 still tracked.
+
 ## [0.7.2] - 2026-04-19
 
 Playwright e2e harness lands. The overlay's Shadow DOM mount,
