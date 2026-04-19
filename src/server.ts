@@ -128,7 +128,8 @@ for (const basePath of runtimeBases) {
     // input without explicit allowlisting. The regex check below is a
     // belt-and-suspenders guard in case the set ever grows to include
     // a value with unsafe characters.
-    const locale = (request.params.locale ?? "").toLowerCase();
+    const raw = request.params.locale;
+    const locale = (typeof raw === "string" ? raw : "").toLowerCase();
     if (!BUILT_IN_LOCALES.has(locale) || !/^[a-z][a-z-]*[a-z]$/.test(locale)) {
       response.status(404).end();
       return;
