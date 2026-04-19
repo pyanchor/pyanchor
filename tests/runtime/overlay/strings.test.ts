@@ -70,6 +70,18 @@ describe("enStrings (default English bundle)", () => {
     expect(enStrings.copyLast).toBeTruthy();
     expect(enStrings.toastCopied).toBeTruthy();
     expect(enStrings.toastCopyFailed).toBeTruthy();
+    // v0.9.7 — diagnostics panel (Codex round-9 feature #6)
+    expect(enStrings.diagnosticsTitle).toBeTruthy();
+    expect(enStrings.diagRuntime).toBeTruthy();
+    expect(enStrings.diagLocale).toBeTruthy();
+    expect(enStrings.diagAuth).toBeTruthy();
+    expect(enStrings.diagStatus).toBeTruthy();
+    expect(enStrings.diagJobId).toBeTruthy();
+    expect(enStrings.diagMode).toBeTruthy();
+    expect(enStrings.diagQueue).toBeTruthy();
+    expect(enStrings.diagLastUpdate).toBeTruthy();
+    expect(enStrings.diagAuthCookie).toBeTruthy();
+    expect(enStrings.diagAuthBearer).toBeTruthy();
   });
 
   it("statusQueuedAt formats the position into the message", () => {
@@ -156,6 +168,10 @@ describe("built-in ko bundle (v0.9.4)", () => {
     expect(ko.retryLast).not.toBe(enStrings.retryLast);
     expect(ko.copyLast).not.toBe(enStrings.copyLast);
     expect(ko.toastCopied).not.toBe(enStrings.toastCopied);
+    // v0.9.7 diagnostics keys
+    expect(ko.diagnosticsTitle).not.toBe(enStrings.diagnosticsTitle);
+    expect(ko.diagRuntime).not.toBe(enStrings.diagRuntime);
+    expect(ko.diagAuth).not.toBe(enStrings.diagAuth);
   });
 
   it("parameterized strings work (statusQueuedAt / statusYourPosition)", () => {

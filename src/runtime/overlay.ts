@@ -406,6 +406,51 @@ const styles = `
     opacity: 0.54;
     cursor: not-allowed;
   }
+  .diagnostics {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border: 1px solid rgba(139, 157, 195, 0.16);
+    border-radius: 12px;
+    background: rgba(11, 16, 28, 0.5);
+  }
+  .diagnostics > summary {
+    cursor: pointer;
+    color: #8f9bbb;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    user-select: none;
+    list-style: none;
+  }
+  .diagnostics > summary::-webkit-details-marker {
+    display: none;
+  }
+  .diagnostics > summary::before {
+    content: "▶";
+    display: inline-block;
+    margin-right: 6px;
+    font-size: 0.6rem;
+    transform: translateY(-1px);
+    transition: transform 120ms ease;
+  }
+  .diagnostics[open] > summary::before {
+    transform: translateY(-1px) rotate(90deg);
+  }
+  .diagnostics__grid {
+    margin: 10px 0 0;
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 4px 12px;
+    font-size: 0.74rem;
+    color: #b8c2da;
+  }
+  .diagnostics__grid dt {
+    color: #6f7c9a;
+  }
+  .diagnostics__grid dd {
+    margin: 0;
+    word-break: break-all;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+  }
   .toast {
     position: absolute;
     right: 0;
@@ -578,6 +623,42 @@ const renderMessages = () =>
     strings: s
   });
 
+// Diagnostics panel (v0.9.7 — Codex round-9 feature suggestion #6).
+// Collapsible disclosure widget showing the live runtime + server
+// state. Uses native <details>/<summary> for built-in keyboard +
+// screen-reader semantics. Persists open/closed state in the DOM
+// itself; no extra UIState field needed.
+const renderDiagnostics = () => {
+  const authMode = config.token ? s.diagAuthBearer : s.diagAuthCookie;
+  const localeDisplay = config.locale ?? "—";
+  const jobIdDisplay = serverState.jobId ?? "—";
+  const modeDisplay = serverState.mode ?? "—";
+  const lastUpdateDisplay = formatTime(serverState.updatedAt) ?? "—";
+  return `
+    <details class="diagnostics" data-action="diagnostics">
+      <summary>${escapeHtml(s.diagnosticsTitle)}</summary>
+      <dl class="diagnostics__grid">
+        <dt>${escapeHtml(s.diagRuntime)}</dt>
+        <dd>${escapeHtml(config.baseUrl)}</dd>
+        <dt>${escapeHtml(s.diagLocale)}</dt>
+        <dd>${escapeHtml(localeDisplay)}</dd>
+        <dt>${escapeHtml(s.diagAuth)}</dt>
+        <dd>${escapeHtml(authMode)}</dd>
+        <dt>${escapeHtml(s.diagStatus)}</dt>
+        <dd>${escapeHtml(serverState.status)}</dd>
+        <dt>${escapeHtml(s.diagJobId)}</dt>
+        <dd>${escapeHtml(jobIdDisplay)}</dd>
+        <dt>${escapeHtml(s.diagMode)}</dt>
+        <dd>${escapeHtml(modeDisplay)}</dd>
+        <dt>${escapeHtml(s.diagQueue)}</dt>
+        <dd>${serverState.queue.length}</dd>
+        <dt>${escapeHtml(s.diagLastUpdate)}</dt>
+        <dd>${escapeHtml(lastUpdateDisplay)}</dd>
+      </dl>
+    </details>
+  `;
+};
+
 const bindHistory = () => {
   const dispatch = () => window.dispatchEvent(new Event("pyanchor:navigation"));
   const wrap = <T extends "pushState" | "replaceState">(method: T) => {
@@ -737,6 +818,8 @@ const render = () => {
           </div>
 
           ${renderMessages()}
+
+          ${renderDiagnostics()}
 
           <form class="composer" data-action="submit">
             <div>

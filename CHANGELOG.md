@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.7] - 2026-04-19
+
+Diagnostics panel — the last UX item from Codex round-9's six
+feature suggestions. Closes the v0.9.x UX track.
+
+### Added
+- **Collapsible Diagnostics block** at the bottom of the panel
+  (between messages and composer). Uses native HTML
+  `<details>` / `<summary>` for built-in keyboard +
+  screen-reader semantics — the browser handles open/close, no
+  extra `UIState` slot needed. Disclosure indicator is a
+  rotating `▶` chevron.
+  Shows live runtime + server state in a tight 2-column grid:
+  - **Runtime** — `config.baseUrl` (e.g. `/_pyanchor`)
+  - **Locale** — resolved locale code (e.g. `ko`) or `—` when
+    unset (English default)
+  - **Auth** — "bearer token" while
+    `window.__PyanchorConfig.token` is still populated, or
+    "cookie session" once bootstrap blanks it (visualizes the
+    v0.5.1 token-blanking flow)
+  - **Status** — `serverState.status`
+  - **Job ID** — `serverState.jobId` or `—`
+  - **Mode** — `serverState.mode` or `—`
+  - **Queue** — `serverState.queue.length`
+  - **Last update** — `formatTime(serverState.updatedAt)`
+- **11 new `StringTable` keys** + Korean translations:
+  `diagnosticsTitle`, `diagRuntime`, `diagLocale`, `diagAuth`,
+  `diagStatus`, `diagJobId`, `diagMode`, `diagQueue`,
+  `diagLastUpdate`, `diagAuthCookie`, `diagAuthBearer`.
+- **`renderDiagnostics()`** module-level helper that composes
+  the disclosure markup. Pure with respect to the closure
+  state it reads (`config`, `serverState`, `s`).
+- **Diagnostics CSS**: subtle border + monospace value column,
+  list-style stripped from `<summary>`, custom rotating chevron.
+- **`tests/e2e/diagnostics.spec.ts`** — **3 Playwright tests**:
+  - collapsed by default (the `<details>` element has no `open`
+    attribute on first render)
+  - running state surfaces jobId + mode in the grid
+  - Korean locale renders translated labels (`런타임`, `상태`,
+    `작업 ID`, `대기열`) and the resolved locale code (`ko`)
+- **+11 unit assertions** in `strings.test.ts` covering the
+  shape and Korean translation of the new keys.
+
+### Tests
+- **Total: 421 unit + 24 e2e = 445 tests**.
+
+### Compatibility
+No breaking change. The diagnostics block adds DOM but no new
+public API. Bundle size: 42.7KB → 46.0KB (+3.3KB) for the markup
+template, 11 strings × 2 locales, and the disclosure CSS.
+
+### v0.9.x UX track summary
+
+| Slice | What landed |
+|---|---|
+| v0.9.0 | a11y phase 1 (focus trap, aria-live) + i18n shim foundation |
+| v0.9.1 | CI hotfix (test scripts self-contained) |
+| v0.9.2 | Codex round-8 patches (locale wiring + focus boundary + i18n completion v1) |
+| v0.9.3 | Codex round-9 patches (focus retention + i18n completion v2 + close-return) |
+| v0.9.4 | Built-in Korean bundle (`koStrings`) |
+| v0.9.5 | UX phase 1: kbd shortcut + retry + copy |
+| v0.9.6 | Codex round-10 patches (repeat guard + retry focus + copy scope) |
+| **v0.9.7** | Diagnostics panel — UX track complete |
+
+Cumulative since v0.9.0:
+- Tests: 404 → **445** (+41, including 24 Playwright e2e)
+- StringTable: 39 → **62 keys** (English + Korean, all translated)
+- Bundle: 35.0KB → **46.0KB** (+11KB for a11y, i18n, ko bundle, 4 features, diagnostics)
+
+### Roadmap
+- **v0.10.x**: more built-in locales (ja / zh-CN). Pattern in
+  `BUILT_IN_BUNDLES` is unchanged; PRs welcome.
+- **v0.10.x e2e hardening**: IME composition guard, disabled-button
+  skip in focus trap (Codex round-10 noted these as remaining
+  coverage gaps).
+- **Lower priority**: Docker-based runner sandbox.
+
 ## [0.9.6] - 2026-04-19
 
 Codex round 10 surfaced 3 lows on v0.9.5 — none release-blocking,

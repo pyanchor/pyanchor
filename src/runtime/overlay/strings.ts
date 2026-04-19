@@ -100,6 +100,30 @@ export interface StringTable {
   toastCopied: string;
   /** Toast when navigator.clipboard.writeText rejects. */
   toastCopyFailed: string;
+
+  // Diagnostics panel (v0.9.7 — Codex round-9 feature suggestion #6)
+  /** <summary> label for the collapsible diagnostics block. */
+  diagnosticsTitle: string;
+  /** Field label: where the runtime is mounted (baseUrl). */
+  diagRuntime: string;
+  /** Field label: resolved locale code. */
+  diagLocale: string;
+  /** Field label: how API requests authenticate (cookie / bearer / none). */
+  diagAuth: string;
+  /** Field label: serverState.status. */
+  diagStatus: string;
+  /** Field label: serverState.jobId or em-dash. */
+  diagJobId: string;
+  /** Field label: serverState.mode. */
+  diagMode: string;
+  /** Field label: serverState.queue.length. */
+  diagQueue: string;
+  /** Field label: serverState.updatedAt formatted. */
+  diagLastUpdate: string;
+  /** Value: cookie-session auth mode (token blanked, cookie active). */
+  diagAuthCookie: string;
+  /** Value: bearer-header auth mode (token still present in window). */
+  diagAuthBearer: string;
 }
 
 export const enStrings: StringTable = {
@@ -167,7 +191,19 @@ export const enStrings: StringTable = {
   retryLast: "Retry last request",
   copyLast: "Copy",
   toastCopied: "Copied to clipboard.",
-  toastCopyFailed: "Copy failed."
+  toastCopyFailed: "Copy failed.",
+
+  diagnosticsTitle: "Diagnostics",
+  diagRuntime: "Runtime",
+  diagLocale: "Locale",
+  diagAuth: "Auth",
+  diagStatus: "Status",
+  diagJobId: "Job ID",
+  diagMode: "Mode",
+  diagQueue: "Queue",
+  diagLastUpdate: "Last update",
+  diagAuthCookie: "cookie session",
+  diagAuthBearer: "bearer token"
 };
 
 /**
@@ -247,7 +283,19 @@ export const koStrings: Partial<StringTable> = {
   retryLast: "마지막 요청 다시 시도",
   copyLast: "복사",
   toastCopied: "클립보드에 복사됨.",
-  toastCopyFailed: "복사 실패."
+  toastCopyFailed: "복사 실패.",
+
+  diagnosticsTitle: "진단 정보",
+  diagRuntime: "런타임",
+  diagLocale: "로케일",
+  diagAuth: "인증",
+  diagStatus: "상태",
+  diagJobId: "작업 ID",
+  diagMode: "모드",
+  diagQueue: "대기열",
+  diagLastUpdate: "마지막 갱신",
+  diagAuthCookie: "쿠키 세션",
+  diagAuthBearer: "Bearer 토큰"
 };
 
 /**
