@@ -680,13 +680,18 @@ const render = () => {
   // v0.9.5 secondary actions:
   //   - Retry: re-run the last submitted prompt+mode after a fail/cancel
   //   - Copy:  put the last assistant text (or the error) on the clipboard
+  // v0.9.6 (Codex round-10 #3): narrowed Copy to assistant-only.
+  // System messages are bookkeeping ("Queued request canceled.",
+  // "Edit job exited abnormally.") — useful to display, not useful to
+  // copy. The error path stays as-is and supersedes the assistant
+  // lookup when status === "failed".
   const canRetry =
     !isBusy &&
     uiState.lastSubmittedPrompt !== null &&
     (serverState.status === "failed" || serverState.status === "canceled");
   const lastAssistantMessage = [...serverState.messages]
     .reverse()
-    .find((m) => m.role === "assistant" || m.role === "system");
+    .find((m) => m.role === "assistant");
   const copyableText =
     serverState.status === "failed" && serverState.error
       ? serverState.error
@@ -922,11 +927,24 @@ const render = () => {
 
   // v0.9.5 retry: re-fill the textarea + restore the mode the last
   // request used. Doesn't auto-submit — leaves the user in control.
+  // v0.9.6 (Codex round-10 #2): explicitly move focus to the textarea
+  // after the render. Without this, the focus-retention logic would
+  // restore focus to the Retry button (still attached, since canRetry
+  // remains true on the same render) and immediate typing would not
+  // edit the restored prompt.
   shadowRoot.querySelector<HTMLElement>("[data-action='retry']")?.addEventListener("click", () => {
     if (!uiState.lastSubmittedPrompt) return;
     uiState.prompt = uiState.lastSubmittedPrompt;
     if (uiState.lastSubmittedMode) uiState.mode = uiState.lastSubmittedMode;
     render();
+    const newTextarea = shadowRoot.querySelector<HTMLTextAreaElement>(".textarea");
+    if (newTextarea) {
+      newTextarea.focus({ preventScroll: true });
+      // Position cursor at end of restored prompt so the user can
+      // immediately keep typing or correct from the tail.
+      const len = newTextarea.value.length;
+      newTextarea.setSelectionRange(len, len);
+    }
   });
 
   // v0.9.5 copy: write the last assistant message text (or the
@@ -963,12 +981,15 @@ document.addEventListener("keydown", (event) => {
 });
 
 // Cmd/Ctrl + Shift + . toggles the panel from anywhere on the page
-// (v0.9.5 — Codex round-9 feature suggestion #2). The accelerator
-// is the same across platforms so the in-product hint can stay
-// concise. Doesn't fire when the user is mid-IME composition (would
-// otherwise eat composition completion keys).
+// (v0.9.5 — Codex round-9 feature suggestion #2; v0.9.6 added the
+// `event.repeat` guard from Codex round-10 #1). The accelerator is
+// the same across platforms so the in-product hint can stay concise.
+// Doesn't fire when the user is mid-IME composition (would otherwise
+// eat composition completion keys), and doesn't bounce on a held
+// chord (would otherwise toggle open/closed/open by key-repeat).
 document.addEventListener("keydown", (event) => {
   if (event.isComposing) return;
+  if (event.repeat) return;
   if (event.key !== ".") return;
   if (!event.shiftKey) return;
   if (!event.metaKey && !event.ctrlKey) return;

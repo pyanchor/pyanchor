@@ -227,7 +227,7 @@ export const koStrings: Partial<StringTable> = {
   toastRequestCanceled: "요청이 취소되었습니다.",
   toastFailedToStart: "요청을 시작하지 못했습니다.",
 
-  messagesEmpty: "질문하거나 변경을 요청하세요. 대화 기록이 여기에 표시됩니다.",
+  messagesEmpty: "질문하거나 변경을 요청하면 대화 기록이 여기에 표시됩니다.",
   roleYou: "사용자",
   rolePyanchor: "Pyanchor",
 

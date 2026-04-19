@@ -106,6 +106,39 @@ test.describe("v0.9.5 keyboard shortcut (Cmd/Ctrl + Shift + .)", () => {
     await page.keyboard.press("Shift+.");
     expect(await isPanelOpen(page)).toBe(false);
   });
+
+  test("synthetic event.repeat keydowns do NOT bounce the panel (Codex round-10 #1)", async ({ page }) => {
+    await mockApi(page);
+    await page.goto("/");
+    await mountOverlay(page);
+
+    expect(await isPanelOpen(page)).toBe(false);
+
+    // Dispatch THREE synthetic keydown events: one fresh (repeat=false)
+    // and two repeat=true. Without the v0.9.6 guard these would
+    // toggle [open, close, open]. With the guard only the fresh one
+    // counts → panel ends up open.
+    await page.evaluate(() => {
+      const fire = (repeat: boolean) => {
+        document.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: ".",
+            shiftKey: true,
+            ctrlKey: true,
+            repeat,
+            bubbles: true,
+            cancelable: true
+          })
+        );
+      };
+      fire(false);
+      fire(true);
+      fire(true);
+    });
+    await page.waitForTimeout(50);
+
+    expect(await isPanelOpen(page)).toBe(true);
+  });
 });
 
 test.describe("v0.9.5 retry last request", () => {
@@ -203,6 +236,18 @@ test.describe("v0.9.5 retry last request", () => {
       return host?.shadowRoot?.querySelector<HTMLTextAreaElement>(".textarea")?.value ?? null;
     });
     expect(restoredPrompt).toBe("rerun me later");
+
+    // Codex round-10 #2: focus must move to the TEXTAREA (not stay
+    // on the Retry button). Without v0.9.6's explicit focus(), the
+    // focus-retention logic would restore focus to the still-attached
+    // Retry button and immediate typing would not edit the prompt.
+    const focusedAction = await page.evaluate(() => {
+      const host = document.querySelector<HTMLElement>("#pyanchor-overlay-root");
+      const root = host?.shadowRoot;
+      const active = root?.activeElement as HTMLElement | null;
+      return active?.tagName === "TEXTAREA" ? "TEXTAREA" : active?.dataset?.action ?? null;
+    });
+    expect(focusedAction).toBe("TEXTAREA");
   });
 });
 
@@ -266,5 +311,53 @@ test.describe("v0.9.5 copy last (clipboard)", () => {
     // Verify clipboard contents
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboard).toBe("here is the assistant answer that should be copied");
+  });
+
+  test("Copy button is NOT shown when only system messages exist (Codex round-10 #3)", async ({ page }) => {
+    // System-only state: a queue cancellation system message but no
+    // assistant message. v0.9.5 incorrectly surfaced Copy here and
+    // copied the system text. v0.9.6 narrows to assistant-only.
+    const systemOnlyState: MockState = {
+      ...idleState,
+      status: "canceled",
+      jobId: "j1",
+      mode: "edit",
+      messages: [
+        {
+          id: "u",
+          jobId: "j1",
+          role: "user",
+          mode: "edit",
+          text: "ask",
+          createdAt: new Date(0).toISOString(),
+          status: "canceled"
+        },
+        {
+          id: "s",
+          jobId: "j1",
+          role: "system",
+          mode: "edit",
+          text: "Queued request canceled.",
+          createdAt: new Date(0).toISOString(),
+          status: "canceled"
+        }
+      ]
+    };
+
+    await mockApi(page, systemOnlyState);
+    await page.goto("/");
+    await mountOverlay(page);
+
+    await page.evaluate(() => {
+      const host = document.querySelector<HTMLElement>("#pyanchor-overlay-root");
+      host?.shadowRoot?.querySelector<HTMLElement>("[data-action='toggle']")?.click();
+    });
+    await page.waitForTimeout(100);
+
+    const copyExists = await page.evaluate(() => {
+      const host = document.querySelector<HTMLElement>("#pyanchor-overlay-root");
+      return Boolean(host?.shadowRoot?.querySelector("[data-action='copy']"));
+    });
+    expect(copyExists).toBe(false);
   });
 });

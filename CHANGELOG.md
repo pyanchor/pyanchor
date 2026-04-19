@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-04-19
+
+Codex round 10 surfaced 3 lows on v0.9.5 — none release-blocking,
+but Codex flagged them as fast-follow before the next UX slice.
+All three patched here, plus a small Korean-tone polish and a
+CHANGELOG bundle-size correction.
+
+### Fixed
+- **Keyboard shortcut no longer bounces on a held key.** v0.9.5's
+  `Cmd/Ctrl + Shift + .` listener checked `isComposing` + the
+  modifier combo but didn't filter `event.repeat`. Holding the
+  chord toggled the panel open/closed/open at OS key-repeat
+  cadence. v0.9.6 adds `if (event.repeat) return;` early in the
+  handler. Verified by a new e2e that dispatches three synthetic
+  keydowns (`repeat: false`, `true`, `true`) and asserts the
+  panel ends up open (only the first counts). Codex round-10 #1.
+- **Retry focuses the textarea, not the Retry button.** v0.9.5's
+  retry handler only restored `uiState.prompt` + `mode` and called
+  `render()`. The focus-retention logic from v0.9.3 then restored
+  focus to the still-attached `[data-action='retry']` button —
+  which meant immediate typing did nothing useful. v0.9.6's retry
+  handler now explicitly `.focus()`es the textarea after render
+  and positions the cursor at the end of the restored prompt
+  (so the user can keep typing or correct from the tail). The
+  existing retry e2e was extended to assert focus lands on
+  `TEXTAREA`. Codex round-10 #2.
+- **Copy is now narrowed to assistant-only.** v0.9.5's
+  `lastAssistantMessage` lookup matched `role === "assistant" || "system"`,
+  which surfaced the Copy button on system bookkeeping messages
+  ("Queued request canceled.", "Edit job exited abnormally.")
+  and copied the system text. The CHANGELOG had documented
+  "assistant message OR error" — the implementation was broader
+  than the contract. v0.9.6 narrows to `role === "assistant"`;
+  the error path stays as-is and supersedes when status is
+  `failed`. Codex round-10 #3.
+
+### Changed
+- **Korean tone polish on `messagesEmpty`.** Previous translation
+  used a polite imperative split across two sentences
+  ("질문하거나 변경을 요청하세요. 대화 기록이 여기에 표시됩니다.")
+  that read out of step with the terse declarative tone of the
+  rest of the bundle. New copy collapses to a single declarative
+  ("질문하거나 변경을 요청하면 대화 기록이 여기에 표시됩니다."). Codex
+  round-10 Korean review surfaced this as the most obviously
+  inconsistent string; the rest are judgment calls left as-is.
+- **CHANGELOG bundle-size correction.** v0.9.5 documented "~41KB"
+  but the actual built artifact was 42.7KB (Codex round-10
+  pointed out the 1.7KB drift). v0.9.6 doesn't fight that — the
+  3 fixes are smaller than the precision of the estimate. Real
+  size after this release is documented below.
+
+### Tests
+- **+3 e2e tests** in `tests/e2e/ux-wins.spec.ts`:
+  - synthetic `event.repeat` keydowns don't bounce the panel
+  - retry click leaves keyboard focus on `TEXTAREA`
+  - Copy button is NOT shown on a system-only-message state
+- **Total: 421 unit + 21 e2e = 442 tests**.
+
+### Compatibility
+No public API change. The three fixes correct documented behavior
+that v0.9.5 promised but didn't deliver. Bundle size after this
+release: **~43KB** (rounded; +0.3KB for the focus call + assistant
+filter narrowing balanced against the kept structure).
+
+### Roadmap
+- **v0.9.7**: diagnostics panel (Codex round-9 feature #6) —
+  collapsible debug section with runtime config, locale, auth
+  mode, current jobId, polling state. Pushed from v0.9.6 because
+  the round-10 fast-follow took priority.
+- **v0.10.x**: more built-in locales (ja / zh-CN). Pattern in
+  `BUILT_IN_BUNDLES` is unchanged.
+- **Lower priority**: Docker-based runner sandbox.
+- **Documentation polish opportunity from Codex round-10**:
+  no e2e for IME composition guard, no e2e for disabled-button
+  skip in the focus trap. Both fall under the v0.10.x e2e
+  hardening track.
+
 ## [0.9.5] - 2026-04-19
 
 UX phase 1. Three of the six features Codex round-9 suggested
