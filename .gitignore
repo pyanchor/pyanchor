@@ -12,6 +12,10 @@ test-results/
 playwright-report/
 .playwright/
 
+# Local Codex / agent collaboration scratchpad — drafted review prompts,
+# session notes, anything not meant for the public repo.
+ref/
+
 # env / secrets
 .env
 .env.local

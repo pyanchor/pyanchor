@@ -94,3 +94,37 @@ describe("isPyanchorConfigured (agent-aware)", () => {
     expect(isPyanchorConfigured()).toBe(false);
   });
 });
+
+describe("workspace command overrides (PYANCHOR_SUDO_BIN / PYANCHOR_FLOCK_BIN)", () => {
+  it("sudoBin defaults to /usr/bin/sudo when env var unset", async () => {
+    setMinimalEnv();
+    delete process.env.PYANCHOR_SUDO_BIN;
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.sudoBin).toBe("/usr/bin/sudo");
+  });
+
+  it("flockBin defaults to /usr/bin/flock when env var unset", async () => {
+    setMinimalEnv();
+    delete process.env.PYANCHOR_FLOCK_BIN;
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.flockBin).toBe("/usr/bin/flock");
+  });
+
+  it("PYANCHOR_SUDO_BIN env override is reflected in pyanchorConfig.sudoBin", async () => {
+    setMinimalEnv({ PYANCHOR_SUDO_BIN: "/opt/local/sudo" });
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.sudoBin).toBe("/opt/local/sudo");
+  });
+
+  it("PYANCHOR_FLOCK_BIN env override is reflected in pyanchorConfig.flockBin", async () => {
+    setMinimalEnv({ PYANCHOR_FLOCK_BIN: "/usr/local/bin/flock" });
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.flockBin).toBe("/usr/local/bin/flock");
+  });
+
+  it("PYANCHOR_SUDO_BIN trims whitespace", async () => {
+    setMinimalEnv({ PYANCHOR_SUDO_BIN: "  /custom/sudo  " });
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.sudoBin).toBe("/custom/sudo");
+  });
+});

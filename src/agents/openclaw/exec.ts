@@ -91,12 +91,16 @@ export async function* streamSpawn(
     }
   }
 
-  // Same EPIPE swallow pattern as worker/child-process.ts: if the
-  // child exits before consuming stdin (no-op wrapper, broken
-  // openclaw binary, sudo prompt rejection), the unhandled stdin
-  // 'error' would crash the worker. The close handler above still
-  // records the non-zero exit code.
-  child.stdin?.on("error", () => undefined);
+  // Capture (don't crash on) stdin errors. If the child exits before
+  // consuming stdin (no-op wrapper, broken openclaw binary, sudo
+  // prompt rejection), Node would re-emit the stdin 'error' as an
+  // uncaughtException without this listener. We surface the captured
+  // error as a synthetic stderr chunk so the failure path retains
+  // diagnostic context instead of silently dropping the signal.
+  child.stdin?.on("error", (err: NodeJS.ErrnoException) => {
+    queue.push({ kind: "stderr", text: `[stdin closed early: ${err.code ?? err.message}]\n` });
+    wake();
+  });
 
   if (options.input !== undefined) {
     child.stdin?.write(options.input);

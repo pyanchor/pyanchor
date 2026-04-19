@@ -127,12 +127,27 @@ export function runCommand(
       reject(new Error(stderr.trim() || stdout.trim() || `${command} exited with ${code}`));
     });
 
-    // Swallow EPIPE: if the child exits before reading stdin (e.g. a
-    // misconfigured wrapper script that returns immediately), Node
-    // raises an unhandled 'error' event on the stdin socket. The
-    // close handler above already records the non-zero exit; we just
-    // need to keep the error from killing the worker process.
-    child.stdin.on("error", () => undefined);
+    // Capture (don't crash on) stdin errors. The close handler above
+    // already surfaces the non-zero exit through the normal failure
+    // path; without this listener Node would re-emit the stdin
+    // 'error' event as an uncaughtException and kill the worker.
+    //
+    // We retain the error code on the child object so failure paths
+    // can include it in their diagnostic message instead of silently
+    // dropping the EPIPE / EBADF / etc. signal.
+    let stdinError: NodeJS.ErrnoException | null = null;
+    child.stdin.on("error", (err: NodeJS.ErrnoException) => {
+      stdinError = err;
+    });
+
+    // Augment the close handler's error message with the stdin error
+    // when both are present. Wraps the existing close listener instead
+    // of replacing it so the resolve/reject contract stays the same.
+    child.on("close", () => {
+      if (stdinError && options.onStderrChunk) {
+        options.onStderrChunk(`[stdin closed early: ${stdinError.code ?? stdinError.message}]\n`);
+      }
+    });
 
     if (options.input) {
       child.stdin.write(options.input);

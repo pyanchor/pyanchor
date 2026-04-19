@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-04-19
+
+Self-review of v0.8.0 (drafted before firing Codex round 7) surfaced
+six items where the v0.7.4 / v0.8.0 patches were technically green
+but weaker than the prose claimed. v0.8.1 closes all six.
+
+### Fixed
+- **"Happy path" subprocess test now exercises the REAL success
+  path, not the empty-stream fallback.** Previously the fake
+  `openclaw` was `/bin/true`, which emits zero events; the test
+  passed because `runAdapterAgent` falls back to `"Edit complete."`
+  for edit-mode jobs when no result event arrives. That's the
+  *failure-recovery* path, not the success path. The fake openclaw
+  now emits a real
+  `{"result":{"payloads":[{"text":"actually wired up the change"}]}}`
+  document, and the test asserts the assistant message + currentStep
+  carry that exact text — proving the result event actually flowed
+  through `parseAgentResult` → `summaryParts` → `finalizeSuccess`
+  end-to-end.
+- **Bootstrap-flow e2e restored to the strict v0.5.1 contract.**
+  v0.8.0 relaxed the assertion to "within 8s, AT LEAST ONE
+  `/api/status` request arrived without Authorization" because the
+  original "LAST request has no Authorization" was flaky under
+  parallel Playwright workers. The relaxed version was technically
+  stable but verified a weaker guarantee — a partial token leak
+  could pass it. v0.8.1 snapshots the request count at the moment
+  token blanking lands, waits for at least one POST-blanking poll,
+  then asserts EVERY post-blanking request omits the Authorization
+  header. This is the actual v0.5.1 security promise. Verified
+  stable across 5/5 consecutive runs.
+- **EPIPE swallow now preserves diagnostic context.** v0.8.0
+  registered a `child.stdin.on("error", () => undefined)` listener
+  to keep the worker from crashing when a child subprocess exits
+  before reading stdin. The listener was a silent no-op — a real
+  `EPIPE` from a network-attached agent or a permission change
+  would vanish without trace. Both `worker/child-process.ts` and
+  `agents/openclaw/exec.ts` now capture the error code and surface
+  it as a synthetic stderr chunk (`[stdin closed early: EPIPE]`),
+  so the failure path retains diagnostic info.
+
+### Added
+- **`tests/config.test.ts`** — **+5 tests** for the v0.8.0
+  `PYANCHOR_SUDO_BIN` / `PYANCHOR_FLOCK_BIN` envs:
+  defaults, env override, whitespace trim. The integration suite
+  exercised these implicitly; now there's explicit unit-level
+  coverage too.
+- **`pnpm test:all`** script runs the full unit + e2e suite in
+  one command (`vitest run && node build.mjs && playwright test`).
+  Previously contributors had to remember both `pnpm test` and
+  `pnpm test:e2e`. The script invokes the binaries directly
+  rather than chaining `pnpm test && pnpm test:e2e` because the
+  inner shell doesn't have pnpm on PATH.
+
+### Changed
+- **`tests/integration/` → `tests/subprocess-smoke/`**. The original
+  name oversold what the suite actually does — it spawns the real
+  worker binary but stubs sudo / flock / openclaw with no-op
+  wrappers, so it's a wiring smoke, not a permission/filesystem
+  integration test. The file's header comment was rewritten to
+  match. A true Docker-based sandbox is still tracked as a
+  follow-up.
+- **`ref/`** local-only scratchpad added (gitignored). Holds drafted
+  Codex prompts, session notes, the round-NN response saves. Lets
+  the cross-session collaboration state stay out of the public repo.
+  See `ref/README.md` for conventions.
+
+### Tests
+- **Unit**: 382 → **387** (+5 config sudo/flock tests; the
+  subprocess-smoke suite is unchanged in count).
+- **E2E (Playwright)**: 7 (unchanged).
+- **Total**: **394 across 30 files**.
+
+### Compatibility
+No runtime behavior change for production deployments. Two
+additions are visible to test code only:
+- the EPIPE diagnostic stderr chunk (only fires when stdin actually
+  errors, which is normally never)
+- the `[stdin closed early: …]` text shape (no contract; just a
+  log line)
+
+The `tests/integration/` → `tests/subprocess-smoke/` rename does
+not affect any external consumer — vitest's `tests/**/*.test.ts`
+glob still picks it up at the new path.
+
+### Roadmap (post-v0.8.1)
+- **Codex round 7** — drafted but not yet fired (sitting in
+  `ref/round-07-prompt.md`). Fire AFTER v0.8.1 ships so the review
+  sees the patched state.
+- **v0.8.x or v0.9.x**: overlay accessibility (focus trap,
+  aria-live, keyboard nav) — Codex round-3 #6.
+- **v0.8.x or v0.9.x**: i18n shim for status copy strings.
+- **Lower priority**: Docker-based runner sandbox for real
+  permission/filesystem semantics. Tracked but not blocking UX
+  work.
+
 ## [0.8.0] - 2026-04-19
 
 Real-subprocess integration coverage for `dist/worker/runner.cjs`

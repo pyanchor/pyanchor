@@ -114,27 +114,35 @@ test.describe("v0.5.1 token surface — full bootstrap path", () => {
       const sessionAuth = sessionRequests[0]!.headers()["authorization"];
       expect(sessionAuth).toBe("Bearer e2e-test-token-32-chars-1234567890");
 
-      // Wait for a /api/status request to actually arrive WITHOUT the
-      // Authorization header. The overlay polls on mount + every 3.5s.
-      // The first poll might race the session POST and still carry the
-      // token (lazy getToken() reads at call-time, but the call may
-      // have been queued before token blanking landed). The next poll
-      // — fired after blanking — must omit the header. We poll for up
-      // to 8s rather than asserting "at this instant" because
-      // parallel workers can shift the timing by hundreds of ms.
+      // Strict v0.5.1 guarantee: every /api/status request issued
+      // AFTER token blanking must omit the Authorization header.
+      //
+      // Snapshot the request count at blanking time. Anything captured
+      // before that index might still carry the token (the first poll
+      // can race the session POST). Anything captured AT OR AFTER
+      // that index is post-blanking and MUST be auth-less — that's
+      // the contract.
+      //
+      // Wait for at least one post-blanking request to arrive so the
+      // assertion is meaningful (not vacuously true on an empty slice).
+      const requestsAtBlanking = statusRequests.length;
       const deadline = Date.now() + 8000;
-      let sawAuthlessRequest = false;
-      while (Date.now() < deadline) {
-        sawAuthlessRequest = statusRequests.some(
-          (req) => !req.headers()["authorization"]
-        );
-        if (sawAuthlessRequest) break;
+      while (statusRequests.length <= requestsAtBlanking && Date.now() < deadline) {
         await page.waitForTimeout(200);
       }
+      const postBlanking = statusRequests.slice(requestsAtBlanking);
       expect(
-        sawAuthlessRequest,
-        `no /api/status request arrived without Authorization within 8s (${statusRequests.length} total captured) — cookie-only path didn't engage`
-      ).toBe(true);
+        postBlanking.length,
+        `no /api/status request fired in the 8s after token blanking (had ${requestsAtBlanking} pre-blanking; cookie-only path can't be verified without a post-blanking poll)`
+      ).toBeGreaterThan(0);
+
+      const leakers = postBlanking.filter((req) =>
+        Boolean(req.headers()["authorization"])
+      );
+      expect(
+        leakers,
+        `${leakers.length}/${postBlanking.length} post-blanking /api/status requests leaked the Authorization header`
+      ).toHaveLength(0);
     }
   );
 });
