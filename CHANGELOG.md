@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-04-19
+
+UX phase 1. Three of the six features Codex round-9 suggested
+land here as a focused slice; diagnostics panel deferred to
+v0.9.6.
+
+### Added
+- **Keyboard shortcut: Cmd/Ctrl + Shift + .** toggles the panel
+  from anywhere on the page. The accelerator is the same on
+  every platform so the in-product hint can stay concise.
+  Skipped during IME composition (`event.isComposing`) so it
+  doesn't eat composition-completion keys for users on
+  Korean / Japanese / Chinese input methods. Codex round-9 #2.
+- **Retry last request** button. After a `failed` or `canceled`
+  outcome, the panel shows a "Retry last request" button that
+  refills the textarea with the previous prompt and restores the
+  prior mode (`edit` / `chat`) — no auto-submit, the user
+  confirms by pressing the primary button. `lastSubmittedPrompt`
+  + `lastSubmittedMode` saved on the same successful submit
+  that already tracked `lastSubmittedJobId`. Codex round-9 #3.
+- **Copy** button. Writes either the most recent assistant
+  message text OR the current `serverState.error` (when status
+  is `failed`) to the clipboard via `navigator.clipboard.writeText`.
+  Toast on success / failure (permission rejection). Visible
+  only when there's something to copy. Codex round-9 #4.
+- **5 new `StringTable` keys** + Korean translations:
+  - `kbdShortcutHint` — "Cmd/Ctrl + Shift + . to toggle"
+    (English) / "Cmd/Ctrl + Shift + . 로 열기/닫기" (Korean).
+    Shown subtly under the composer hint.
+  - `retryLast` — "Retry last request" / "마지막 요청 다시 시도"
+  - `copyLast` — "Copy" / "복사"
+  - `toastCopied` — "Copied to clipboard." / "클립보드에 복사됨."
+  - `toastCopyFailed` — "Copy failed." / "복사 실패."
+- **`UIState.lastSubmittedPrompt` + `.lastSubmittedMode`** —
+  module-private persistence for the Retry feature.
+- **`button--ghost`** CSS class for the Retry / Copy chips —
+  visually de-emphasized vs the primary submit + danger cancel.
+- **`composer__hint-shortcut`** CSS for the new shortcut hint
+  beneath the existing send hint.
+
+### Tests
+- **+1 unit test** in `strings.test.ts`: shape includes the 5
+  new keys + `kbdShortcutHint` mentions the documented accelerator
+  (regression guard against the editor stripping the modifier
+  list). Korean ko bundle assertions extended to verify the new
+  keys are translated (not English fallthrough).
+- **`tests/e2e/ux-wins.spec.ts`** — **4 Playwright tests**:
+  - `Ctrl+Shift+.` toggles the panel from closed → open → closed
+  - plain `.` and `Shift+.` (no Ctrl/Meta) do NOT toggle —
+    proves the modifier guard
+  - retry: submit succeeds, status flips to failed, Retry button
+    appears with the localized label, click refills the textarea
+    with the prior prompt
+  - copy: assistant message present → Copy visible, click writes
+    the message text to `navigator.clipboard` (verified via
+    `clipboard-read` permission grant)
+- **Total: 421 unit + 19 e2e = 440 tests**.
+
+### Compatibility
+No runtime behavior change for users who don't trigger any of
+the three new affordances. The keyboard shortcut listener is
+passive until the exact accelerator combo arrives. Bundle size:
+40.0KB → ~41KB (+~1KB for the 5 strings + 3 click handlers + CSS).
+
+### Roadmap
+- **v0.9.6**: diagnostics panel (Codex round-9 feature #6) — a
+  collapsible debug section showing runtime config, locale, auth
+  mode, current jobId, and polling state. Bigger than the v0.9.5
+  trio so split into its own slice.
+- **v0.10.x**: more built-in locales (ja / zh-CN); contributor
+  pattern is already in `BUILT_IN_BUNDLES`.
+- **Lower priority**: Docker-based runner sandbox.
+
 ## [0.9.4] - 2026-04-19
 
 Built-in Korean bundle. v0.9.3 actually finished the i18n

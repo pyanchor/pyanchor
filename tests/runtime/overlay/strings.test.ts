@@ -64,6 +64,12 @@ describe("enStrings (default English bundle)", () => {
     // v0.9.3 — i18n completion (Codex round-9 #2)
     expect(enStrings.errorRequestFailed).toBeTruthy();
     expect(enStrings.errorJobFailed).toBeTruthy();
+    // v0.9.5 — UX phase 1 (Codex round-9 features 2/3/4)
+    expect(enStrings.kbdShortcutHint).toBeTruthy();
+    expect(enStrings.retryLast).toBeTruthy();
+    expect(enStrings.copyLast).toBeTruthy();
+    expect(enStrings.toastCopied).toBeTruthy();
+    expect(enStrings.toastCopyFailed).toBeTruthy();
   });
 
   it("statusQueuedAt formats the position into the message", () => {
@@ -85,6 +91,12 @@ describe("enStrings (default English bundle)", () => {
     // otherwise silently change the user-facing copy.
     expect(enStrings.errorRequestFailed).toBe("Request failed.");
     expect(enStrings.errorJobFailed).toBe("Job failed.");
+  });
+
+  it("kbdShortcutHint mentions the Cmd/Ctrl + Shift + . accelerator", () => {
+    expect(enStrings.kbdShortcutHint).toContain("Cmd/Ctrl");
+    expect(enStrings.kbdShortcutHint).toContain("Shift");
+    expect(enStrings.kbdShortcutHint).toContain(".");
   });
 
   it("composerSubmitSending uses the unicode horizontal ellipsis (no ASCII '...')", () => {
@@ -133,13 +145,17 @@ describe("built-in ko bundle (v0.9.4)", () => {
 
   it("falls back to enStrings for keys NOT present in the ko bundle (none currently)", () => {
     const ko = resolveStrings("ko");
-    // Every StringTable key should have a Korean translation in v0.9.4.
-    // If a future key is added to StringTable but not ko, this would
+    // Every StringTable key should have a Korean translation. If a
+    // future key is added to StringTable but not ko, this would
     // catch it by returning the English value (== enStrings[key]).
     expect(ko.statusReadingChat).not.toBe(enStrings.statusReadingChat);
     expect(ko.statusJobFailed).not.toBe(enStrings.statusJobFailed);
     expect(ko.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
     expect(ko.errorJobFailed).not.toBe(enStrings.errorJobFailed);
+    // v0.9.5 keys also translated
+    expect(ko.retryLast).not.toBe(enStrings.retryLast);
+    expect(ko.copyLast).not.toBe(enStrings.copyLast);
+    expect(ko.toastCopied).not.toBe(enStrings.toastCopied);
   });
 
   it("parameterized strings work (statusQueuedAt / statusYourPosition)", () => {

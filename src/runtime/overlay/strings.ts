@@ -88,6 +88,18 @@ export interface StringTable {
   errorRequestFailed: string;
   /** Generic fallback when a polling outcome reports `failed` with null error (polling). */
   errorJobFailed: string;
+
+  // UX phase 1 (v0.9.5 — Codex round-9 feature suggestions 2/3/4)
+  /** Subtle hint shown in composer footer about the keyboard shortcut. */
+  kbdShortcutHint: string;
+  /** Label for the "Retry last request" button shown after fail/cancel. */
+  retryLast: string;
+  /** Label for the "Copy" button (copies last assistant message OR error). */
+  copyLast: string;
+  /** Toast after successful clipboard write. */
+  toastCopied: string;
+  /** Toast when navigator.clipboard.writeText rejects. */
+  toastCopyFailed: string;
 }
 
 export const enStrings: StringTable = {
@@ -149,7 +161,13 @@ export const enStrings: StringTable = {
   statusYourPosition: (n) => `Your request: position ${n}`,
 
   errorRequestFailed: "Request failed.",
-  errorJobFailed: "Job failed."
+  errorJobFailed: "Job failed.",
+
+  kbdShortcutHint: "Cmd/Ctrl + Shift + . to toggle",
+  retryLast: "Retry last request",
+  copyLast: "Copy",
+  toastCopied: "Copied to clipboard.",
+  toastCopyFailed: "Copy failed."
 };
 
 /**
@@ -223,7 +241,13 @@ export const koStrings: Partial<StringTable> = {
   statusYourPosition: (n) => `내 요청: ${n}번째`,
 
   errorRequestFailed: "요청 실패.",
-  errorJobFailed: "작업 실패."
+  errorJobFailed: "작업 실패.",
+
+  kbdShortcutHint: "Cmd/Ctrl + Shift + . 로 열기/닫기",
+  retryLast: "마지막 요청 다시 시도",
+  copyLast: "복사",
+  toastCopied: "클립보드에 복사됨.",
+  toastCopyFailed: "복사 실패."
 };
 
 /**

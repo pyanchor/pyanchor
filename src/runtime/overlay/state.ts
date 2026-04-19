@@ -74,6 +74,13 @@ export interface UIState {
   mode: AiEditMode;
   /** jobId of the most recent submit — used to highlight the user's queued slot. */
   lastSubmittedJobId: string | null;
+  /**
+   * Most recent submitted prompt + mode (v0.9.5). Lets the user
+   * re-run the same request after a failure / cancel without
+   * re-typing. Cleared by a successful done outcome.
+   */
+  lastSubmittedPrompt: string | null;
+  lastSubmittedMode: AiEditMode | null;
   toast: { message: string; tone: "info" | "success" | "error" } | null;
   toastTimer: number;
 }
@@ -85,6 +92,8 @@ export const createUIState = (): UIState => ({
   prompt: "",
   mode: "edit",
   lastSubmittedJobId: null,
+  lastSubmittedPrompt: null,
+  lastSubmittedMode: null,
   toast: null,
   toastTimer: 0
 });

@@ -370,6 +370,10 @@ const styles = `
     color: #dbe4ff;
     font-size: 0.8rem;
   }
+  .composer__hint-shortcut {
+    color: #6f7c9a;
+    font-size: 0.7rem;
+  }
   .actions {
     display: inline-flex;
     align-items: center;
@@ -390,6 +394,13 @@ const styles = `
   .button--primary {
     background: linear-gradient(135deg, #4e6dff, #7e94ff);
     color: white;
+  }
+  .button--ghost {
+    background: rgba(180, 198, 255, 0.08);
+    color: #c8d3ff;
+  }
+  .button--ghost:hover {
+    background: rgba(180, 198, 255, 0.15);
   }
   .button:disabled {
     opacity: 0.54;
@@ -666,6 +677,22 @@ const render = () => {
   const isFreshOpen = uiState.isOpen && !wasOpenLastRender;
   const justClosed = !uiState.isOpen && wasOpenLastRender;
 
+  // v0.9.5 secondary actions:
+  //   - Retry: re-run the last submitted prompt+mode after a fail/cancel
+  //   - Copy:  put the last assistant text (or the error) on the clipboard
+  const canRetry =
+    !isBusy &&
+    uiState.lastSubmittedPrompt !== null &&
+    (serverState.status === "failed" || serverState.status === "canceled");
+  const lastAssistantMessage = [...serverState.messages]
+    .reverse()
+    .find((m) => m.role === "assistant" || m.role === "system");
+  const copyableText =
+    serverState.status === "failed" && serverState.error
+      ? serverState.error
+      : lastAssistantMessage?.text ?? null;
+  const canCopy = copyableText !== null;
+
   shadowRoot.innerHTML = `
     <style>${styles}</style>
     <div class="pyanchor-root">
@@ -715,8 +742,11 @@ const render = () => {
               <div class="composer__hint">
                 <strong>${escapeHtml(uiState.mode === "chat" ? s.composerHeadlineChat : s.composerHeadlineEdit)}</strong>
                 <span>${escapeHtml(serverState.configured ? s.composerSendHint : s.composerNotConfigured)}</span>
+                <span class="composer__hint-shortcut">${escapeHtml(s.kbdShortcutHint)}</span>
               </div>
               <div class="actions">
+                ${canCopy ? `<button class="button button--ghost" type="button" data-action="copy" aria-label="${escapeHtml(s.copyLast)}">${escapeHtml(s.copyLast)}</button>` : ""}
+                ${canRetry ? `<button class="button button--ghost" type="button" data-action="retry" aria-label="${escapeHtml(s.retryLast)}">${escapeHtml(s.retryLast)}</button>` : ""}
                 ${canCancel ? `<button class="button button--danger" type="button" data-action="cancel" aria-label="${escapeHtml(s.composerCancelLabel)}" ${uiState.isCanceling ? "disabled" : ""}>${escapeHtml(s.composerCancelLabel)}</button>` : ""}
                 <button class="button button--primary" type="submit" data-action="submit-button" ${!serverState.configured || isBusy || !uiState.prompt.trim() ? "disabled" : ""}>
                   ${escapeHtml(uiState.isSubmitting ? s.composerSubmitSending : uiState.mode === "chat" ? s.composerSubmitSend : s.composerSubmitRun)}
@@ -868,6 +898,10 @@ const render = () => {
       });
 
       serverState = next;
+      // v0.9.5: stash the prompt + mode so the user can Retry without
+      // re-typing if the job fails or gets canceled.
+      uiState.lastSubmittedPrompt = trimmed;
+      uiState.lastSubmittedMode = uiState.mode;
       uiState.prompt = "";
 
       const lastQueued = next.queue[next.queue.length - 1];
@@ -883,6 +917,28 @@ const render = () => {
     } finally {
       uiState.isSubmitting = false;
       render();
+    }
+  });
+
+  // v0.9.5 retry: re-fill the textarea + restore the mode the last
+  // request used. Doesn't auto-submit — leaves the user in control.
+  shadowRoot.querySelector<HTMLElement>("[data-action='retry']")?.addEventListener("click", () => {
+    if (!uiState.lastSubmittedPrompt) return;
+    uiState.prompt = uiState.lastSubmittedPrompt;
+    if (uiState.lastSubmittedMode) uiState.mode = uiState.lastSubmittedMode;
+    render();
+  });
+
+  // v0.9.5 copy: write the last assistant message text (or the
+  // current error) to the clipboard. Falls back to a toast on
+  // permission rejection.
+  shadowRoot.querySelector<HTMLElement>("[data-action='copy']")?.addEventListener("click", async () => {
+    if (!copyableText) return;
+    try {
+      await navigator.clipboard.writeText(copyableText);
+      showToast(s.toastCopied, "success");
+    } catch {
+      showToast(s.toastCopyFailed, "error");
     }
   });
 };
@@ -903,6 +959,21 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!uiState.isOpen) return;
   uiState.isOpen = false;
+  render();
+});
+
+// Cmd/Ctrl + Shift + . toggles the panel from anywhere on the page
+// (v0.9.5 — Codex round-9 feature suggestion #2). The accelerator
+// is the same across platforms so the in-product hint can stay
+// concise. Doesn't fire when the user is mid-IME composition (would
+// otherwise eat composition completion keys).
+document.addEventListener("keydown", (event) => {
+  if (event.isComposing) return;
+  if (event.key !== ".") return;
+  if (!event.shiftKey) return;
+  if (!event.metaKey && !event.ctrlKey) return;
+  event.preventDefault();
+  uiState.isOpen = !uiState.isOpen;
   render();
 });
 
