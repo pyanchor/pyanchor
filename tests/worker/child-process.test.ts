@@ -83,6 +83,33 @@ describe("runCommand", () => {
       runCommand("/bin/sleep", ["30"], { timeoutMs: 50 })
     ).rejects.toThrow();
   });
+
+  it(
+    "rejects with the canceled error when the cancel flag flips DURING the run (race between spawn and close)",
+    async () => {
+      // Scenario A from the v0.6.1 codex review: cancel arrives while
+      // the child is still alive. We flip the flag from false→true
+      // 30ms in, kill the (long-lived) child to force a close event,
+      // and assert the close handler observes the now-true flag and
+      // rejects with the canceled error rather than the SIGTERM
+      // exit-by-signal path.
+      let cancelled = false;
+      const tracker = new Set<ChildProcess>();
+      const promise = runCommand("/bin/sleep", ["10"], {
+        activeChildren: tracker,
+        isCancelled: () => cancelled,
+        canceledError: "race-canceled"
+      });
+
+      setTimeout(() => {
+        cancelled = true;
+        for (const child of tracker) killChild(child, "SIGTERM");
+      }, 30);
+
+      await expect(promise).rejects.toThrow("race-canceled");
+      expect(tracker.size).toBe(0);
+    }
+  );
 });
 
 describe("killChild", () => {

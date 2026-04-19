@@ -28,6 +28,15 @@ export interface RuntimeBufferOptions {
   maxThinkingChars: number;
   /** Flush coalesce window in ms. Default 500. Lower for tests. */
   flushIntervalMs?: number;
+  /**
+   * Optional sink for flush failures from the timer-driven path.
+   * `setTimeout(flushRuntimeBuffers)` is fire-and-forget by design
+   * — without this hook, a rejected flush (disk full, EROFS, perm
+   * change after fork) would surface as an unhandledRejection and
+   * crash the worker mid-job. Caller can wire to its own logger /
+   * activity log.
+   */
+  onFlushError?: (error: unknown) => void;
 }
 
 export interface RuntimeBuffer {
@@ -118,7 +127,13 @@ export function createRuntimeBuffer(opts: RuntimeBufferOptions): RuntimeBuffer {
     if (flushTimer) return;
     flushTimer = setTimeout(() => {
       flushTimer = null;
-      void flushRuntimeBuffers();
+      // Swallow + report flush failures so they don't surface as
+      // unhandledRejection and kill the worker. Real bugs still
+      // bubble through the synchronous flushRuntimeBuffers() callers
+      // (pulseState, withHeartbeat) where they're awaited.
+      flushRuntimeBuffers().catch((error) => {
+        opts.onFlushError?.(error);
+      });
     }, flushIntervalMs);
   };
 

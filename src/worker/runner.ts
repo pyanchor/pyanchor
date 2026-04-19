@@ -42,7 +42,13 @@ const { readState, writeState, updateState } = stateIO;
 const runtimeBuffer = createRuntimeBuffer({
   updateState,
   maxActivityLog: pyanchorConfig.maxActivityLog,
-  maxThinkingChars: 8000
+  maxThinkingChars: 8000,
+  // Surface flush failures to stderr so they hit pm2/journald instead
+  // of vanishing into an unhandledRejection. The next pulseState/
+  // withHeartbeat call will surface a synchronous failure too.
+  onFlushError: (error) => {
+    console.error("[pyanchor] runtime-buffer flush failed:", error);
+  }
 });
 const {
   queueLog,

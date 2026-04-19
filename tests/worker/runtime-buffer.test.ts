@@ -155,6 +155,37 @@ describe("queueLog + flushRuntimeBuffers (coalesce)", () => {
     await buf.flushRuntimeBuffers();
     expect(calls).toHaveLength(0);
   });
+
+  it("invokes onFlushError when the timer-driven flush rejects (no unhandled rejection)", async () => {
+    const updateState = vi.fn().mockRejectedValue(new Error("EROFS: read-only fs"));
+    const onFlushError = vi.fn();
+    const buf = createRuntimeBuffer({
+      updateState,
+      maxActivityLog: 80,
+      maxThinkingChars: 8000,
+      onFlushError
+    });
+    buf.queueLog(["something"]);
+    await vi.advanceTimersByTimeAsync(500);
+    // Let any pending microtasks (the .catch chain) settle.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onFlushError).toHaveBeenCalledOnce();
+    expect(onFlushError.mock.calls[0]?.[0]).toBeInstanceOf(Error);
+    expect((onFlushError.mock.calls[0]?.[0] as Error).message).toContain("EROFS");
+  });
+
+  it("does not throw when onFlushError is not supplied (silent swallow)", async () => {
+    const updateState = vi.fn().mockRejectedValue(new Error("disk full"));
+    const buf = createRuntimeBuffer({ updateState, maxActivityLog: 80, maxThinkingChars: 8000 });
+    buf.queueLog(["x"]);
+    await vi.advanceTimersByTimeAsync(500);
+    await Promise.resolve();
+    await Promise.resolve();
+    // If the .catch wasn't there, vitest would fail this test with
+    // an unhandledRejection. Reaching here means the swallow works.
+    expect(true).toBe(true);
+  });
 });
 
 describe("queueThinking", () => {
@@ -219,18 +250,23 @@ describe("withHeartbeat", () => {
     expect(labelSet).toBe(true);
   });
 
-  it("clears the interval timer even when the task throws", async () => {
-    const { updateState } = makeUpdateState(baseState());
+  it("clears the interval timer even when the task throws (no leaked pulses)", async () => {
+    const { updateState, calls } = makeUpdateState(baseState());
     const buf = createRuntimeBuffer({ updateState, maxActivityLog: 80, maxThinkingChars: 8000 });
     await expect(
-      buf.withHeartbeat({ step: "boom step", label: "Boom" }, async () => {
+      buf.withHeartbeat({ step: "boom step", label: "Boom", intervalMs: 100 }, async () => {
         throw new Error("task failed");
       })
     ).rejects.toThrow("task failed");
-    // If the timer leaked, advancing real time would call updateState again.
-    // We only assert the rejection here; cleanup correctness is exercised by
-    // not seeing additional updateState calls in subsequent tests sharing
-    // the same fake-timer scope.
+    // Snapshot how many updateState calls happened up to (and including)
+    // the throw. After the throw, advancing time by many heartbeat
+    // windows must NOT cause additional updateState invocations.
+    const callsAfterThrow = calls.length;
+    await vi.advanceTimersByTimeAsync(1000); // 10 missed intervals if the timer leaked
+    expect(calls.length).toBe(callsAfterThrow);
+    // Belt-and-suspenders: vitest exposes the active fake-timer count.
+    // After cleanup there should be zero pending heartbeat timers.
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("uses the configured intervalMs for repeated pulses while task runs", async () => {

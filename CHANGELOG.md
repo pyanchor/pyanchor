@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-04-19
+
+Codex round-4 review of v0.6.1 (regression-focused) flagged three
+hardening items to ship before the v0.6.3 lifecycle decomposition.
+All three landed here. One scenario (cancel-during-dequeue boundary)
+deferred to v0.6.3 because it requires the lifecycle module to be
+extracted first.
+
+### Fixed
+- **`runtime-buffer` flush rejection no longer escapes as
+  unhandledRejection.** The 500ms timer-driven `flushRuntimeBuffers()`
+  was fire-and-forget (`void flushRuntimeBuffers()`) — a rejected
+  flush (EROFS, disk full, perm change after fork) would surface as
+  an unhandledRejection and could kill the worker mid-job. Now wired
+  through `.catch(opts.onFlushError)`. The runner injects an
+  `onFlushError` that logs to stderr so pm2 / journald sees the
+  failure, and the next pulseState / withHeartbeat call still
+  surfaces a synchronous failure to the caller.
+
+### Added
+- **`createRuntimeBuffer` accepts `onFlushError?: (error) => void`.**
+  Optional sink for failures from the timer-driven path. Synchronous
+  flushes (called directly from pulseState/withHeartbeat) continue
+  to bubble exceptions to the caller — only the fire-and-forget path
+  needs the swallow.
+
+### Tests
+- `runtime-buffer.test.ts`:
+  - **+2 tests** for the flush-rejection path: `onFlushError`
+    invocation with the original error, and silent-swallow when
+    no sink is supplied.
+  - **Strengthened** `withHeartbeat` throw test from intent-only
+    documentation to explicit assertions: after the task throws,
+    advancing fake time 10× the heartbeat interval must NOT trigger
+    additional `updateState` calls, and `vi.getTimerCount()` must
+    be exactly 0.
+- `child-process.test.ts`:
+  - **+1 test** for the cancel-mid-spawn race (scenario A from the
+    Codex review): the `isCancelled()` callback flips false→true
+    30ms into a long-lived `sleep`, the test SIGTERMs the child to
+    force a close event, and asserts the close handler observes the
+    flipped flag and rejects with the configured `canceledError`
+    (not the SIGTERM exit-by-signal path).
+- Total: **237 passing tests** across 18 files (was 234 / 18).
+
+### Compatibility
+No behavior change for any caller that doesn't pass `onFlushError`
+— the swallow defaults to a silent no-op. Existing `runner.ts` wiring
+adds the stderr sink; no observable difference for happy-path runs.
+
+### Roadmap
+- **v0.6.3**: extract `worker/lifecycle.ts` (dequeueNext,
+  finalizeSuccess, finalizeFailure, runAdapterAgent) and add the
+  cancel-during-dequeue integration test (scenario B from the
+  Codex review) once the seam exists.
+- **v0.6.4** (separate): `runtime/overlay.ts` decomposition + Playwright e2e.
+
 ## [0.6.1] - 2026-04-19
 
 Second slice of the worker decomposition. Two more pure modules
