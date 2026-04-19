@@ -355,7 +355,20 @@ describe("runBootstrap — overlay script injection", () => {
   // person who edits BUILT_IN_LOCALES doesn't accidentally drop the
   // injection (silent regression: locale 404s + UI stays English).
   describe("auto-injects locale bundle script BEFORE overlay (built-in locales)", () => {
-    const builtIns = ["ko", "ja", "zh-cn", "es", "de", "fr", "pt-br", "vi", "id"];
+    const builtIns = [
+      "ko",
+      "ja",
+      "zh-cn",
+      "es",
+      "de",
+      "fr",
+      "pt-br",
+      "vi",
+      "id",
+      "ru",
+      "hi",
+      "th"
+    ];
     it.each(builtIns)("locale=%s injects locales/%s.js with defer + correct attrs", (locale) => {
       const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });
       script.dataset.pyanchorLocale = locale;

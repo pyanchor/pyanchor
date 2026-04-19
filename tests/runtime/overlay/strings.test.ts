@@ -24,6 +24,10 @@ import { frStrings } from "../../../src/runtime/overlay/locales/fr";
 import { ptBRStrings } from "../../../src/runtime/overlay/locales/pt-br";
 import { viStrings } from "../../../src/runtime/overlay/locales/vi";
 import { idStrings } from "../../../src/runtime/overlay/locales/id";
+// v0.13.0 — Slavic / Indic / SE-Asian additions.
+import { ruStrings } from "../../../src/runtime/overlay/locales/ru";
+import { hiStrings } from "../../../src/runtime/overlay/locales/hi";
+import { thStrings } from "../../../src/runtime/overlay/locales/th";
 
 beforeEach(() => {
   // Re-seed the queue with every built-in locale so the rest of the
@@ -37,7 +41,10 @@ beforeEach(() => {
     { locale: "fr", bundle: frStrings },
     { locale: "pt-br", bundle: ptBRStrings },
     { locale: "vi", bundle: viStrings },
-    { locale: "id", bundle: idStrings }
+    { locale: "id", bundle: idStrings },
+    { locale: "ru", bundle: ruStrings },
+    { locale: "hi", bundle: hiStrings },
+    { locale: "th", bundle: thStrings }
   ];
   _clearRegistry();
 });
@@ -323,6 +330,48 @@ describe("built-in Latin + SE-Asian bundles (v0.12.0)", () => {
       const t = resolveStrings(locale);
       // Spot-check the diagnostic labels (newest keys are the most
       // common to forget when translating).
+      expect(t.diagnosticsTitle).not.toBe(enStrings.diagnosticsTitle);
+      expect(t.retryLast).not.toBe(enStrings.retryLast);
+      expect(t.copyLast).not.toBe(enStrings.copyLast);
+      expect(t.statusReadingChat).not.toBe(enStrings.statusReadingChat);
+      expect(t.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
+    }
+  );
+});
+
+describe("built-in Slavic + Indic + SE-Asian bundles (v0.13.0)", () => {
+  it.each([
+    ["ru", "Вы", "Текущая страница"],
+    ["hi", "आप", "मौजूदा पेज"],
+    ["th", "คุณ", "หน้าปัจจุบัน"]
+  ])("%s resolves to a translated bundle (roleYou=%s, panelContextLabel=%s)", (locale, roleYou, panelContextLabel) => {
+    const t = resolveStrings(locale);
+    expect(t).not.toBe(enStrings);
+    expect(t.roleYou).toBe(roleYou);
+    expect(t.panelContextLabel).toBe(panelContextLabel);
+    expect(t.panelTitle).toBe("Pyanchor DevTools");
+  });
+
+  it.each([
+    ["ru", "RU"],
+    ["hi", "HI"],
+    ["th", "TH"]
+  ])("%s lookup is case-insensitive (uppercase %s also works)", (locale, upper) => {
+    expect(resolveStrings(upper)).toEqual(resolveStrings(locale));
+  });
+
+  it.each([
+    ["ru", "В очереди, позиция 2."],
+    ["hi", "कतार में, स्थान 2।"],
+    ["th", "อยู่ในคิว ตำแหน่งที่ 2"]
+  ])("%s statusQueuedAt formats the position (%s prefix)", (locale, expectedPrefix) => {
+    expect(resolveStrings(locale).statusQueuedAt(2)).toContain(expectedPrefix);
+  });
+
+  it.each(["ru", "hi", "th"])(
+    "%s translates every checked surface key (no English fallthrough)",
+    (locale) => {
+      const t = resolveStrings(locale);
       expect(t.diagnosticsTitle).not.toBe(enStrings.diagnosticsTitle);
       expect(t.retryLast).not.toBe(enStrings.retryLast);
       expect(t.copyLast).not.toBe(enStrings.copyLast);

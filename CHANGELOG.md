@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-04-20
+
+Slavic / Indic / SE-Asian locale expansion. Three new built-in
+translation bundles riding on the v0.11.0 split + v0.12.1
+production-route infrastructure. Codex round-11 explicitly flagged
+these three as "mechanically much safer once the split-bundle
+activation bugs above are fixed" — now that v0.12.1 closed those,
+they ship cleanly. Twelve total built-in locales.
+
+### Added
+- **`src/runtime/overlay/locales/{ru,hi,th}.ts`** — three new locale
+  modules. All translate every key in `StringTable`. Bundle sizes:
+  ru 4.2KB / hi 6.8KB (Devanagari) / th 6.9KB (Thai script + no
+  spaces). Each follows the v0.12.1 dynamic activation path
+  (`__PyanchorRegisterStrings` if present, else queue push).
+- **`build.mjs`** — IIFE list extended to 12 entries.
+- **`src/runtime/bootstrap.ts`** — `BUILT_IN_LOCALES` set now 12
+  (auto-injects `<script src="locales/{ru,hi,th}.js">` for these
+  codes).
+- **`src/server.ts`** — production server's `BUILT_IN_LOCALES`
+  whitelist set now 12. Verified via real-server smoke (all 12 200,
+  klingon 404).
+- **`tests/e2e/server.mjs`** — serves the new bundles + adds fixture
+  pages `/{ru,hi,th}.html`.
+- **`tests/e2e/i18n-v013.spec.ts`** — 6 new e2e cases (3 locales × 2
+  assertions: panel content + translated `aria-label`).
+- **`tests/runtime/overlay/strings.test.ts`** — extended seed +
+  `built-in Slavic + Indic + SE-Asian bundles (v0.13.0)` describe
+  with parameterized roleYou / panelContextLabel / case-insensitive
+  / statusQueuedAt / no-fallthrough guards.
+- **`tests/runtime/bootstrap.test.ts`** — `builtIns` array extended
+  to 12; the auto-inject ordering test now parameterizes over all
+  twelve.
+
+### Translation notes
+- **th** uses no trailing periods (Thai script convention). Other
+  punctuation (commas, em-dashes) preserved where it aids parsing.
+- **hi** uses Devanagari "।" (purna viram) as sentence terminator,
+  matching the rest of the panel's polite-imperative register.
+- **ru** uses formal "Вы" (capitalized) consistent with software-UI
+  conventions in Russian. "Сайдкар" is loanword transliteration —
+  "sidecar" is a Pyanchor term, no Russian equivalent.
+- "Auth" / "Runtime" / "Bearer" left in English across all three
+  (same convention as v0.10.0–v0.12.1; these are technical
+  identifiers).
+
+### Roadmap
+- **ar** (Arabic, RTL) — explicitly punted from v0.13.0 per Codex
+  round-11 #4: needs RTL audit inside the shadow root first
+  (panel layout, `dir="rtl"` propagation, mirrored arrows). Plan
+  for v0.14.0 as a dedicated track.
+- Remaining popular candidates: tr / nl / pl / sv / it. Same
+  mechanical pattern — each adds ~3-7KB lazy-loaded.
+
 ## [0.12.1] - 2026-04-19
 
 Round-11 Codex patches. Two real activation bugs in v0.11.0/v0.12.0
