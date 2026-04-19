@@ -1,6 +1,6 @@
 {
   "name": "pyanchor",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "description": "Agent-agnostic AI live-edit sidecar for Next.js. Anchor edits straight into your running app.",
   "license": "MIT",
   "author": "PYAN <ikellllllll@users.noreply.github.com>",
@@ -68,6 +68,7 @@
     "@types/node": "^22.10.1",
     "@vitest/coverage-v8": "^2.1.9",
     "esbuild": "^0.25.3",
+    "happy-dom": "^15.11.7",
     "typescript": "^5.6.3",
     "vitest": "^2.1.9"
   },

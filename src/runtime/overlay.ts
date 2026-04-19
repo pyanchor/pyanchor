@@ -1,48 +1,20 @@
-export {};
-
-type AiEditStatus = "idle" | "running" | "canceling" | "done" | "failed" | "canceled";
-type AiEditMode = "edit" | "chat";
-type AiEditMessageRole = "user" | "assistant" | "system";
-type AiEditMessageStatus = "queued" | "running" | "done" | "failed" | "canceled";
-
-interface AiEditQueueItem {
-  jobId: string;
-  prompt: string;
-  targetPath: string;
-  enqueuedAt: string;
-  mode: AiEditMode;
-}
-
-interface AiEditMessage {
-  id: string;
-  jobId: string | null;
-  role: AiEditMessageRole;
-  mode: AiEditMode;
-  text: string;
-  createdAt: string;
-  status: AiEditMessageStatus | null;
-}
-
-interface AiEditState {
-  configured: boolean;
-  status: AiEditStatus;
-  jobId: string | null;
-  pid: number | null;
-  prompt: string;
-  targetPath: string;
-  mode: AiEditMode | null;
-  currentStep: string | null;
-  heartbeatAt: string | null;
-  heartbeatLabel: string | null;
-  thinking: string | null;
-  activityLog: string[];
-  error: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  updatedAt: string;
-  queue: AiEditQueueItem[];
-  messages: AiEditMessage[];
-}
+import { closeIcon, mountOverlayHost, sparkIcon, typingDots } from "./overlay/elements";
+import { createFetchJson, runtimePath as buildRuntimePath } from "./overlay/fetch-helper";
+import { escapeHtml, formatTime, shorten, takeFirstLine } from "./overlay/format";
+import {
+  createEmptyServerState,
+  createUIState,
+  getComposerTitle,
+  getPendingBubbleTitle,
+  getPlaceholder,
+  getStatusHeadline,
+  getStatusMeta,
+  getTrackedQueuePosition,
+  shouldPoll,
+  type AiEditMessage,
+  type AiEditMode,
+  type AiEditState
+} from "./overlay/state";
 
 interface RuntimeConfig {
   baseUrl: string;
@@ -59,26 +31,7 @@ declare global {
 const POLL_INTERVAL_MS = 3500;
 const AUTO_SCROLL_THRESHOLD_PX = 48;
 
-const emptyState: AiEditState = {
-  configured: false,
-  status: "idle",
-  jobId: null,
-  pid: null,
-  prompt: "",
-  targetPath: "",
-  mode: null,
-  currentStep: null,
-  heartbeatAt: null,
-  heartbeatLabel: null,
-  thinking: null,
-  activityLog: [],
-  error: null,
-  startedAt: null,
-  completedAt: null,
-  updatedAt: new Date(0).toISOString(),
-  queue: [],
-  messages: []
-};
+const emptyState: AiEditState = createEmptyServerState();
 
 const styles = `
   :host { all: initial; }
@@ -531,34 +484,6 @@ const styles = `
   }
 `;
 
-const escapeHtml = (value: string) =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-
-const sparkIcon = `
-  <svg class="spark" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-    <path d="M10 2 11.8 7.8H17.8L12.9 11.4 14.7 17.2 10 13.6 5.3 17.2 7.1 11.4 2.2 7.8H8.2L10 2Z" fill="currentColor" />
-  </svg>
-`;
-
-const closeIcon = `
-  <svg class="close" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M4 4 12 12M12 4 4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-  </svg>
-`;
-
-const typingDots = `
-  <span class="typing" aria-hidden="true">
-    <span class="typing__dot"></span>
-    <span class="typing__dot"></span>
-    <span class="typing__dot"></span>
-  </span>
-`;
-
 const config = window.__PyanchorConfig;
 
 if (!config || window.__PyanchorOverlayLoaded) {
@@ -567,75 +492,22 @@ if (!config || window.__PyanchorOverlayLoaded) {
 
 window.__PyanchorOverlayLoaded = true;
 
-const root = document.createElement("div");
-root.id = "pyanchor-overlay-root";
-document.body.appendChild(root);
+const { host: root, shadowRoot } = mountOverlayHost();
 
-const shadowRoot = root.attachShadow({ mode: "open" });
-
-const uiState = {
-  isOpen: false,
-  isSubmitting: false,
-  isCanceling: false,
-  prompt: "",
-  mode: "edit" as AiEditMode,
-  lastSubmittedJobId: null as string | null,
-  toast: null as null | { message: string; tone: "info" | "success" | "error" },
-  toastTimer: 0
-};
+const uiState = createUIState();
 
 let serverState: AiEditState = { ...emptyState };
 
-const runtimePath = (suffix: string) => `${config.baseUrl}${suffix}`;
+// Lazy token reader — bootstrap blanks config.token after the
+// session-exchange POST resolves (since v0.5.1), so capturing it
+// at module-eval time would defeat the cookie-only fallback.
+const fetchJson = createFetchJson({
+  baseUrl: config.baseUrl,
+  getToken: () => config.token || null
+});
+
+const runtimePath = (suffix: string) => buildRuntimePath(config.baseUrl, suffix);
 const currentPath = () => window.location.pathname;
-
-const formatTime = (iso: string | null) => {
-  if (!iso) {
-    return null;
-  }
-
-  const value = new Date(iso);
-  if (Number.isNaN(value.getTime())) {
-    return null;
-  }
-
-  // Locale-agnostic HH:MM:SS — same shape regardless of viewer locale,
-  // matches the worker's stampLogLine format.
-  const hh = String(value.getHours()).padStart(2, "0");
-  const mm = String(value.getMinutes()).padStart(2, "0");
-  const ss = String(value.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
-};
-
-const takeFirstLine = (value: string | null) => {
-  if (!value) {
-    return "";
-  }
-
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .find(Boolean) ?? "";
-};
-
-const shorten = (value: string, max = 120) => (value.length > max ? `${value.slice(0, max - 1)}…` : value);
-
-const fetchJson = async <T>(input: string, init?: RequestInit) => {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(config.token ? { Authorization: `Bearer ${config.token}` } : {}),
-      ...(init?.headers ?? {})
-    },
-    cache: "no-store"
-  });
-  const data = (await response.json()) as T & { error?: string };
-  if (!response.ok) {
-    throw new Error(data.error ?? "Request failed.");
-  }
-  return data;
-};
 
 const showToast = (message: string, tone: "info" | "success" | "error") => {
   uiState.toast = { message, tone };
@@ -649,83 +521,24 @@ const showToast = (message: string, tone: "info" | "success" | "error") => {
   render();
 };
 
-const getTrackedQueuePosition = () => {
-  if (!uiState.lastSubmittedJobId) {
-    return 0;
-  }
-  return serverState.queue.findIndex((item) => item.jobId === uiState.lastSubmittedJobId) + 1;
-};
-
-const shouldPoll = () =>
-  serverState.status === "running" ||
-  serverState.status === "canceling" ||
-  serverState.queue.length > 0 ||
-  getTrackedQueuePosition() > 0;
-
-const getStatusHeadline = () => {
-  const queuePosition = getTrackedQueuePosition();
-  const thinkingPreview = shorten(takeFirstLine(serverState.thinking));
-
-  if (queuePosition > 0 && serverState.status !== "running" && serverState.status !== "canceling") {
-    return `Queued at position ${queuePosition}. Will run after the current jobs finish.`;
-  }
-
-  if (serverState.status === "running" || serverState.status === "canceling") {
-    return (
-      thinkingPreview ||
-      serverState.heartbeatLabel ||
-      serverState.currentStep ||
-      (serverState.mode === "chat" ? "Reading your question." : "Reading the page and the code.")
-    );
-  }
-
-  if (serverState.status === "failed") {
-    return serverState.error ?? "Job failed.";
-  }
-
-  if (serverState.status === "canceled") {
-    return serverState.error ?? "Job canceled.";
-  }
-
-  if (serverState.status === "done") {
-    return serverState.mode === "chat" ? "Answer ready." : "Edit complete.";
-  }
-
-  return "";
-};
-
-const getStatusMeta = () => {
-  const pieces = [
-    serverState.heartbeatLabel,
-    formatTime(serverState.heartbeatAt),
-    getTrackedQueuePosition() > 0 ? `Your request: position ${getTrackedQueuePosition()}` : null
-  ].filter(Boolean);
-
-  return pieces.join(" / ");
-};
-
-const getPlaceholder = () =>
-  uiState.mode === "edit"
-    ? "e.g. make the login/signup tab transition smoother. Keep the existing structure intact."
-    : "e.g. explain why this page behaves the way it does. Cite the files.";
-
-const getComposerTitle = () => (uiState.mode === "edit" ? "Edit request" : "Send a question");
-
-const getPendingBubbleTitle = () => {
-  if (serverState.status === "canceling") {
-    return "Drafting your request.";
-  }
-
-  if (serverState.mode === "edit" || uiState.mode === "edit") {
-    return "Reading page and code.";
-  }
-
-  return "Drafting an answer.";
-};
+// Closures over the local mutable uiState + serverState. The pure
+// versions live in ./overlay/state.ts; these adapters keep call
+// sites compact and let the render() body stay readable.
+const trackedQueuePosition = () => getTrackedQueuePosition(uiState, serverState);
+const shouldPollNow = () => shouldPoll(uiState, serverState);
+const statusHeadline = () =>
+  getStatusHeadline(uiState, serverState, {
+    thinkingPreview: shorten(takeFirstLine(serverState.thinking))
+  });
+const statusMeta = () =>
+  getStatusMeta(uiState, serverState, formatTime(serverState.heartbeatAt));
+const placeholder = () => getPlaceholder(uiState.mode);
+const composerTitle = () => getComposerTitle(uiState.mode);
+const pendingBubbleTitle = () => getPendingBubbleTitle(uiState, serverState);
 
 const renderMessages = () => {
   const messages = serverState.messages.slice(-18);
-  const queuePosition = getTrackedQueuePosition();
+  const queuePosition = trackedQueuePosition();
   const showPendingMessage =
     serverState.status === "running" ||
     serverState.status === "canceling" ||
@@ -764,7 +577,7 @@ const renderMessages = () => {
                   <span class="message__name">Pyanchor</span>
                   <span class="message__time">${escapeHtml(formatTime(serverState.heartbeatAt) ?? formatTime(serverState.startedAt) ?? "")}</span>
                 </div>
-                <div class="message__body message__body--pending">${typingDots}<span class="message__body--pending-text">${escapeHtml(getPendingBubbleTitle())}</span></div>
+                <div class="message__body message__body--pending">${typingDots}<span class="message__body--pending-text">${escapeHtml(pendingBubbleTitle())}</span></div>
               </article>
             </div>
           `
@@ -827,9 +640,9 @@ const syncState = async (withOutcomeToast = false) => {
 const render = () => {
   const isWorking = serverState.status === "running" || serverState.status === "canceling";
   const isBusy = isWorking || uiState.isSubmitting || uiState.isCanceling;
-  const canCancel = isWorking || getTrackedQueuePosition() > 0;
-  const statusHeadline = getStatusHeadline();
-  const statusMeta = getStatusMeta();
+  const canCancel = isWorking || trackedQueuePosition() > 0;
+  const headline = statusHeadline();
+  const meta = statusMeta();
 
   const previousActive = shadowRoot.activeElement as HTMLElement | null;
   const previousMessagesPanel = shadowRoot.querySelector<HTMLElement>(".messages");
@@ -873,13 +686,13 @@ const render = () => {
           </div>
 
           ${
-            statusHeadline
+            headline
               ? `
                 <div class="status-line status-line--${serverState.status}">
                   ${isWorking ? typingDots : ""}
                   <div class="status-line__copy">
-                    <div class="status-line__headline">${escapeHtml(statusHeadline)}</div>
-                    ${statusMeta ? `<div class="status-line__meta">${escapeHtml(statusMeta)}</div>` : ""}
+                    <div class="status-line__headline">${escapeHtml(headline)}</div>
+                    ${meta ? `<div class="status-line__meta">${escapeHtml(meta)}</div>` : ""}
                   </div>
                 </div>
               `
@@ -890,8 +703,8 @@ const render = () => {
 
           <form class="composer" data-action="submit">
             <div>
-              <span class="composer__title">${getComposerTitle()}</span>
-              <textarea class="textarea" rows="4" placeholder="${escapeHtml(getPlaceholder())}" ${isBusy ? "disabled" : ""}></textarea>
+              <span class="composer__title">${composerTitle()}</span>
+              <textarea class="textarea" rows="4" placeholder="${escapeHtml(placeholder())}" ${isBusy ? "disabled" : ""}></textarea>
             </div>
             <div class="composer__footer">
               <div class="composer__hint">
@@ -1067,7 +880,7 @@ render();
 void syncState(false);
 
 window.setInterval(() => {
-  if (document.visibilityState === "hidden" && !shouldPoll()) {
+  if (document.visibilityState === "hidden" && !shouldPollNow()) {
     return;
   }
   void syncState(true);

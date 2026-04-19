@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-19
+
+First slice of the `runtime/overlay.ts` decomposition track. Four
+pure / DOM-friendly submodules carved out of the 1074-LOC monolith,
+all tested individually (3 of 4 at 100% statements, the fourth at
+98%). Adds `happy-dom` as a dev dependency for the DOM-touching tests.
+
+### Added
+- **`src/runtime/overlay/format.ts`** — pure formatters
+  (`escapeHtml`, `formatTime`, `takeFirstLine`, `shorten`). No DOM,
+  no module state. Mirrors the worker's `stampLogLine` HH:MM:SS
+  format so log lines and heartbeats display identically across the
+  server-rendered admin page and the in-page overlay.
+- **`src/runtime/overlay/elements.ts`** — inline SVG icon strings
+  (`sparkIcon`, `closeIcon`, `typingDots`) + `mountOverlayHost(doc?)`
+  factory that creates the `#pyanchor-overlay-root` host and opens
+  its Shadow DOM. Caller still owns idempotency (the
+  `window.__PyanchorOverlayLoaded` check).
+- **`src/runtime/overlay/fetch-helper.ts`** — `createFetchJson({
+  baseUrl, getToken, fetchImpl? })` factory + `runtimePath(base, suffix)`
+  joiner. **Token is read lazily on every call** (`getToken()`) so the
+  v0.5.1 cookie-exchange behavior — bootstrap blanks
+  `window.__PyanchorConfig.token` after the session POST — still
+  works without breaking long-lived adapters. Error normalization
+  surfaces the server's `{error}` field; falls back to
+  `"Request failed."`.
+- **`src/runtime/overlay/state.ts`** — UI state types
+  (`UIState`, `AiEditState`, etc., re-declared locally so the
+  browser bundle stays self-contained), plus pure derived helpers
+  (`getTrackedQueuePosition`, `shouldPoll`, `getStatusHeadline`,
+  `getStatusMeta`, `getPlaceholder`, `getComposerTitle`,
+  `getPendingBubbleTitle`). Each helper takes `(uiState, serverState)`
+  by parameter so the overlay's mutable singletons stay in
+  `overlay.ts` while the logic becomes testable.
+
+### Changed
+- **`src/runtime/overlay.ts`** went from **1074 → 887 LOC** (-187 / -17%).
+  What's left is the styles block, render() template orchestration,
+  and event-handler wiring. The mutable singletons (`uiState`,
+  `serverState`, the shadow root) stay here because they're
+  inherently coupled to the render() loop; the pure logic is now
+  out and individually verified.
+- Bootstrap-and-mount sequence consolidated through `mountOverlayHost()`.
+  fetchJson reads the token through a closure each call, restoring
+  the cookie-only path the v0.5.1 patch enabled (was working but
+  the lazy-read wasn't testable in isolation; it is now).
+
+### Tests
+- `tests/runtime/overlay/format.test.ts` — **16 tests** for the
+  pure formatters: HTML escape ordering, ISO parsing edge cases,
+  Unicode passthrough, takeFirstLine on whitespace-only input,
+  shorten cap inclusivity (ellipsis takes one of the `max` slots).
+- `tests/runtime/overlay/elements.test.ts` — **6 tests** (happy-dom)
+  for SVG markup contents and the mount/shadow-root contract.
+- `tests/runtime/overlay/fetch-helper.test.ts` — **11 tests** for
+  header composition (Content-Type + lazy Authorization), per-call
+  header merging, server-error message surfacing + generic fallback,
+  and the lazy-token re-read behavior (proves the cookie-only path
+  works after the bootstrap clears the token).
+- `tests/runtime/overlay/state.test.ts` — **29 tests** for the
+  derived helpers: queue-position 1-based indexing, polling
+  predicate truth table, status headline priority cascade
+  (queue → thinking → heartbeat → currentStep → mode-specific
+  fallback → error → done summary → empty), getStatusMeta join
+  semantics, mode-specific composer / placeholder / pending titles.
+- Total: **328 passing tests** across 24 files (was 266 / 20).
+
+### Coverage
+- Whole-repo: 55.1% → **59.3%** (+4.2 pp).
+- `src/runtime/overlay/`: **98.8%** statements (3/4 modules at 100%,
+  state.ts at 98%).
+- `src/runtime/overlay.ts` itself stays at 0% — the remaining
+  render() body and event-handler wiring is integration-test
+  surface, slated for the v0.7.2 Playwright e2e pass.
+
+### Compatibility
+No runtime behavior change for the in-page overlay. The Shadow DOM
+host mounts the same way, the polling cadence is unchanged, the
+fetch helper composes the exact same headers, and the status
+headline / queue-position UX is identical (verified by the
+character-for-character pure tests against the same priority cascade
+the original inlined logic implemented).
+
+### Roadmap (overlay track)
+- **v0.7.1**: extract `runtime/overlay/anchor-picker.ts` (page
+  element selection, highlight box, selector extraction) and
+  `runtime/overlay/panel.ts` (the chat/edit panel template +
+  binding).
+- **v0.7.2**: Playwright e2e harness — overlay mount → anchor
+  pick → submit → server response, plus the cancel happy path. CI
+  workflow for the browser job.
+- **v0.7.3**: sandboxed integration tests for `worker/runner.ts`
+  (real signal handlers, real dequeue boundary) — the smoke
+  Codex round-5 noted is a nice-to-have.
+
 ## [0.6.3] - 2026-04-19
 
 Third (and final) slice of the worker decomposition tracked since
