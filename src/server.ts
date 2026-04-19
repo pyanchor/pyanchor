@@ -7,7 +7,7 @@ import { pyanchorConfig, validateConfig } from "./config";
 import { SESSION_COOKIE, requireGateCookie, requireToken } from "./auth";
 import { requireAllowedOrigin } from "./origin";
 import { tokenBucketMiddleware } from "./rate-limit";
-import { createSession, revokeSession } from "./sessions";
+import { activeSessionCount, createSession, revokeSession } from "./sessions";
 import { cancelAiEdit, getAdminHealth, readAiEditState, startAiEdit } from "./state";
 import { BUILT_IN_LOCALE_SET } from "./shared/locales";
 import type { AiEditCancelInput, AiEditStartInput } from "./shared/types";
@@ -273,6 +273,56 @@ app.get(
   asyncRoute(async (_request, response) => {
     setNoStore(response);
     response.json(await readAiEditState());
+  })
+);
+
+// v0.23.1 — operator visibility. Cheap in-process aggregations only;
+// historical aggregations from audit log come in a future minor as
+// an opt-in `?include=audit` query (parsing JSONL on every request
+// is expensive). Adoption-window value: operator can see queue
+// pressure + active sessions + recent outcome counts at a glance
+// without grepping state.json.
+const SERVER_STARTED_AT = new Date().toISOString();
+app.get(
+  "/api/admin/metrics",
+  requireGateCookie,
+  requireToken,
+  asyncRoute(async (_request, response) => {
+    setNoStore(response);
+    const state = await readAiEditState();
+    // Tally outcomes from recent messages (last 50 of state.messages).
+    // Bounded so the endpoint stays cheap regardless of history size.
+    const recent = state.messages.slice(-50);
+    const outcomeCounts = recent.reduce<Record<string, number>>((acc, msg) => {
+      const key = msg.status ?? "unknown";
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {});
+    response.json({
+      ts: new Date().toISOString(),
+      serverStartedAt: SERVER_STARTED_AT,
+      version: process.env.npm_package_version ?? null,
+      queue: {
+        depth: state.queue.length,
+        // Position of the oldest queued item's enqueue timestamp,
+        // useful to spot a stuck queue.
+        oldestEnqueuedAt: state.queue[0]?.enqueuedAt ?? null
+      },
+      currentJob: {
+        status: state.status,
+        jobId: state.jobId,
+        mode: state.mode,
+        targetPath: state.targetPath || null,
+        startedAt: state.startedAt
+      },
+      sessions: {
+        activeCount: activeSessionCount()
+      },
+      recentMessages: {
+        sampleSize: recent.length,
+        byStatus: outcomeCounts
+      }
+    });
   })
 );
 

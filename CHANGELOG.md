@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-04-20
+
+Roadmap rewrite + operator visibility endpoint. No new product
+features — making what's there observable + updating stale docs
+that pre-dated half the codebase.
+
+### Added
+- **`/api/admin/metrics` endpoint** (new). Cheap in-process
+  aggregations only — no audit-log parse, no historical data.
+  Shape:
+  ```json
+  {
+    "ts": "...", "serverStartedAt": "...", "version": "0.23.1",
+    "queue": { "depth": 0, "oldestEnqueuedAt": null },
+    "currentJob": { "status": "idle", "jobId": null, "mode": null,
+                    "targetPath": null, "startedAt": null },
+    "sessions": { "activeCount": 3 },
+    "recentMessages": { "sampleSize": 50, "byStatus": { "done": 47, "failed": 3 } }
+  }
+  ```
+  Routes through the same `requireGateCookie + requireToken` chain
+  as the rest of `/api/admin/*`. Marked `Pre-1.0` in
+  `docs/API-STABILITY.md` — historical-aggregation variant
+  (`?include=audit`) tracked as a post-1.0 candidate.
+- **`tests/subprocess-smoke/server-metrics.test.ts`** (new) —
+  4 cases against the actual built `dist/server.cjs`: 401 without
+  bearer, full shape with bearer, idempotent reads, session count
+  reflects POST `/api/session`.
+
+### Changed
+- **`docs/roadmap.md`** — full rewrite from the v0.2.0 → v0.3.0
+  sized-task plan (the inline-runner refactor that shipped in
+  v0.6/v0.7) to the present-tense map: where we are at v0.23.0,
+  1.0 trajectory blocker table, active polish track (v0.23.x +
+  v0.24.x scope), post-1.0 candidates ordered by likely demand,
+  explicit non-goals (DB / control plane / SaaS / built-in
+  identity / fancy admin UI / telemetry).
+
+### Tests
+- 706 unit (+4 metrics) / 69 e2e (unchanged).
+
+### Toward 1.0
+This release closes the last "obvious docs debt" item (stale
+roadmap pointing at finished work) and adds the metrics surface
+operators want during the adoption window. studio.pyan.kr will
+see the new endpoint after upgrade + can enable
+`PYANCHOR_AUDIT_LOG=true` to capture real outcome data through
+the 30-day window.
+
 ## [0.23.0] - 2026-04-20
 
 Polish + multi-tenancy design draft. No production behavior change
