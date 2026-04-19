@@ -9,6 +9,7 @@ import { requireAllowedOrigin } from "./origin";
 import { tokenBucketMiddleware } from "./rate-limit";
 import { createSession, revokeSession } from "./sessions";
 import { cancelAiEdit, getAdminHealth, readAiEditState, startAiEdit } from "./state";
+import { BUILT_IN_LOCALE_SET } from "./shared/locales";
 import type { AiEditCancelInput, AiEditStartInput } from "./shared/types";
 
 validateConfig();
@@ -101,33 +102,10 @@ app.get("/healthz", (_request, response) => {
   response.json({ ok: true });
 });
 
-// v0.12.1 — keep this list in sync with `BUILT_IN_LOCALES` in
-// `src/runtime/bootstrap.ts`. Bootstrap auto-injects
-// `<script src="${basePath}/locales/${locale}.js">` for these codes,
-// so the server has to actually serve them (round-11 #1: previously
-// the bootstrap path was wired but the route was missing in
-// production, only the e2e fixture had it — locales silently fell
-// back to English).
-const BUILT_IN_LOCALES = new Set([
-  "ko",
-  "ja",
-  "zh-cn",
-  "es",
-  "de",
-  "fr",
-  "pt-br",
-  "vi",
-  "id",
-  "ru",
-  "hi",
-  "th",
-  "tr",
-  "nl",
-  "pl",
-  "sv",
-  "it",
-  "ar"
-]);
+// v0.16.0: BUILT_IN_LOCALE_SET imported from `src/shared/locales.ts`
+// so this whitelist and the bootstrap auto-inject list can never
+// drift (round-11 #1 root cause was the manual duplication; this
+// collapses it).
 
 for (const basePath of runtimeBases) {
   app.get(`${basePath}/bootstrap.js`, serveRuntimeAsset("bootstrap.js"));
@@ -139,7 +117,7 @@ for (const basePath of runtimeBases) {
     // a value with unsafe characters.
     const raw = request.params.locale;
     const locale = (typeof raw === "string" ? raw : "").toLowerCase();
-    if (!BUILT_IN_LOCALES.has(locale) || !/^[a-z][a-z-]*[a-z]$/.test(locale)) {
+    if (!BUILT_IN_LOCALE_SET.has(locale) || !/^[a-z][a-z-]*[a-z]$/.test(locale)) {
       response.status(404).end();
       return;
     }

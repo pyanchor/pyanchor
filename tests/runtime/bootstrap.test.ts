@@ -373,7 +373,10 @@ describe("runBootstrap — overlay script injection", () => {
       "pl",
       "sv",
       "it",
-      "ar"
+      "ar",
+      "he",
+      "fa",
+      "ur"
     ];
     it.each(builtIns)("locale=%s injects locales/%s.js with defer + correct attrs", (locale) => {
       const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });

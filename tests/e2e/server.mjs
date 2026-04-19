@@ -32,7 +32,10 @@ const localeBundles = {
   pl: readFileSync(path.join(repoRoot, "dist", "public", "locales", "pl.js")),
   sv: readFileSync(path.join(repoRoot, "dist", "public", "locales", "sv.js")),
   it: readFileSync(path.join(repoRoot, "dist", "public", "locales", "it.js")),
-  ar: readFileSync(path.join(repoRoot, "dist", "public", "locales", "ar.js"))
+  ar: readFileSync(path.join(repoRoot, "dist", "public", "locales", "ar.js")),
+  he: readFileSync(path.join(repoRoot, "dist", "public", "locales", "he.js")),
+  fa: readFileSync(path.join(repoRoot, "dist", "public", "locales", "fa.js")),
+  ur: readFileSync(path.join(repoRoot, "dist", "public", "locales", "ur.js"))
 };
 
 // Fast-path fixture: loads overlay.js directly with __PyanchorConfig
@@ -145,6 +148,9 @@ const plLocaleHtml = buildLocaleFixture("pl", "Polish");
 const svLocaleHtml = buildLocaleFixture("sv", "Swedish");
 const itLocaleHtml = buildLocaleFixture("it", "Italian");
 const arLocaleHtml = buildLocaleFixture("ar", "Arabic");
+const heLocaleHtml = buildLocaleFixture("he", "Hebrew");
+const faLocaleHtml = buildLocaleFixture("fa", "Persian");
+const urLocaleHtml = buildLocaleFixture("ur", "Urdu");
 
 const server = createServer((req, res) => {
   if (!req.url) {
@@ -279,6 +285,25 @@ const server = createServer((req, res) => {
   if (req.url === "/ar.html") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(arLocaleHtml);
+    return;
+  }
+
+  // v0.16.0 — RTL expansion (he / fa / ur)
+  if (req.url === "/he.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(heLocaleHtml);
+    return;
+  }
+
+  if (req.url === "/fa.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(faLocaleHtml);
+    return;
+  }
+
+  if (req.url === "/ur.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(urLocaleHtml);
     return;
   }
 

@@ -1,4 +1,5 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readdir } from "node:fs/promises";
+import path from "node:path";
 
 import { build } from "esbuild";
 
@@ -54,35 +55,25 @@ await build({
 // v0.11.0 — locale bundles ship as separate IIFEs so the main
 // overlay.js doesn't drag every translation along. Bootstrap loads
 // the matching one when `data-pyanchor-locale="..."` is set.
+//
+// v0.16.0: glob the locales directory directly instead of carrying
+// a hand-maintained list. Adding a new locale = drop the file on
+// disk + add the code to `src/shared/locales.ts` (the single source
+// of truth bootstrap.ts + server.ts both read). Keeps build wiring
+// from drifting when the runtime list grows.
 await mkdir("dist/public/locales", { recursive: true });
+const localeDir = "src/runtime/overlay/locales";
+const localeFiles = (await readdir(localeDir)).filter((f) => f.endsWith(".ts"));
 await Promise.all(
-  [
-    "ko",
-    "ja",
-    "zh-cn",
-    "es",
-    "de",
-    "fr",
-    "pt-br",
-    "vi",
-    "id",
-    "ru",
-    "hi",
-    "th",
-    "tr",
-    "nl",
-    "pl",
-    "sv",
-    "it",
-    "ar"
-  ].map((locale) =>
-    build({
+  localeFiles.map((file) => {
+    const code = path.basename(file, ".ts");
+    return build({
       ...shared,
-      entryPoints: [`src/runtime/overlay/locales/${locale}.ts`],
-      outfile: `dist/public/locales/${locale}.js`,
+      entryPoints: [path.join(localeDir, file)],
+      outfile: `dist/public/locales/${code}.js`,
       platform: "browser",
       format: "iife",
       target: "es2020"
-    })
-  )
+    });
+  })
 );

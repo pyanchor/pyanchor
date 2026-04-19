@@ -1,4 +1,4 @@
-export {};
+import { BUILT_IN_LOCALE_SET } from "../shared/locales";
 
 declare global {
   interface Window {
@@ -127,30 +127,13 @@ export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
   //
   // Only inject for locales we ship bundles for. Unknown locales fall
   // back to English silently (same contract as `resolveStrings`).
-  const BUILT_IN_LOCALES = new Set([
-    "ko",
-    "ja",
-    "zh-cn",
-    "es",
-    "de",
-    "fr",
-    "pt-br",
-    "vi",
-    "id",
-    "ru",
-    "hi",
-    "th",
-    "tr",
-    "nl",
-    "pl",
-    "sv",
-    "it",
-    "ar"
-  ]);
+  // v0.16.0: BUILT_IN_LOCALE_SET is shared with src/server.ts so the
+  // client's auto-injection list and the server's route whitelist
+  // can never drift (round-11 #1 root cause).
   const localeKey = locale?.toLowerCase();
   if (
     localeKey &&
-    BUILT_IN_LOCALES.has(localeKey) &&
+    BUILT_IN_LOCALE_SET.has(localeKey) &&
     !doc.querySelector(`script[data-pyanchor-locale-bundle='${localeKey}']`)
   ) {
     const localeScript = doc.createElement("script");

@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-04-20
+
+Three new RTL locales (he / fa / ur) plus the round-12
+`BUILT_IN_LOCALES` single-source-of-truth refactor. Twenty-one
+built-in locales total (17 LTR + 4 RTL).
+
+### Added
+- **`src/runtime/overlay/locales/{he,fa,ur}.ts`** — Hebrew,
+  Persian (Farsi), Urdu. All translate every key in
+  `StringTable`. Bundle sizes: he 4.0KB, fa 4.7KB, ur 5.3KB.
+  Same activation + layout-flip mechanism as v0.15.0 ar — the
+  v0.15.0 CSS logical-properties migration covers all four
+  RTL locales without further changes.
+- **`src/runtime/overlay/strings.ts`** — `RTL_LOCALES` extended
+  to `{ar, he, fa, ur}`. The `isRtlLocale` helper unchanged.
+- **`tests/e2e/server.mjs`** — fixtures `/{he,fa,ur}.html`
+  + bundles served from `dist/public/locales/{he,fa,ur}.js`.
+- **`tests/e2e/i18n-v016-rtl.spec.ts`** — 6 new e2e cases
+  (3 locales × 2 assertions: dir attribute + translated copy +
+  LEFT-edge trigger). Mirrors the v0.15.0 ar suite.
+
+### Changed
+- **`src/shared/locales.ts`** (NEW) — single source of truth
+  for `BUILT_IN_LOCALES` (the 21-entry array) +
+  `BUILT_IN_LOCALE_SET` for O(1) lookups. Closes the round-12
+  duplication risk: previously the same list lived in
+  `bootstrap.ts`, `server.ts`, `build.mjs`, plus tests, and
+  the round-11 #1 incident proved hand-syncing was failing.
+- **`src/runtime/bootstrap.ts`** — imports `BUILT_IN_LOCALE_SET`
+  from `shared/locales.ts` instead of redefining the inline set.
+- **`src/server.ts`** — same. The route guard now reads from
+  the same set the client uses.
+- **`build.mjs`** — globs `src/runtime/overlay/locales/*.ts`
+  instead of carrying its own array. Adding a new locale no
+  longer requires updating the build script — drop the file
+  + add the code to `shared/locales.ts`, rebuild.
+- **`tests/runtime/overlay/strings.test.ts`** — new
+  `BUILT_IN_LOCALES single source of truth` describe with
+  invariants: array length matches set size, every entry
+  resolves to a non-English bundle, every code matches the
+  server route's `^[a-z][a-z-]*[a-z]$` regex (catches a code
+  that bootstrap would inject but the server would 404).
+- **`tests/runtime/bootstrap.test.ts`** + **`tests/subprocess-smoke/server-locale-routes.test.ts`**
+  — `builtIns` arrays extended to 21 (parameterized tests
+  auto-cover the three new locales).
+
+### Translation notes
+- `he` uses informal-direct register (`אתה`/`שלך`), matching
+  the dev-tool tone established by ko/ja/zh-cn.
+- `fa` uses formal `شما` (Persian software-UI convention).
+- `ur` uses respectful `آپ` (standard Urdu UI convention).
+- All four RTL locales keep brand "Pyanchor DevTools" and the
+  `Cmd/Ctrl + Shift + .` shortcut hint in Latin script.
+
+### Adding a new built-in locale (post-v0.16.0)
+1. `src/runtime/overlay/locales/{code}.ts` — the bundle.
+2. Append `{code}` to `BUILT_IN_LOCALES` in `src/shared/locales.ts`.
+3. (RTL only) add to `RTL_LOCALES` in `src/runtime/overlay/strings.ts`.
+4. Tests: extend the seed in `tests/runtime/overlay/strings.test.ts`
+   + add a fixture page to `tests/e2e/server.mjs`. The
+   `bootstrap.test.ts` + `server-locale-routes.test.ts` smoke
+   parameterize over the array, so they auto-cover the new code.
+   `build.mjs` discovers the file via glob — no change needed.
+
 ## [0.15.0] - 2026-04-20
 
 First RTL locale (Arabic). The big work was the layout flip,

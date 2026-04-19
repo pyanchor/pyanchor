@@ -259,10 +259,11 @@ export const LOCALE_REGISTERED_EVENT = "pyanchor:locale-registered";
  * the v0.15.0 CSS logical-properties migration) flips the trigger
  * to the bottom-LEFT corner and mirrors the panel layout.
  *
- * Currently only `ar`. Adding he / fa / ur is a one-line addition
- * once those bundles ship — the layout work is already done.
+ * v0.15.0: ar (Arabic). v0.16.0: he (Hebrew), fa (Persian), ur (Urdu).
+ * Layout work is the same for all four — script direction propagates
+ * from the dir attribute, fonts are browser-default.
  */
-export const RTL_LOCALES = new Set<string>(["ar"]);
+export const RTL_LOCALES = new Set<string>(["ar", "he", "fa", "ur"]);
 
 /**
  * @returns true if the locale code (case-insensitive) is in the

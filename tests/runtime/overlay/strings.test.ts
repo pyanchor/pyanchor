@@ -37,6 +37,11 @@ import { itStrings } from "../../../src/runtime/overlay/locales/it";
 // v0.15.0 — first RTL locale.
 import { arStrings } from "../../../src/runtime/overlay/locales/ar";
 import { isRtlLocale, RTL_LOCALES } from "../../../src/runtime/overlay/strings";
+// v0.16.0 — RTL expansion (Hebrew / Persian / Urdu).
+import { heStrings } from "../../../src/runtime/overlay/locales/he";
+import { faStrings } from "../../../src/runtime/overlay/locales/fa";
+import { urStrings } from "../../../src/runtime/overlay/locales/ur";
+import { BUILT_IN_LOCALES, BUILT_IN_LOCALE_SET } from "../../../src/shared/locales";
 
 beforeEach(() => {
   // Re-seed the queue with every built-in locale so the rest of the
@@ -59,7 +64,10 @@ beforeEach(() => {
     { locale: "pl", bundle: plStrings },
     { locale: "sv", bundle: svStrings },
     { locale: "it", bundle: itStrings },
-    { locale: "ar", bundle: arStrings }
+    { locale: "ar", bundle: arStrings },
+    { locale: "he", bundle: heStrings },
+    { locale: "fa", bundle: faStrings },
+    { locale: "ur", bundle: urStrings }
   ];
   _clearRegistry();
 });
@@ -476,6 +484,72 @@ describe("built-in Arabic bundle + RTL locale set (v0.15.0)", () => {
     expect(isRtlLocale(undefined)).toBe(false);
     expect(isRtlLocale("")).toBe(false);
     expect(isRtlLocale("klingon")).toBe(false);
+  });
+});
+
+describe("built-in RTL expansion (v0.16.0 \u2014 he / fa / ur)", () => {
+  it.each([
+    ["he", "אתה", "הדף הנוכחי"],
+    ["fa", "شما", "صفحه فعلی"],
+    ["ur", "آپ", "موجودہ صفحہ"]
+  ])("%s resolves to a translated bundle (roleYou=%s, panelContextLabel=%s)", (locale, roleYou, panelContextLabel) => {
+    const t = resolveStrings(locale);
+    expect(t).not.toBe(enStrings);
+    expect(t.roleYou).toBe(roleYou);
+    expect(t.panelContextLabel).toBe(panelContextLabel);
+    expect(t.panelTitle).toBe("Pyanchor DevTools");
+  });
+
+  it.each(["he", "fa", "ur"])(
+    "%s is in RTL_LOCALES (will get dir='rtl')",
+    (locale) => {
+      expect(RTL_LOCALES.has(locale)).toBe(true);
+      expect(isRtlLocale(locale)).toBe(true);
+      expect(isRtlLocale(locale.toUpperCase())).toBe(true);
+    }
+  );
+
+  it.each(["he", "fa", "ur"])(
+    "%s translates every checked surface key (no English fallthrough)",
+    (locale) => {
+      const t = resolveStrings(locale);
+      expect(t.diagnosticsTitle).not.toBe(enStrings.diagnosticsTitle);
+      expect(t.retryLast).not.toBe(enStrings.retryLast);
+      expect(t.copyLast).not.toBe(enStrings.copyLast);
+      expect(t.statusReadingChat).not.toBe(enStrings.statusReadingChat);
+      expect(t.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
+    }
+  );
+});
+
+describe("BUILT_IN_LOCALES single source of truth (v0.16.0 \u2014 round-12 cleanup)", () => {
+  it("contains all 21 currently-shipping locales", () => {
+    // Sanity: the source of truth list size matches what bootstrap +
+    // server + smoke test all parameterize over. If a locale is added
+    // to one without updating shared/locales.ts, this fails first.
+    expect(BUILT_IN_LOCALES.length).toBe(21);
+    expect(BUILT_IN_LOCALE_SET.size).toBe(21);
+  });
+
+  it("set + array stay in sync (no duplicate codes)", () => {
+    expect(BUILT_IN_LOCALE_SET.size).toBe(BUILT_IN_LOCALES.length);
+  });
+
+  it("every code resolves through resolveStrings to a non-English bundle", () => {
+    for (const code of BUILT_IN_LOCALES) {
+      const t = resolveStrings(code);
+      expect(t).not.toBe(enStrings);
+    }
+  });
+
+  it("every code is lowercase + safe for the server route regex", () => {
+    // server.ts validates `^[a-z][a-z-]*[a-z]$` on the path param.
+    // Every code we ship must satisfy that regex or the production
+    // route will 404 it (round-11 #1 root cause class).
+    const safe = /^[a-z][a-z-]*[a-z]$/;
+    for (const code of BUILT_IN_LOCALES) {
+      expect(safe.test(code)).toBe(true);
+    }
   });
 });
 
