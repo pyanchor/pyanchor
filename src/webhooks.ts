@@ -114,11 +114,15 @@ export function renderSummary(payload: WebhookPayload): string {
   const who = payload.actor ? `*${payload.actor}*` : "someone";
   const where = payload.target_path ? ` on \`${payload.target_path}\`` : "";
   switch (payload.event) {
-    case "edit_requested":
-      // Round-14 #4b: article should be "an" before "edit" (vowel),
-      // "a" before "chat" (consonant). v0.20.0 had both branches
-      // emit "n", so chat requests rendered "an chat".
-      return `${who} requested a${payload.mode === "edit" ? "n" : ""} ${payload.mode ?? "edit"}${where}.`;
+    case "edit_requested": {
+      // Round-15 #4: resolve the noun once + use that resolved value
+      // for the article check. v0.20.1 used `payload.mode === "edit"`
+      // for the article but `payload.mode ?? "edit"` for the noun, so
+      // an undefined `mode` rendered "a edit" (article picked the
+      // consonant branch but the noun fallback was a vowel word).
+      const requestedMode = payload.mode ?? "edit";
+      return `${who} requested a${requestedMode === "edit" ? "n" : ""} ${requestedMode}${where}.`;
+    }
     case "edit_applied":
       return `${who}'s ${payload.mode ?? "edit"}${where} was applied.`;
     case "pr_opened":

@@ -327,7 +327,12 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
   await flushRuntimeBuffers();
 
   if (failure) {
-    throw new Error(failure);
+    // v0.21.1 (round-15 #1): humanize HERE, at the agent-error
+    // boundary, instead of in the outer catch. Without this scoping,
+    // failures from preparePrWorkspace / installWorkspaceDependencies /
+    // executeOutput (e.g. yarn install 401, git fetch 429) would
+    // also get the agent-backend hint, misleading the operator.
+    throw new Error(humanizeAgentFailure(failure));
   }
 
   if (mode === "chat") {
@@ -428,12 +433,11 @@ async function main() {
         await finalizeFailure(CANCELED_ERROR, "canceled", currentMode);
         await emitAuditOnce("canceled", CANCELED_ERROR);
       } else {
-        // v0.21.0: humanize the upstream agent error before it reaches
-        // state.error / audit log / activity log. Keeps the raw message
-        // and appends a kind-specific hint when the classifier matches
-        // (auth / rate_limit / timeout / network). Default = raw passthrough.
-        const raw = error instanceof Error ? error.message : "Unknown error.";
-        const message = humanizeAgentFailure(raw);
+        // v0.21.1 (round-15 #1): no humanization here. Agent errors
+        // are humanized at the boundary in processJob() above; non-
+        // agent errors (workspace prep, install, build, output) reach
+        // this branch verbatim so their hints stay accurate.
+        const message = error instanceof Error ? error.message : "Unknown error.";
         await finalizeFailure(message, "failed", currentMode);
         await emitAuditOnce("failed", message);
       }
@@ -458,8 +462,9 @@ void main().catch(async (error) => {
     return;
   }
 
-  const raw = error instanceof Error ? error.message : "Unknown error.";
-  const message = humanizeAgentFailure(raw);
+  // v0.21.1 (round-15 #1): top-level catch is the same scope decision —
+  // raw passthrough. Agent errors humanized at processJob boundary.
+  const message = error instanceof Error ? error.message : "Unknown error.";
   await finalizeFailure(message, "failed", activeJob.mode);
   await emitAuditOnce("failed", message);
 });

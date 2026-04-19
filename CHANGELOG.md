@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-04-20
+
+Round-15 Codex patches. Three actual bugs (one of which was the
+v0.20.1 docs-sync work that silently didn't land) plus a low-
+severity copy fix. The biggest change is scoping the v0.21.0
+agent classifier to only the agent path — the previous version
+also painted "agent backend" hints onto npm install / git fetch
+failures, which mislead operators.
+
+### Fixed
+- **Classifier scope (round-15 #1, MEDIUM)** — `humanizeAgentFailure`
+  now wraps ONLY the agent-error boundary (`if (failure) { throw new
+  Error(humanizeAgentFailure(failure)); }`), not the outer catch
+  block. v0.21.0's outer catch caught throws from `preparePrWorkspace`
+  / `installWorkspaceDependencies` / `executeOutput` and painted them
+  with `openclaw onboard` / `codex login` hints — e.g. a yarn install
+  401 from npmjs.org would tell the operator to re-auth their LLM
+  backend. After the fix, only failures from `runAdapterAgent`
+  (returned via the `failure` field) are classified; everything else
+  passes through verbatim.
+- **`openclaw login` → `openclaw onboard` hint (round-15 #2, MEDIUM)**
+  — `openclaw login` is not a documented command in the openclaw CLI.
+  The repo's own setup docs (`README.md`, `docs/openclaw-setup.md`)
+  consistently use `openclaw onboard`. v0.21.1 hint reflects that.
+  `codex login` was correct and stays.
+- **`.env.example` actually adds the v0.18-v0.20 envs (round-15 #3,
+  MEDIUM)** — v0.20.1 claimed to add them but the edit silently
+  didn't land in the commit. Round-15 caught it (the file was 216
+  lines, ending at the worker IPC section). v0.21.1 correctly adds
+  the 14 keys (output mode + audit log + PR mode + production gate
+  cookie + 6 webhook envs), bringing the file to 261 lines.
+- **`renderSummary` undefined-mode fallback (round-15 #4, LOW)** —
+  v0.20.1's article logic checked `payload.mode === "edit"` for the
+  article ("a"/"an") but `payload.mode ?? "edit"` for the noun. When
+  `mode` was undefined, the article picked the consonant branch but
+  the noun fell back to a vowel word, producing "requested a edit".
+  v0.21.1 resolves the noun once and uses that for the article check.
+
+### Tests
+- **`tests/worker/agent-error.test.ts`** — updated assertion for the
+  hint command (`openclaw onboard` instead of `openclaw login`) plus
+  a negative assertion that `openclaw login` is not present.
+- **`tests/webhooks.test.ts`** — new case verifying
+  `renderSummary({ event: "edit_requested" })` (no mode) renders
+  "requested an edit", not "a edit".
+
+### Verified by Codex round 15 (other findings)
+- **PR re-anchor position decision (v0.20.1) is correct.** Real git
+  reproduction by Codex confirmed `job2_parent == origin/main` with
+  the v0.20.1 sequence (pre-agent fetch + checkout + reset --hard).
+  My choice to position the reset BEFORE the agent (Codex's round-14
+  diff had it after, which would have wiped agent edits) was the
+  right call.
+- **PR re-anchor assumes `app_dir == origin/<base>`.** Documented
+  contract: the workspace's app_dir mirror must match the deployed
+  state which must match the base branch tip. Codex repro: an
+  unpushed hotfix in app_dir gets wiped by the reset. This is by
+  design for normal deployments; tracked as an explicit operator
+  contract (see comment in `output.ts` `preparePrWorkspace`).
+- **PR body escape covers `@` + fence, not full markdown sanitizer.**
+  `[label](...)`, `<details>`, `![img](...)` etc. still flow through.
+  GitHub's own renderer sanitizes `javascript:` URLs but the wider
+  attack surface (reviewer-facing spoofing / external image fetch /
+  collapsible UI) is not pyanchor's responsibility — operators
+  reviewing PRs should treat the body as untrusted user input,
+  same as any AI-authored PR.
+
+### Migration
+- No env changes. No new behavior for the apply path.
+- PR mode + classifier behavior change: errors from non-agent
+  failure paths (yarn install, git fetch, build) no longer carry
+  the agent-backend hint. They show their raw upstream error
+  instead. If you were relying on the hint for those paths,
+  consider that the hint was misleading — use the raw error.
+
 ## [0.21.0] - 2026-04-20
 
 Agent failure classification. The single most common transient

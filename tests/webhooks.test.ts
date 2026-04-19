@@ -86,6 +86,20 @@ describe("renderSummary", () => {
     );
   });
 
+  it("falls back to 'an edit' when mode is omitted (v0.21.1 round-15 #4)", () => {
+    // v0.20.1 picked the article from `mode === "edit"` (false →
+    // consonant branch) but the noun from `mode ?? "edit"` (vowel
+    // word), so an undefined mode rendered "a edit". v0.21.1 resolves
+    // the noun once and uses that for both checks.
+    expect(renderSummary(basePayload({ event: "edit_requested" }))).toContain(
+      "requested an edit"
+    );
+    // Sanity: still picks the right article for explicit values.
+    expect(renderSummary(basePayload({ event: "edit_requested" }))).not.toContain(
+      "a edit"
+    );
+  });
+
   it("pr_opened includes the PR URL", () => {
     expect(
       renderSummary(

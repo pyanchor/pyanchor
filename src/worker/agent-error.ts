@@ -47,7 +47,7 @@ const PATTERNS: Array<{
     hint:
       "This is often a transient OAuth token-refresh race. " +
       "Try once more before re-authenticating the agent backend " +
-      "(e.g. `openclaw login` / `codex login`)."
+      "(e.g. `openclaw onboard` / `codex login`)."
   },
   {
     kind: "rate_limit",

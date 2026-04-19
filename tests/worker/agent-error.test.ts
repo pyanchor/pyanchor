@@ -20,9 +20,13 @@ describe("classifyAgentFailure", () => {
       expect(result.raw).toBe(raw);
     });
 
-    it("hint mentions the typical re-auth commands", () => {
+    it("hint mentions the typical re-auth commands (round-15 #2: openclaw onboard, not login)", () => {
+      // v0.21.0 had `openclaw login` which doesn't exist in the
+      // shipped openclaw CLI / docs. Round-15 caught it; v0.21.1
+      // points at the documented `openclaw onboard` command.
       const { hint } = classifyAgentFailure("Agent authentication failed.");
-      expect(hint).toMatch(/openclaw login|codex login/);
+      expect(hint).toMatch(/openclaw onboard|codex login/);
+      expect(hint).not.toContain("openclaw login");
     });
   });
 
