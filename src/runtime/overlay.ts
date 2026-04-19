@@ -1,6 +1,7 @@
 import { closeIcon, mountOverlayHost, sparkIcon, typingDots } from "./overlay/elements";
 import { createFetchJson, runtimePath as buildRuntimePath } from "./overlay/fetch-helper";
 import { escapeHtml, formatTime, shorten, takeFirstLine } from "./overlay/format";
+import { createSyncStateClient } from "./overlay/polling";
 import {
   createEmptyServerState,
   createUIState,
@@ -15,6 +16,7 @@ import {
   type AiEditMode,
   type AiEditState
 } from "./overlay/state";
+import { renderMessagesTemplate } from "./overlay/templates";
 
 interface RuntimeConfig {
   baseUrl: string;
@@ -536,56 +538,15 @@ const placeholder = () => getPlaceholder(uiState.mode);
 const composerTitle = () => getComposerTitle(uiState.mode);
 const pendingBubbleTitle = () => getPendingBubbleTitle(uiState, serverState);
 
-const renderMessages = () => {
-  const messages = serverState.messages.slice(-18);
-  const queuePosition = trackedQueuePosition();
-  const showPendingMessage =
-    serverState.status === "running" ||
-    serverState.status === "canceling" ||
-    queuePosition > 0;
-
-  if (messages.length === 0 && !showPendingMessage) {
-    return `<div class="messages messages--empty">Ask a question or request a change. Conversation history shows up here.</div>`;
-  }
-
-  return `
-    <div class="messages">
-      ${messages
-        .map((message) => {
-          const roleLabel =
-            message.role === "assistant" ? "Pyanchor" : message.role === "system" ? "Pyanchor" : "You";
-
-          return `
-            <div class="message-row message-row--${message.role}">
-              <article class="message message--${message.role}">
-                <div class="message__head">
-                  <span class="message__name">${escapeHtml(roleLabel)}</span>
-                  <span class="message__time">${escapeHtml(formatTime(message.createdAt) ?? "")}</span>
-                </div>
-                <div class="message__body">${escapeHtml(message.text)}</div>
-              </article>
-            </div>
-          `;
-        })
-        .join("")}
-      ${
-        showPendingMessage
-          ? `
-            <div class="message-row message-row--assistant">
-              <article class="message message--assistant message--pending">
-                <div class="message__head">
-                  <span class="message__name">Pyanchor</span>
-                  <span class="message__time">${escapeHtml(formatTime(serverState.heartbeatAt) ?? formatTime(serverState.startedAt) ?? "")}</span>
-                </div>
-                <div class="message__body message__body--pending">${typingDots}<span class="message__body--pending-text">${escapeHtml(pendingBubbleTitle())}</span></div>
-              </article>
-            </div>
-          `
-          : ""
-      }
-    </div>
-  `;
-};
+const renderMessages = () =>
+  renderMessagesTemplate({
+    messages: serverState.messages,
+    queuePosition: trackedQueuePosition(),
+    serverStatus: serverState.status,
+    heartbeatAt: serverState.heartbeatAt,
+    startedAt: serverState.startedAt,
+    pendingBubbleTitle: pendingBubbleTitle()
+  });
 
 const bindHistory = () => {
   const dispatch = () => window.dispatchEvent(new Event("pyanchor:navigation"));
@@ -603,39 +564,28 @@ const bindHistory = () => {
   window.addEventListener("popstate", dispatch);
 };
 
-const syncState = async (withOutcomeToast = false) => {
-  try {
-    const previousStatus = serverState.status;
-    const previousJobId = serverState.jobId;
-    const next = await fetchJson<AiEditState>(runtimePath("/api/status"));
+const syncStateClient = createSyncStateClient({
+  fetchJson,
+  buildStatusUrl: () => runtimePath("/api/status"),
+  getUIState: () => uiState,
+  getServerState: () => serverState,
+  setServerState: (next) => {
     serverState = next;
-
-    if (uiState.lastSubmittedJobId && next.queue.every((item) => item.jobId !== uiState.lastSubmittedJobId)) {
-      if (next.jobId !== uiState.lastSubmittedJobId && next.status !== "running" && next.status !== "canceling") {
-        uiState.lastSubmittedJobId = null;
-      }
+  },
+  mutateUIState: (mutator) => mutator(uiState),
+  render: () => render(),
+  onOutcome: (outcome) => {
+    if (outcome.kind === "done") {
+      showToast(outcome.mode === "chat" ? "Answer received." : "Edit complete.", "success");
+    } else if (outcome.kind === "failed") {
+      showToast(outcome.error, "error");
+    } else {
+      showToast("Request canceled.", "info");
     }
-
-    if (withOutcomeToast && previousJobId && previousStatus !== next.status && previousJobId === next.jobId) {
-      if (next.status === "done") {
-        showToast(next.mode === "chat" ? "Answer received." : "Edit complete.", "success");
-        return;
-      }
-      if (next.status === "failed") {
-        showToast(next.error ?? "Job failed.", "error");
-        return;
-      }
-      if (next.status === "canceled") {
-        showToast("Request canceled.", "info");
-        return;
-      }
-    }
-
-    render();
-  } catch {
-    render();
   }
-};
+});
+
+const syncState = (withOutcomeToast = false) => syncStateClient.sync(withOutcomeToast);
 
 const render = () => {
   const isWorking = serverState.status === "running" || serverState.status === "canceling";

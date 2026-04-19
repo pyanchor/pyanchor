@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-04-19
+
+Second slice of the overlay decomposition. Two more submodules
+extracted; both at 100% statement coverage. Note: the original
+v0.7.x roadmap mentioned an `anchor-picker.ts` module — turns out
+the overlay is a chat/edit panel, not a Figma-style element-picker,
+so there's nothing to extract under that name. Pivoted to extracting
+the message-list template and the server-state polling client
+instead, which are the natural seams given the actual code.
+
+### Added
+- **`src/runtime/overlay/templates.ts`** — `renderMessagesTemplate(props)`
+  takes a plain props object (`messages`, `queuePosition`,
+  `serverStatus`, `heartbeatAt`, `startedAt`, `pendingBubbleTitle`,
+  optional `messageWindow`) and returns the messages-list HTML
+  string. No closure over the overlay's mutable singletons —
+  snapshot-testable in isolation. Splits the row + pending-bubble
+  rendering into private helpers.
+- **`src/runtime/overlay/polling.ts`** — `createSyncStateClient({
+  fetchJson, buildStatusUrl, getUIState, getServerState, setServerState,
+  mutateUIState, render, onOutcome })` factory returning `{ sync }`.
+  Encapsulates the GET /api/status fetch, the
+  `lastSubmittedJobId` clear-when-job-leaves-queue logic, and the
+  done/failed/canceled outcome dispatch. UI-agnostic — caller
+  wires `render` to the overlay's actual render and `onOutcome`
+  to its toast renderer.
+
+### Changed
+- **`src/runtime/overlay.ts`** went from **887 → 837 LOC** (-50 / -5.6%).
+  Cumulative since v0.6.3: **1074 → 837 (-22%)**. Six overlay
+  submodules now exist; all at ≥ 98% coverage.
+- `renderMessages` and `syncState` are now thin closures around
+  the new module factories. Behavior bit-identical:
+  - same 18-message window
+  - same role-label mapping (`user`→"You", others→"Pyanchor")
+  - same pending-bubble trigger conditions (running / canceling /
+    user-has-queued-job)
+  - same outcome-toast cascade (done with mode-specific text,
+    failed with `{error}` fallback, canceled generic)
+
+### Tests
+- `tests/runtime/overlay/templates.test.ts` — **11 tests** for the
+  message-list builder: empty placeholder, role-label mapping,
+  XSS escape on message text + pending title, default 18-message
+  window, custom window, pending-bubble trigger conditions,
+  heartbeat→start fallback for the timestamp.
+- `tests/runtime/overlay/polling.test.ts` — **12 tests** for the
+  sync client: fetch+replace+render, render-on-error, the
+  `lastSubmittedJobId` clearing rules (4 cases — leaves queue +
+  not running, becomes the running job, still queued, mid-cancel
+  transition), and the outcome cascade (done/failed/failed-with-null-error/
+  canceled, plus the no-toast-when-silent and jobId-changed
+  no-emit cases).
+- Total: **351 passing tests** across 26 files (was 328 / 24).
+
+### Coverage
+- Whole-repo: 59.3% → **60.9%** (+1.6 pp).
+- All six overlay submodules now at **100% statements**:
+  format, elements, fetch-helper, state, templates, polling
+  (state at 98% from v0.7.0 — same; templates and polling fresh
+  at 100%).
+
+### Compatibility
+No runtime behavior change. The overlay still polls at 3.5s,
+clears `lastSubmittedJobId` under the same conditions, and
+displays the same outcome toasts at the same transitions.
+
+### Roadmap (overlay track continued)
+- **v0.7.2**: Playwright e2e harness — overlay mount → submit →
+  server response → cancel happy path. CI workflow for the browser
+  job. Bigger lift (new test infra), separate session.
+- **v0.7.3**: sandboxed integration tests for `worker/runner.ts`
+  (the runner-smoke item from Codex round-5).
+
 ## [0.7.0] - 2026-04-19
 
 First slice of the `runtime/overlay.ts` decomposition track. Four
