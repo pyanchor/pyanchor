@@ -188,6 +188,24 @@ export const pyanchorConfig = {
   // session cookie. Flip this on only for legacy callers you control.
   allowQueryToken: optionalBool("PYANCHOR_ALLOW_QUERY_TOKEN", false),
 
+  // ─── output mode (v0.18.0) ──────────────────────────────────────
+  // What happens AFTER the agent finishes editing the workspace.
+  //   "apply"  — current behavior: rsync workspace → app, restart.
+  //   "pr"     — v0.19+: git commit + push + open PR. No rsync, no
+  //              restart. The agent's edits land as a reviewable PR
+  //              instead of going straight to prod.
+  //   "dryrun" — skip both. Useful for testing the agent path without
+  //              touching the live app.
+  outputMode: optionalEnv("PYANCHOR_OUTPUT_MODE", "apply") as "apply" | "pr" | "dryrun",
+
+  // ─── audit log (v0.18.0) ────────────────────────────────────────
+  // Append-only JSON-lines log of every edit outcome. Disabled by
+  // default in current ergonomics so existing setups don't grow a
+  // new file silently; enable with PYANCHOR_AUDIT_LOG=true.
+  // The schema is documented in src/audit.ts (AuditEvent type).
+  auditLogEnabled: optionalBool("PYANCHOR_AUDIT_LOG", false),
+  auditLogFile: optionalEnv("PYANCHOR_AUDIT_LOG_FILE", path.join(stateDir, "audit.jsonl")),
+
   // ─── production gating (defense in depth, v0.17.0) ─────────────
   // When `requireGateCookie` is true, the sidecar requires a
   // host-set cookie (default name `pyanchor_dev`) on every API +
@@ -310,6 +328,27 @@ export function validateConfig(): void {
     console.warn(
       `[pyanchor] PYANCHOR_TOKEN is only ${pyanchorConfig.token.length} characters. ` +
         `Use at least 32 random bytes (e.g. \`openssl rand -hex 32\`).`
+    );
+  }
+
+  // v0.18.0 fail-closed: binding to anything other than loopback
+  // (127.0.0.1 / ::1) without an explicit origin allowlist exposes
+  // /api/edit + /api/cancel to any origin presenting a token. The
+  // SameSite=Strict cookie blocks most browser-driven cross-site
+  // attacks, but a deliberately-crafted curl from any host with the
+  // token in hand goes through. Refuse to start instead of warning.
+  const isLoopback =
+    pyanchorConfig.host === "127.0.0.1" ||
+    pyanchorConfig.host === "::1" ||
+    pyanchorConfig.host === "localhost" ||
+    pyanchorConfig.host === "[::1]";
+  if (!isLoopback && pyanchorConfig.allowedOrigins.length === 0) {
+    throw new Error(
+      `[pyanchor] Refusing to bind to non-loopback host "${pyanchorConfig.host}" ` +
+        `without PYANCHOR_ALLOWED_ORIGINS set. The cookie-session path admits ` +
+        `cross-origin token-bearing requests; set PYANCHOR_ALLOWED_ORIGINS to a ` +
+        `CSV of trusted origins (e.g. https://app.example.com) before publishing ` +
+        `pyanchor on this host. See docs/SECURITY.md and docs/PRODUCTION-HARDENING.md.`
     );
   }
 }

@@ -140,3 +140,86 @@ describe("workspace command overrides (PYANCHOR_SUDO_BIN / PYANCHOR_FLOCK_BIN)",
     expect(pyanchorConfig.flockBin).toBe("/usr/bin/flock");
   });
 });
+
+describe("validateConfig fail-closed origin allowlist (v0.18.0)", () => {
+  it("throws when binding to non-loopback host with empty PYANCHOR_ALLOWED_ORIGINS", async () => {
+    setMinimalEnv({
+      PYANCHOR_HOST: "0.0.0.0",
+      PYANCHOR_ALLOWED_ORIGINS: ""
+    });
+    const { validateConfig } = await import("../src/config");
+    expect(() => validateConfig()).toThrow(/non-loopback/);
+    expect(() => validateConfig()).toThrow(/PYANCHOR_ALLOWED_ORIGINS/);
+  });
+
+  it("throws when host is a public IP without origin allowlist", async () => {
+    setMinimalEnv({
+      PYANCHOR_HOST: "192.168.1.10",
+      PYANCHOR_ALLOWED_ORIGINS: ""
+    });
+    const { validateConfig } = await import("../src/config");
+    expect(() => validateConfig()).toThrow(/non-loopback/);
+  });
+
+  it("does NOT throw when binding to non-loopback WITH PYANCHOR_ALLOWED_ORIGINS set", async () => {
+    setMinimalEnv({
+      PYANCHOR_HOST: "0.0.0.0",
+      PYANCHOR_ALLOWED_ORIGINS: "https://app.example.com"
+    });
+    const { validateConfig } = await import("../src/config");
+    expect(() => validateConfig()).not.toThrow();
+  });
+
+  it("does NOT throw on the default 127.0.0.1 binding even with empty origins (loopback exempt)", async () => {
+    setMinimalEnv({ PYANCHOR_ALLOWED_ORIGINS: "" });
+    const { validateConfig } = await import("../src/config");
+    expect(() => validateConfig()).not.toThrow();
+  });
+
+  it("treats ::1 / localhost / [::1] as loopback (exempt)", async () => {
+    for (const host of ["::1", "localhost", "[::1]"]) {
+      setMinimalEnv({ PYANCHOR_HOST: host, PYANCHOR_ALLOWED_ORIGINS: "" });
+      const { validateConfig } = await import("../src/config");
+      expect(() => validateConfig()).not.toThrow();
+      vi.resetModules();
+    }
+  });
+});
+
+describe("PYANCHOR_OUTPUT_MODE + audit log config (v0.18.0)", () => {
+  it("defaults outputMode to 'apply' when env unset", async () => {
+    setMinimalEnv();
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.outputMode).toBe("apply");
+  });
+
+  it("reads PYANCHOR_OUTPUT_MODE override (string passthrough; runtime resolves)", async () => {
+    setMinimalEnv({ PYANCHOR_OUTPUT_MODE: "pr" });
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.outputMode).toBe("pr");
+  });
+
+  it("auditLogEnabled defaults to false (no surprise file growth)", async () => {
+    setMinimalEnv();
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.auditLogEnabled).toBe(false);
+  });
+
+  it("auditLogEnabled flips on with PYANCHOR_AUDIT_LOG=true", async () => {
+    setMinimalEnv({ PYANCHOR_AUDIT_LOG: "true" });
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.auditLogEnabled).toBe(true);
+  });
+
+  it("auditLogFile defaults to <stateDir>/audit.jsonl", async () => {
+    setMinimalEnv();
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.auditLogFile).toMatch(/audit\.jsonl$/);
+  });
+
+  it("auditLogFile honors PYANCHOR_AUDIT_LOG_FILE override", async () => {
+    setMinimalEnv({ PYANCHOR_AUDIT_LOG_FILE: "/custom/path/myaudit.jsonl" });
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.auditLogFile).toBe("/custom/path/myaudit.jsonl");
+  });
+});

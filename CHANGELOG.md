@@ -7,6 +7,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-04-20
+
+Team-ready foundation. Three things land together because they
+all serve the same goal: make pyanchor adoptable beyond a single
+dev's laptop. Audit log answers "who/when/what" for compliance,
+output-mode dispatch lets PR generation slot in without runner
+surgery (v0.19), and fail-closed origins keeps people from
+shipping a wide-open sidecar.
+
+### Added
+- **`src/audit.ts`** — append-only audit log infrastructure.
+  `AuditEvent` type + `AuditSink` interface + `FileAuditSink`
+  (writes one JSON line per event) + `NoopAuditSink`. Schema
+  fields documented in the source: `ts`, `run_id`, `actor`
+  (v0.19+), `origin`, `prompt_hash` (sha256), `target_path`,
+  `mode`, `output_mode`, `diff_hash`, `outcome`, `pr_url`
+  (v0.19+), `duration_ms`, `agent`, `error`. Re-opens file on
+  every emit so log rotation is safe (no SIGHUP needed).
+- **`src/worker/output.ts`** — output mode dispatcher.
+  `OutputMode` enum (`apply` | `pr` | `dryrun`),
+  `resolveOutputMode()` with case-insensitive normalization
+  + stderr warning on unknowns, `executeOutput()` that
+  always builds first then dispatches mode-specific tail.
+  - `apply` (default): existing rsync + restart behavior, just
+    extracted from runner.ts inline code.
+  - `dryrun`: build only. Skips sync + restart. Useful for
+    testing agent paths against the live workspace without
+    touching the deployed app.
+  - `pr`: throws "not implemented in v0.18, coming v0.19" so
+    misconfiguration fails loud instead of silently behaving
+    like apply.
+- **`PYANCHOR_OUTPUT_MODE`** env (`apply` | `pr` | `dryrun`,
+  default `apply`).
+- **`PYANCHOR_AUDIT_LOG`** + **`PYANCHOR_AUDIT_LOG_FILE`** envs
+  (default disabled / `<stateDir>/audit.jsonl`).
+- **`docs/PRODUCTION-HARDENING.md`** — operator playbook with
+  concrete recipes: separate Unix user, full systemd sandbox unit
+  file, bubblewrap wrap example, sudoers grants, restart-script
+  lockdown, audit log rotation + Datadog/Splunk shipping,
+  configuration matrix per scenario. Counterpoint to
+  `docs/SECURITY.md` (threat model) — this is the "do this"
+  side.
+
+### Changed
+- **`src/config.ts`** — `validateConfig()` now refuses to start
+  when `PYANCHOR_HOST` is non-loopback (anything other than
+  `127.0.0.1` / `::1` / `localhost` / `[::1]`) AND
+  `PYANCHOR_ALLOWED_ORIGINS` is empty. Previously this was a
+  `console.warn`. Fail-closed because the cookie-session path
+  admits cross-origin token-bearing requests; the only thing
+  blocking arbitrary curl from any host with the token is the
+  origin allowlist.
+- **`src/worker/runner.ts`** — replaced the inline
+  `buildWorkspace + syncToAppDir + (maybe restartFrontend)`
+  block with a single `executeOutput(outputMode, ctx)` call.
+  Behavior identical for `apply` mode (the default); new
+  `dryrun` short-circuits earlier; `pr` errors clearly.
+- **`src/worker/runner.ts`** — emits one audit event per job
+  outcome (success / failed / canceled). Fire-and-forget against
+  the configured sink (file or noop). Audit failure NEVER blocks
+  the worker's success path — sink errors log to stderr only.
+
+### Tests
+- **`tests/audit.test.ts`** (new) — 9 cases. sha256Hex vector
+  + UTF-8 (한글, 中文, العربية), FileAuditSink writes valid
+  JSONL + survives newlines/quotes in field values + handles
+  missing parent dir without throwing, NoopAuditSink no-op.
+- **`tests/worker/output.test.ts`** (new) — 10 cases.
+  `resolveOutputMode` case-insensitive + unknown-fallback,
+  `executeOutput` apply runs build→sync→restart in order,
+  `runBuild=false` skips build, `shouldRestart=false` skips
+  restart, dryrun build-only and full no-op, pr throws with
+  "v0.19" reference.
+- **`tests/config.test.ts`** — extended with 11 new cases:
+  fail-closed validateConfig (5: 0.0.0.0 throws, public IP
+  throws, with origins doesn't throw, loopback exempt, ::1 +
+  localhost + [::1] all exempt) + output-mode + audit-log
+  config (6: outputMode default + override, auditLogEnabled
+  default false + opt-in true, auditLogFile default + override).
+
+### Roadmap (post-v0.18)
+- **v0.19** — PR mode actual implementation (git checkout + add +
+  commit + push + `gh pr create`) + `X-Pyanchor-Actor` header
+  passthrough. PR mode populates `pr_url` in the audit event;
+  Actor populates `actor` (host owns identity verification —
+  pyanchor records what it's told).
+- **v0.20** — webhook hooks (`PYANCHOR_WEBHOOK_*` envs) firing
+  on `EDIT_REQUESTED` / `EDIT_APPLIED` / `PR_OPENED`. Built-in
+  Slack + Discord formatters.
+
+### Migration
+- Defaults are unchanged. Existing loopback dev workflows
+  continue to work without any env additions or config changes.
+- If you bind to `0.0.0.0` directly today (we recommend you
+  don't), the sidecar will now refuse to start unless you also
+  set `PYANCHOR_ALLOWED_ORIGINS`. This is intentional — the
+  fail-closed guard catches the "I deployed pyanchor publicly
+  by accident" footgun. See `docs/PRODUCTION-HARDENING.md`
+  for the recommended reverse-proxy pattern instead.
+
 ## [0.17.0] - 2026-04-20
 
 Production gating track. Pyanchor's defaults are still loopback-only,

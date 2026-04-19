@@ -6,17 +6,17 @@ import { selectAgent } from "../agents";
 import { selectFramework } from "../frameworks";
 import type { AiEditMode, AiEditState } from "../shared/types";
 
+import { FileAuditSink, NoopAuditSink, sha256Hex, type AuditSink } from "../audit";
+
 import { cancelActiveChildren, runCommand, type RunCommandOptions } from "./child-process";
 import { createLifecycle } from "./lifecycle";
 import { createMessage, pushMessageWithCap, updateUserMessageStatus } from "./messages";
+import { executeOutput, resolveOutputMode } from "./output";
 import { createRuntimeBuffer } from "./runtime-buffer";
 import { createStateIO } from "./state-io";
 import {
-  buildWorkspace,
   installWorkspaceDependencies,
   prepareWorkspace,
-  restartFrontend,
-  syncToAppDir,
   type WorkspaceConfig,
   type WorkspaceDeps
 } from "./workspace";
@@ -83,6 +83,36 @@ const shouldRestartAfterEdit =
     process.platform === "linux" &&
     fsSync.existsSync(pyanchorConfig.restartFrontendScript));
 
+// v0.18.0: output mode + audit sink. resolveOutputMode normalizes
+// the env value with a stderr warning on unknowns. Audit defaults
+// to disabled so existing setups don't grow a new file silently;
+// PYANCHOR_AUDIT_LOG=true opt-in.
+const outputMode = resolveOutputMode(pyanchorConfig.outputMode);
+const auditSink: AuditSink = pyanchorConfig.auditLogEnabled
+  ? new FileAuditSink(pyanchorConfig.auditLogFile)
+  : new NoopAuditSink();
+const jobStartedAtMs = Date.now();
+let auditEmitted = false;
+const emitAuditOnce = async (
+  outcome: "success" | "failed" | "canceled",
+  error?: string
+) => {
+  if (auditEmitted) return;
+  auditEmitted = true;
+  await auditSink.emit({
+    ts: new Date().toISOString(),
+    run_id: process.env.PYANCHOR_JOB_ID || "",
+    prompt_hash: sha256Hex(process.env.PYANCHOR_JOB_PROMPT || ""),
+    target_path: process.env.PYANCHOR_JOB_TARGET_PATH || undefined,
+    mode: process.env.PYANCHOR_JOB_MODE === "chat" ? "chat" : "edit",
+    output_mode: outputMode,
+    outcome,
+    duration_ms: Date.now() - jobStartedAtMs,
+    agent: pyanchorConfig.agent,
+    ...(error ? { error } : {})
+  });
+};
+
 const activeJob = {
   jobId: process.env.PYANCHOR_JOB_ID || "",
   prompt: process.env.PYANCHOR_JOB_PROMPT || "",
@@ -109,6 +139,7 @@ async function finalizeCancellation(signal: NodeJS.Signals) {
   cancelHandled = true;
   cancelRequested = true;
   cancelController.abort();
+  await emitAuditOnce("canceled", `Canceled via ${signal}`);
   queueLog([`Cancel signal received. (${signal})`, "Tearing down active children."]);
   await flushRuntimeBuffers();
   await cancelActiveChildren(activeChildren);
@@ -244,52 +275,23 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
     return true;
   }
 
-  if (!pyanchorConfig.fastReload) {
-    await withHeartbeat(
-      {
-        step: "Validating with a workspace build.",
-        label: "Build"
-      },
-      () => buildWorkspace(workspaceConfig, workspaceDeps)
-    );
-  }
+  // v0.18.0: output mode dispatch. apply (default) keeps the existing
+  // build → rsync → restart tail. dryrun stops after build. pr (v0.19+)
+  // throws "not implemented" so misconfigurations fail loud.
+  await executeOutput(outputMode, {
+    workspaceConfig,
+    workspaceDeps,
+    runBuild: !pyanchorConfig.fastReload,
+    shouldRestart: shouldRestartAfterEdit && !pyanchorConfig.fastReload,
+    withHeartbeat
+  });
 
-  await withHeartbeat(
-    {
-      step: "Syncing edits back to the app dir.",
-      label: "Syncing"
-    },
-    () => syncToAppDir(workspaceConfig, workspaceDeps)
-  );
-
-  if (shouldRestartAfterEdit && !pyanchorConfig.fastReload) {
-    await updateState((state) =>
-      pushMessage(
-        {
-          ...state,
-          status: "running",
-          pid: process.pid,
-          currentStep: summary,
-          heartbeatAt: new Date().toISOString(),
-          heartbeatLabel: "Restarting",
-          thinking: mergeThinking(state.thinking, thinking),
-          error: null,
-          completedAt: null
-        },
-        createMessage({
-          jobId,
-          role: "assistant",
-          mode,
-          text: summary,
-          status: "done"
-        })
-      )
-    );
-
-    await restartFrontend(workspaceConfig, workspaceDeps);
-    return false;
-  }
-
+  // For apply mode with restart, the original code used to write the
+  // "Restarting" heartbeat message via pushMessage (so the assistant
+  // bubble showed up immediately) and then return false to defer
+  // finalize until restart completed. After the v0.18 refactor the
+  // restart happens inside executeOutput, so the assistant message
+  // gets written here in one place via finalizeSuccess.
   await finalizeSuccess(summary, thinking, mode);
   return true;
 }
@@ -311,18 +313,18 @@ async function main() {
   while (true) {
     try {
       const canContinue = await processJob(currentJobId, currentPrompt, currentTargetPath, currentMode);
+      await emitAuditOnce("success");
       if (!canContinue) {
         break;
       }
     } catch (error) {
       if (cancelRequested || (error instanceof Error && error.message === CANCELED_ERROR)) {
         await finalizeFailure(CANCELED_ERROR, "canceled", currentMode);
+        await emitAuditOnce("canceled", CANCELED_ERROR);
       } else {
-        await finalizeFailure(
-          error instanceof Error ? error.message : "Unknown error.",
-          "failed",
-          currentMode
-        );
+        const message = error instanceof Error ? error.message : "Unknown error.";
+        await finalizeFailure(message, "failed", currentMode);
+        await emitAuditOnce("failed", message);
       }
     }
 
@@ -341,12 +343,11 @@ async function main() {
 void main().catch(async (error) => {
   if (cancelRequested) {
     await finalizeFailure(CANCELED_ERROR, "canceled", activeJob.mode);
+    await emitAuditOnce("canceled", CANCELED_ERROR);
     return;
   }
 
-  await finalizeFailure(
-    error instanceof Error ? error.message : "Unknown error.",
-    "failed",
-    activeJob.mode
-  );
+  const message = error instanceof Error ? error.message : "Unknown error.";
+  await finalizeFailure(message, "failed", activeJob.mode);
+  await emitAuditOnce("failed", message);
 });
