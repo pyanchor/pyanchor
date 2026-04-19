@@ -73,6 +73,14 @@ export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
   const baseUrl = `${scriptUrl?.origin ?? win.location.origin}${basePath}`.replace(/\/+$/, "");
   const token = currentScript?.dataset.pyanchorToken?.trim() ?? "";
 
+  // Locale resolution priority: pre-seeded `__PyanchorConfig.locale`
+  // (host code mutated the global before bootstrap ran) →
+  // `data-pyanchor-locale` on this <script> tag → undefined (overlay
+  // falls back to English). Read once here so the overlay-side
+  // resolveStrings() lookup actually has data to work with.
+  const datasetLocale = currentScript?.dataset.pyanchorLocale?.trim();
+  const locale = win.__PyanchorConfig?.locale ?? datasetLocale ?? undefined;
+
   // Hostname allowlist defense.
   const customHosts = currentScript?.dataset.pyanchorTrustedHosts?.trim();
   const allowList = customHosts ? customHosts.split(",") : DEFAULT_TRUSTED_HOSTS;
@@ -84,7 +92,7 @@ export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
     return "skipped-untrusted-host";
   }
 
-  win.__PyanchorConfig = { baseUrl, token };
+  win.__PyanchorConfig = { baseUrl, token, ...(locale ? { locale } : {}) };
 
   // Exchange the bearer token for an HttpOnly session cookie. On
   // success, blank window.__PyanchorConfig.token so the raw bearer
@@ -114,6 +122,13 @@ export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
   overlayScript.src = `${baseUrl}/overlay.js`;
   overlayScript.defer = true;
   overlayScript.dataset.pyanchorOverlay = "1";
+  if (locale) {
+    // Mirror the locale onto the overlay script tag so the overlay
+    // can read it via its own data-pyanchor-locale lookup. Redundant
+    // with __PyanchorConfig.locale but keeps the two activation
+    // paths consistent.
+    overlayScript.dataset.pyanchorLocale = locale;
+  }
   doc.head.appendChild(overlayScript);
   return "loaded";
 }

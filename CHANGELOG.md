@@ -7,6 +7,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-04-19
+
+Codex round 8 surfaced 3 mediums on v0.9.0 — the i18n activation
+wiring and the a11y focus-trap behavior both had real bugs that
+the v0.9.0 tests missed. v0.9.2 patches all three before shipping
+the Korean bundle or continuing the UX track.
+
+### Fixed
+- **Bootstrap now actually reads `data-pyanchor-locale` and preserves
+  pre-seeded `__PyanchorConfig.locale`.** v0.9.0 claimed two
+  activation paths (host-set `window.__PyanchorConfig.locale` AND
+  `data-pyanchor-locale` on the `<script>` tag) but bootstrap read
+  neither — it unconditionally overwrote `__PyanchorConfig` with
+  `{baseUrl, token}`, clobbering any host-set locale, and never
+  inspected the dataset attribute. The documented locale activation
+  was effectively dead. v0.9.2 wires both paths with host-set
+  taking priority over the dataset, and mirrors the resolved
+  locale onto the appended overlay `<script>` tag so the
+  overlay-side fallback path also sees it. Codex round-8 #1.
+- **Auto-focus no longer steals focus on every re-render.** v0.9.0's
+  "was focus inside overlay?" check used `root.contains(previousActive)`
+  — but `host.contains(shadowChild)` returns `false` across the
+  shadow boundary in real browsers (Chromium confirmed), so every
+  re-render (mode button click, submit, toast dismiss) looked like
+  a "fresh open" and the textarea stole focus back, breaking keyboard
+  navigation. The correct signal: `shadowRoot.activeElement` returns
+  null when focus is outside the shadow tree, so `previousActive !==
+  null` is the reliable "was inside" check. Codex round-8 #2.
+- **i18n extraction completed** — three user-visible strings still
+  hardcoded in v0.9.0 now go through the `StringTable`:
+  - `"Pyanchor DevTools"` (panel header title) → `panelTitle`
+  - `"Current page"` (panel context label) → `panelContextLabel`
+  - `"Your request: position ${n}"` (status meta breadcrumb) →
+    `statusYourPosition(n)` parameterized
+  The panel's dialog `aria-label` now uses `panelTitle` instead of
+  the generic `toggleTitle` action copy. Codex round-8 #3.
+
+### Added
+- 3 new `StringTable` keys documented above.
+- **Tests**:
+  - `bootstrap.test.ts` — **+5 tests** for locale propagation:
+    reads dataset → writes to config; pre-seeded host locale wins
+    over dataset; missing locale → omitted from config; mirrored
+    onto overlay script tag; not added when absent.
+  - `strings.test.ts` — **+2 tests**: shape includes the 3 new keys;
+    `statusYourPosition` formats the position; `panelTitle` matches
+    the brand.
+  - `state.test.ts` — **+1 test**: `getStatusMeta` uses
+    `strings.statusYourPosition` (verified via a Korean override
+    bundle rendering "대기열 1번째").
+- **Total: 412 unit + 7 e2e = 419 tests**.
+
+### Compatibility
+No runtime behavior change for English users (default bundle).
+Host apps that previously set `window.__PyanchorConfig.locale`
+before bootstrap now actually see that locale applied; before,
+they would have needed to set it AFTER bootstrap plus mutate the
+config object a second time.
+
+### Verified
+- `pnpm typecheck` clean
+- `pnpm test` → 412/412 green
+- `pnpm test:e2e` → 7/7 green
+
+### Roadmap
+- **v0.9.3**: ship Korean bundle (`src/runtime/overlay/strings/ko.ts`)
+  now that the extraction is actually complete. Dynamic-import
+  story TBD; simplest v0 is static import gated on locale string.
+- **v0.9.x**: keyboard nav diagnostic e2e (tab through every focusable
+  element, verify trap wraps correctly — now that the focus logic
+  is actually right); render snapshot test for the panel template.
+
 ## [0.9.1] - 2026-04-19
 
 CI hotfix. The GitHub Actions `ci` and `release` workflows had been

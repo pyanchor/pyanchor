@@ -204,14 +204,14 @@ export const getStatusHeadline = (
 export const getStatusMeta = (
   uiState: Pick<UIState, "lastSubmittedJobId">,
   serverState: Pick<AiEditState, "queue" | "heartbeatLabel" | "heartbeatAt">,
-  formattedHeartbeatAt: string | null
+  formattedHeartbeatAt: string | null,
+  strings: StringTable
 ): string => {
   const queuePosition = getTrackedQueuePosition(uiState, serverState);
   const pieces = [
     serverState.heartbeatLabel,
     formattedHeartbeatAt,
-    // Position breadcrumb is locale-independent (just a number).
-    queuePosition > 0 ? `Your request: position ${queuePosition}` : null
+    queuePosition > 0 ? strings.statusYourPosition(queuePosition) : null
   ].filter(Boolean);
   return pieces.join(" / ");
 };

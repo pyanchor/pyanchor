@@ -74,6 +74,14 @@ export interface StringTable {
   // Composer headline ("Ask / Explain" vs "Edit page")
   composerHeadlineChat: string;
   composerHeadlineEdit: string;
+
+  // Panel header / status meta (v0.9.2 — completing the i18n extraction)
+  /** Brand title shown in the panel header AND used as the dialog aria-label. */
+  panelTitle: string;
+  /** Label preceding the current page path in the panel header. */
+  panelContextLabel: string;
+  /** "Your request: position {N}" breadcrumb in getStatusMeta. */
+  statusYourPosition: (position: number) => string;
 }
 
 export const enStrings: StringTable = {
@@ -128,7 +136,11 @@ export const enStrings: StringTable = {
   errorRuntimeNotConfigured: "Pyanchor devtools runtime is not configured.",
 
   composerHeadlineChat: "Ask / Explain",
-  composerHeadlineEdit: "Edit page"
+  composerHeadlineEdit: "Edit page",
+
+  panelTitle: "Pyanchor DevTools",
+  panelContextLabel: "Current page",
+  statusYourPosition: (n) => `Your request: position ${n}`
 };
 
 const registry = new Map<string, Partial<StringTable>>();

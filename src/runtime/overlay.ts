@@ -550,7 +550,7 @@ const statusHeadline = () =>
     s
   );
 const statusMeta = () =>
-  getStatusMeta(uiState, serverState, formatTime(serverState.heartbeatAt));
+  getStatusMeta(uiState, serverState, formatTime(serverState.heartbeatAt), s);
 const placeholder = () => getPlaceholder(uiState.mode, s);
 const composerTitle = () => getComposerTitle(uiState.mode, s);
 const pendingBubbleTitle = () => getPendingBubbleTitle(uiState, serverState, s);
@@ -632,9 +632,15 @@ const render = () => {
       : null;
 
   // a11y: detect a fresh panel open so we can auto-focus the textarea.
-  // "Fresh" = panel is now open and previousActive wasn't inside the
-  // overlay shadow root (i.e. the panel just appeared this render).
-  const wasFocusInsideOverlay = previousActive ? root.contains(previousActive) : false;
+  // "Fresh" = panel is now open and focus was NOT inside the shadow
+  // root before this render. ShadowRoot.activeElement returns null
+  // when the focused element is outside the shadow tree, so the
+  // simplest reliable check is `previousActive !== null`. (We can't
+  // use `root.contains(previousActive)` — host.contains() does NOT
+  // pierce the shadow boundary in real browsers, so it would return
+  // false for shadow descendants and re-trigger autofocus on every
+  // re-render. Codex round-8 #2.)
+  const wasFocusInsideOverlay = previousActive !== null;
   const isFreshOpen = uiState.isOpen && !wasFocusInsideOverlay;
 
   shadowRoot.innerHTML = `
@@ -642,12 +648,12 @@ const render = () => {
     <div class="pyanchor-root">
       ${uiState.toast ? `<div class="toast toast--${uiState.toast.tone}">${escapeHtml(uiState.toast.message)}</div>` : ""}
       ${uiState.isOpen ? `
-        <div class="panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(s.toggleTitle)}" aria-describedby="pyanchor-status-line">
+        <div class="panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(s.panelTitle)}" aria-describedby="pyanchor-status-line">
           <div class="panel__header">
             <div class="panel__title">
-              <div class="panel__title-line">${sparkIcon}<span>Pyanchor DevTools</span></div>
+              <div class="panel__title-line">${sparkIcon}<span>${escapeHtml(s.panelTitle)}</span></div>
               <div class="panel__context">
-                <span>Current page</span>
+                <span>${escapeHtml(s.panelContextLabel)}</span>
                 <code class="panel__path">${escapeHtml(currentPath())}</code>
               </div>
             </div>

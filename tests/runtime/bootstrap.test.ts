@@ -242,6 +242,82 @@ describe("runBootstrap — session exchange + token blanking (v0.5.1 security)",
   });
 });
 
+describe("runBootstrap — locale propagation (v0.9.2 fix, Codex round-8 #1)", () => {
+  const makeScriptWithLocale = (locale: string) => {
+    const script = makeScript({
+      src: "http://localhost/_pyanchor/bootstrap.js",
+      pyanchorToken: "tok"
+    });
+    script.dataset.pyanchorLocale = locale;
+    return script;
+  };
+
+  it("reads data-pyanchor-locale and writes it onto window.__PyanchorConfig.locale", () => {
+    const script = makeScriptWithLocale("ko");
+    runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+    expect(window.__PyanchorConfig?.locale).toBe("ko");
+  });
+
+  it("preserves a pre-seeded __PyanchorConfig.locale (host code wins over dataset)", () => {
+    // Host app set locale before bootstrap loaded.
+    (window as Window & { __PyanchorConfig?: { locale?: string; baseUrl?: string; token?: string } })
+      .__PyanchorConfig = {
+      baseUrl: "ignored",
+      token: "ignored",
+      locale: "ja"
+    };
+
+    const script = makeScriptWithLocale("ko");
+    runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+
+    // Pre-seeded "ja" wins over dataset "ko".
+    expect(window.__PyanchorConfig?.locale).toBe("ja");
+  });
+
+  it("omits the locale field entirely when neither is present", () => {
+    const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });
+    runBootstrap({ window, document, fetch: vi.fn() as never, currentScript: script });
+    expect(window.__PyanchorConfig).toBeDefined();
+    expect(window.__PyanchorConfig?.locale).toBeUndefined();
+  });
+
+  it("mirrors the locale onto the appended overlay script tag's dataset", () => {
+    const script = makeScriptWithLocale("ko");
+    runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+
+    const overlayTag = document.head.querySelector<HTMLScriptElement>(
+      "script[data-pyanchor-overlay='1']"
+    );
+    expect(overlayTag).not.toBeNull();
+    expect(overlayTag?.dataset.pyanchorLocale).toBe("ko");
+  });
+
+  it("does NOT add data-pyanchor-locale on the overlay tag when no locale resolved", () => {
+    const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });
+    runBootstrap({ window, document, fetch: vi.fn() as never, currentScript: script });
+
+    const overlayTag = document.head.querySelector<HTMLScriptElement>(
+      "script[data-pyanchor-overlay='1']"
+    );
+    expect(overlayTag?.dataset.pyanchorLocale).toBeUndefined();
+  });
+});
+
 describe("runBootstrap — overlay script injection", () => {
   it("appends a <script src='.../overlay.js' data-pyanchor-overlay='1' defer> to <head>", () => {
     const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });

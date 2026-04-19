@@ -57,11 +57,23 @@ describe("enStrings (default English bundle)", () => {
     expect(enStrings.errorRuntimeNotConfigured).toBeTruthy();
     expect(enStrings.composerHeadlineChat).toBeTruthy();
     expect(enStrings.composerHeadlineEdit).toBeTruthy();
+    // v0.9.2 — i18n extraction completion (Codex round-8 #3)
+    expect(enStrings.panelTitle).toBeTruthy();
+    expect(enStrings.panelContextLabel).toBeTruthy();
+    expect(typeof enStrings.statusYourPosition).toBe("function");
   });
 
   it("statusQueuedAt formats the position into the message", () => {
     expect(enStrings.statusQueuedAt(3)).toContain("3");
     expect(enStrings.statusQueuedAt(3)).toContain("Queued");
+  });
+
+  it("statusYourPosition formats the position into the breadcrumb", () => {
+    expect(enStrings.statusYourPosition(2)).toBe("Your request: position 2");
+  });
+
+  it("panelTitle is the brand name (used as dialog aria-label)", () => {
+    expect(enStrings.panelTitle).toBe("Pyanchor DevTools");
   });
 
   it("composerSubmitSending uses the unicode horizontal ellipsis (no ASCII '...')", () => {

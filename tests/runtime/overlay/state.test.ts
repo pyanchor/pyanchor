@@ -185,13 +185,27 @@ describe("getStatusMeta", () => {
       heartbeatAt: "2026-04-19T03:14:07Z",
       queue: [queueItem({ jobId: "mine" })]
     });
-    const meta = getStatusMeta(ui, s, "03:14:07");
+    const meta = getStatusMeta(ui, s, "03:14:07", enStrings);
     expect(meta).toBe("Build / 03:14:07 / Your request: position 1");
   });
 
   it("omits null pieces", () => {
     const s = stateWith({ heartbeatLabel: null, heartbeatAt: null });
-    expect(getStatusMeta(uiWith(), s, null)).toBe("");
+    expect(getStatusMeta(uiWith(), s, null, enStrings)).toBe("");
+  });
+
+  it("uses strings.statusYourPosition for the queue breadcrumb (i18n)", () => {
+    const koStrings = {
+      ...enStrings,
+      statusYourPosition: (n: number) => `대기열 ${n}번째`
+    };
+    const ui = uiWith({ lastSubmittedJobId: "mine" });
+    const s = stateWith({
+      heartbeatLabel: null,
+      heartbeatAt: null,
+      queue: [queueItem({ jobId: "mine" })]
+    });
+    expect(getStatusMeta(ui, s, null, koStrings)).toBe("대기열 1번째");
   });
 });
 
