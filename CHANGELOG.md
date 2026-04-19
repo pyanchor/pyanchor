@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-04-20
+
+Five new built-in locales (tr / nl / pl / sv / it) bringing the
+total to 17, plus the round-12 known-limitation cleanup
+(fetchJson + polling getters) and a real-server route smoke
+test that locks the round-11 #1 fix automatically.
+
+### Added
+- **`src/runtime/overlay/locales/{tr,nl,pl,sv,it}.ts`** — Turkish,
+  Dutch, Polish, Swedish, Italian. All translate every key in
+  `StringTable`. Bundle sizes (built actuals): tr 3.4KB, nl 3.5KB,
+  pl 3.6KB, sv 3.4KB, it 3.5KB. Each follows the v0.12.1 dynamic
+  activation path + the v0.13.1 late-register CustomEvent
+  contract.
+- **`src/runtime/bootstrap.ts`** + **`src/server.ts`** —
+  `BUILT_IN_LOCALES` set extended to 17 entries (kept manually in
+  sync; round-12 CHANGELOG flagged this as future-work for a
+  shared module).
+- **`build.mjs`** — IIFE list extended to 17.
+- **`tests/e2e/server.mjs`** — serves the new bundles + adds
+  fixture pages `/{tr,nl,pl,sv,it}.html`.
+- **`tests/e2e/i18n-v014.spec.ts`** — 10 new e2e cases (5 locales
+  × 2 assertions: panel content + translated `aria-label`).
+- **`tests/runtime/overlay/strings.test.ts`** — extended seed +
+  parameterized describe block for the five new locales.
+- **`tests/runtime/bootstrap.test.ts`** — `builtIns` array
+  extended to 17; the auto-inject ordering test now parameterizes
+  over all seventeen.
+- **`tests/subprocess-smoke/server-locale-routes.test.ts`** — new
+  subprocess smoke that boots the actual built `dist/server.cjs`
+  and curls all 17 locale routes + four negative cases (unknown
+  locale, path traversal, single-char locale, `..js`). Mirrors
+  `runner-subprocess.test.ts` rather than introducing a
+  supertest dependency. **Locks the round-11 #1 fix** so the
+  next time someone adds a built-in locale they can't ship a
+  client that injects a bundle the server doesn't serve.
+
+### Fixed
+- **`src/runtime/overlay/fetch-helper.ts`** — `defaultErrorMessage`
+  now accepts `string | () => string`. Closes the round-12
+  known limitation: a fetch error toast during a late-registered
+  locale window will now match the panel locale instead of
+  flashing English.
+- **`src/runtime/overlay/polling.ts`** — same getter pattern for
+  `defaultJobFailedMessage` (used when a polling outcome reports
+  `failed` with a null error field).
+- **`src/runtime/overlay.ts`** — passes both default-message
+  options as getters reading from the mutable `s` so the
+  late-register listener's swap is visible to error paths too.
+
+### Translation notes
+- All five locales use the informal/direct register established by
+  the v0.12.0 Latin set. tr / nl / sv use 2sg-ish forms (`Sen`-ish,
+  `Jij`, `Du`); it uses `Tu`; pl uses `Ty`. Brand "Pyanchor
+  DevTools" is untranslated across all five (same convention).
+- `tr`: composer placeholders use the polite imperative `yapın` /
+  `koruyun` (rather than friend-form `yap` / `koru`) — matches
+  software UI tooling convention; can revisit if a Turkish reviewer
+  prefers otherwise.
+- `pl` / `sv` / `nl`: `Ctrl/Cmd + Enter` is hint copy, kept English
+  to match the actual key labels users see on their keyboards.
+
+### Roadmap
+- **v0.15.0**: ar (Arabic, RTL) — punted from v0.13.0 / v0.14.0
+  per Codex round-11 #4; needs a dedicated track for shadow-root
+  `dir="rtl"` propagation, CSS logical properties, and
+  cross-regression on the existing 17 LTR locales.
+
 ## [0.13.1] - 2026-04-20
 
 Round-12 Codex patches. The high-severity round-11 finding closed

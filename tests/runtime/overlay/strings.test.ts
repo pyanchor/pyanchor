@@ -28,6 +28,12 @@ import { idStrings } from "../../../src/runtime/overlay/locales/id";
 import { ruStrings } from "../../../src/runtime/overlay/locales/ru";
 import { hiStrings } from "../../../src/runtime/overlay/locales/hi";
 import { thStrings } from "../../../src/runtime/overlay/locales/th";
+// v0.14.0 — Turkish / Dutch / Polish / Swedish / Italian.
+import { trStrings } from "../../../src/runtime/overlay/locales/tr";
+import { nlStrings } from "../../../src/runtime/overlay/locales/nl";
+import { plStrings } from "../../../src/runtime/overlay/locales/pl";
+import { svStrings } from "../../../src/runtime/overlay/locales/sv";
+import { itStrings } from "../../../src/runtime/overlay/locales/it";
 
 beforeEach(() => {
   // Re-seed the queue with every built-in locale so the rest of the
@@ -44,7 +50,12 @@ beforeEach(() => {
     { locale: "id", bundle: idStrings },
     { locale: "ru", bundle: ruStrings },
     { locale: "hi", bundle: hiStrings },
-    { locale: "th", bundle: thStrings }
+    { locale: "th", bundle: thStrings },
+    { locale: "tr", bundle: trStrings },
+    { locale: "nl", bundle: nlStrings },
+    { locale: "pl", bundle: plStrings },
+    { locale: "sv", bundle: svStrings },
+    { locale: "it", bundle: itStrings }
   ];
   _clearRegistry();
 });
@@ -369,6 +380,44 @@ describe("built-in Slavic + Indic + SE-Asian bundles (v0.13.0)", () => {
   });
 
   it.each(["ru", "hi", "th"])(
+    "%s translates every checked surface key (no English fallthrough)",
+    (locale) => {
+      const t = resolveStrings(locale);
+      expect(t.diagnosticsTitle).not.toBe(enStrings.diagnosticsTitle);
+      expect(t.retryLast).not.toBe(enStrings.retryLast);
+      expect(t.copyLast).not.toBe(enStrings.copyLast);
+      expect(t.statusReadingChat).not.toBe(enStrings.statusReadingChat);
+      expect(t.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
+    }
+  );
+});
+
+describe("built-in Turkish + Dutch + Polish + Swedish + Italian bundles (v0.14.0)", () => {
+  it.each([
+    ["tr", "Siz", "Mevcut sayfa"],
+    ["nl", "Jij", "Huidige pagina"],
+    ["pl", "Ty", "Bieżąca strona"],
+    ["sv", "Du", "Aktuell sida"],
+    ["it", "Tu", "Pagina corrente"]
+  ])("%s resolves to a translated bundle (roleYou=%s, panelContextLabel=%s)", (locale, roleYou, panelContextLabel) => {
+    const t = resolveStrings(locale);
+    expect(t).not.toBe(enStrings);
+    expect(t.roleYou).toBe(roleYou);
+    expect(t.panelContextLabel).toBe(panelContextLabel);
+    expect(t.panelTitle).toBe("Pyanchor DevTools");
+  });
+
+  it.each([
+    ["tr", "TR"],
+    ["nl", "NL"],
+    ["pl", "PL"],
+    ["sv", "SV"],
+    ["it", "IT"]
+  ])("%s lookup is case-insensitive (uppercase %s also works)", (locale, upper) => {
+    expect(resolveStrings(upper)).toEqual(resolveStrings(locale));
+  });
+
+  it.each(["tr", "nl", "pl", "sv", "it"])(
     "%s translates every checked surface key (no English fallthrough)",
     (locale) => {
       const t = resolveStrings(locale);

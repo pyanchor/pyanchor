@@ -27,8 +27,14 @@ export interface FetchHelperOptions {
    * Generic fallback message when a non-2xx response has no `{error}`
    * field. Defaults to English "Request failed." for callers that
    * don't pass a localized override.
+   *
+   * Accepts either a static string OR a getter — the overlay passes
+   * a getter so that late-registered locales (round-12 #1) update
+   * the error copy too. Without the getter form the toast on a
+   * post-late-register fetch failure would read English while the
+   * rest of the UI is translated.
    */
-  defaultErrorMessage?: string;
+  defaultErrorMessage?: string | (() => string);
 }
 
 export interface FetchJson {
@@ -48,7 +54,12 @@ const DEFAULT_ERROR_MESSAGE = "Request failed.";
  */
 export function createFetchJson(opts: FetchHelperOptions): FetchJson {
   const fetchImpl: typeof fetch = opts.fetchImpl ?? fetch;
-  const defaultError = opts.defaultErrorMessage ?? DEFAULT_ERROR_MESSAGE;
+  const resolveDefaultError = (): string => {
+    if (typeof opts.defaultErrorMessage === "function") {
+      return opts.defaultErrorMessage();
+    }
+    return opts.defaultErrorMessage ?? DEFAULT_ERROR_MESSAGE;
+  };
   return async <T>(input: string, init?: RequestInit): Promise<T> => {
     const token = opts.getToken();
     const response = await fetchImpl(input, {
@@ -62,7 +73,7 @@ export function createFetchJson(opts: FetchHelperOptions): FetchJson {
     });
     const data = (await response.json()) as T & { error?: string };
     if (!response.ok) {
-      throw new Error(data?.error ?? defaultError);
+      throw new Error(data?.error ?? resolveDefaultError());
     }
     return data;
   };

@@ -581,7 +581,9 @@ let serverState: AiEditState = { ...emptyState };
 const fetchJson = createFetchJson({
   baseUrl: config.baseUrl,
   getToken: () => config.token || null,
-  defaultErrorMessage: s.errorRequestFailed
+  // Getter form: rebinds late-registered locales (round-12 #1)
+  // so a fetch error toast post late-load matches the panel.
+  defaultErrorMessage: () => s.errorRequestFailed
 });
 
 const runtimePath = (suffix: string) => buildRuntimePath(config.baseUrl, suffix);
@@ -708,7 +710,7 @@ const syncStateClient = createSyncStateClient({
       showToast(s.toastRequestCanceled, "info");
     }
   },
-  defaultJobFailedMessage: s.errorJobFailed
+  defaultJobFailedMessage: () => s.errorJobFailed
 });
 
 const syncState = (withOutcomeToast = false) => syncStateClient.sync(withOutcomeToast);

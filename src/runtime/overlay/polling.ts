@@ -44,8 +44,12 @@ export interface SyncStateClientOptions {
    * Generic fallback message when a polling outcome reports `failed`
    * with a null `error` field. Defaults to English "Job failed." for
    * callers that don't pass a localized override.
+   *
+   * Accepts either a static string OR a getter (round-12 #1 follow-up:
+   * the overlay uses a getter so late-registered locales also localize
+   * this fallback path).
    */
-  defaultJobFailedMessage?: string;
+  defaultJobFailedMessage?: string | (() => string);
 }
 
 export interface SyncStateClient {
@@ -96,7 +100,12 @@ export function createSyncStateClient(opts: SyncStateClientOptions): SyncStateCl
           if (next.status === "failed") {
             opts.onOutcome?.({
               kind: "failed",
-              error: next.error ?? opts.defaultJobFailedMessage ?? "Job failed."
+              error:
+                next.error ??
+                (typeof opts.defaultJobFailedMessage === "function"
+                  ? opts.defaultJobFailedMessage()
+                  : opts.defaultJobFailedMessage) ??
+                "Job failed."
             });
             return;
           }

@@ -26,7 +26,12 @@ const localeBundles = {
   id: readFileSync(path.join(repoRoot, "dist", "public", "locales", "id.js")),
   ru: readFileSync(path.join(repoRoot, "dist", "public", "locales", "ru.js")),
   hi: readFileSync(path.join(repoRoot, "dist", "public", "locales", "hi.js")),
-  th: readFileSync(path.join(repoRoot, "dist", "public", "locales", "th.js"))
+  th: readFileSync(path.join(repoRoot, "dist", "public", "locales", "th.js")),
+  tr: readFileSync(path.join(repoRoot, "dist", "public", "locales", "tr.js")),
+  nl: readFileSync(path.join(repoRoot, "dist", "public", "locales", "nl.js")),
+  pl: readFileSync(path.join(repoRoot, "dist", "public", "locales", "pl.js")),
+  sv: readFileSync(path.join(repoRoot, "dist", "public", "locales", "sv.js")),
+  it: readFileSync(path.join(repoRoot, "dist", "public", "locales", "it.js"))
 };
 
 // Fast-path fixture: loads overlay.js directly with __PyanchorConfig
@@ -133,6 +138,11 @@ const idLocaleHtml = buildLocaleFixture("id", "Indonesian");
 const ruLocaleHtml = buildLocaleFixture("ru", "Russian");
 const hiLocaleHtml = buildLocaleFixture("hi", "Hindi");
 const thLocaleHtml = buildLocaleFixture("th", "Thai");
+const trLocaleHtml = buildLocaleFixture("tr", "Turkish");
+const nlLocaleHtml = buildLocaleFixture("nl", "Dutch");
+const plLocaleHtml = buildLocaleFixture("pl", "Polish");
+const svLocaleHtml = buildLocaleFixture("sv", "Swedish");
+const itLocaleHtml = buildLocaleFixture("it", "Italian");
 
 const server = createServer((req, res) => {
   if (!req.url) {
@@ -229,6 +239,37 @@ const server = createServer((req, res) => {
   if (req.url === "/th.html") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(thLocaleHtml);
+    return;
+  }
+
+  // v0.14.0 — Turkish / Dutch / Polish / Swedish / Italian
+  if (req.url === "/tr.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(trLocaleHtml);
+    return;
+  }
+
+  if (req.url === "/nl.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(nlLocaleHtml);
+    return;
+  }
+
+  if (req.url === "/pl.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(plLocaleHtml);
+    return;
+  }
+
+  if (req.url === "/sv.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(svLocaleHtml);
+    return;
+  }
+
+  if (req.url === "/it.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(itLocaleHtml);
     return;
   }
 

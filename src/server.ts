@@ -120,7 +120,12 @@ const BUILT_IN_LOCALES = new Set([
   "id",
   "ru",
   "hi",
-  "th"
+  "th",
+  "tr",
+  "nl",
+  "pl",
+  "sv",
+  "it"
 ]);
 
 for (const basePath of runtimeBases) {
