@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.2] - 2026-04-20
+
+`overlay.ts` decomposition round 2. Pure refactor — no behavior
+change, no public-API change, all 706 unit + 69 e2e tests green
+without touching test code. The CSS template literal that was
+inlined in `overlay.ts` since the v0.7.x decomposition is now its
+own module.
+
+### Changed
+- **`src/runtime/overlay/styles.ts`** (new). Single export:
+  `OVERLAY_STYLES` — the same shadow-root CSS string that was
+  inlined as `const styles = \`...\`` in `overlay.ts`. Pure data,
+  no logic, no closures captured.
+- **`src/runtime/overlay.ts`** — imports `OVERLAY_STYLES` from
+  the new module instead of carrying the 518-line CSS template.
+  The `<style>${OVERLAY_STYLES}</style>` reference is the only
+  consumer.
+
+### Result
+- overlay.ts: **1165 → 647 LOC** (−518, −45%).
+- styles.ts: 534 LOC (pure CSS + 17-line module header).
+- Total LOC across `src/runtime/overlay/` unchanged; just split.
+- Bundle size unchanged (`overlay.js` ~45KB, well under the 80KB
+  guard added in v0.23.0).
+
+### Why CSS only this round
+The other big chunk (`render()`, ~400 LOC) is tightly coupled to
+overlay module state — `uiState`, `serverState`, `s`, `config`,
+`shadowRoot`, plus closures for `showToast` / `render` recursion.
+Extracting it would force a wide deps interface (~12 dependencies)
+that adds noise without improving readability. CSS was a clean
+extraction because it's pure data; render extraction belongs to a
+different refactor pattern (likely splitting render's internal
+sections into composable template helpers, not a single factory).
+
+That follow-up is queued for v0.24.x if it actually pays off
+during the realistic-smoke-lane work.
+
+### Tests
+- 706 unit + 69 e2e green. Identical pass count as v0.23.1.
+- No new tests added — pure refactor relies on existing coverage.
+
+### Migration
+- Defaults unchanged. No env changes. No behavior change.
+- `overlay.ts` is internal — the public `Stable @ 1.0` surface
+  (host globals + bootstrap data attrs + HTTP API) is unaffected.
+
 ## [0.23.1] - 2026-04-20
 
 Roadmap rewrite + operator visibility endpoint. No new product
