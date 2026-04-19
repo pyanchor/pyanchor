@@ -127,4 +127,16 @@ describe("workspace command overrides (PYANCHOR_SUDO_BIN / PYANCHOR_FLOCK_BIN)",
     const { pyanchorConfig } = await import("../src/config");
     expect(pyanchorConfig.sudoBin).toBe("/custom/sudo");
   });
+
+  it("empty PYANCHOR_SUDO_BIN falls back to /usr/bin/sudo", async () => {
+    setMinimalEnv({ PYANCHOR_SUDO_BIN: "" });
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.sudoBin).toBe("/usr/bin/sudo");
+  });
+
+  it("whitespace-only PYANCHOR_FLOCK_BIN falls back to /usr/bin/flock", async () => {
+    setMinimalEnv({ PYANCHOR_FLOCK_BIN: "   " });
+    const { pyanchorConfig } = await import("../src/config");
+    expect(pyanchorConfig.flockBin).toBe("/usr/bin/flock");
+  });
 });

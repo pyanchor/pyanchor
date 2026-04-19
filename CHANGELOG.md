@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-04-19
+
+Codex round-7 review of v0.8.1 surfaced 3 findings — 2 mediums
+(actual contract gaps) + 1 low (test branch coverage). All three
+patched here. Codex flagged the mediums as blockers before UX track
+entry; resolving them clears the path to v0.9.0.
+
+### Fixed
+- **Worker EPIPE diagnostic now actually lands on the thrown error
+  message.** v0.8.1 registered a second `child.on("close", …)` handler
+  that forwarded the synthetic `[stdin closed early: …]` note via
+  `onStderrChunk`. But the FIRST close handler had already settled the
+  promise from the `stderr` buffer by the time the second fired —
+  meaning the thrown `Error.message` for non-zero exits never contained
+  the note. And callers that don't pass `onStderrChunk` (the
+  prepare/sync/chown variants in `workspace.ts`) lost the note entirely.
+  v0.8.2 collapses to a single error handler that appends the note
+  directly to the `stderr` buffer, so the diagnostic survives both the
+  thrown error path AND the resolved-but-augmented `stderr` field.
+  Codex round-7 #2.
+- **Bootstrap-flow e2e race window mathematically closed.** v0.8.1
+  snapshotted `statusRequests.length` AFTER `waitForFunction(token === "")`
+  resolved. Requests that landed in the gap between blanking and
+  snapshot were bucketed pre-snapshot but were actually post-blanking
+  → escaped the assertion. v0.8.2 captures `blankingTimestampMs`
+  inside the page (`performance.timeOrigin + performance.now()`) at
+  the exact tick token blanking is observed, and the route handler
+  stamps `Date.now()` on every captured request as `_capturedAt`.
+  The post-blanking filter is now `req._capturedAt > blankingTimestampMs`
+  — strictly time-ordered, no count-snapshot race. Verified stable
+  across 15/15 consecutive runs (`--repeat-each=5`). Codex round-7 #1.
+
+### Added
+- **`tests/config.test.ts`** — **+2 tests** for the optionalEnv
+  fallback branch on the workspace-command env vars: empty-string
+  `PYANCHOR_SUDO_BIN` falls back to `/usr/bin/sudo`; whitespace-only
+  `PYANCHOR_FLOCK_BIN` falls back to `/usr/bin/flock`. The trim
+  branch was already covered; the empty/whitespace fallback was the
+  gap. Codex round-7 #3.
+
+### Tests
+- **Unit**: 387 → **389** (+2 config fallback tests).
+- **E2E (Playwright)**: 7 (unchanged, but the bootstrap-flow test's
+  race window is closed — same count, stronger guarantee).
+- **Total**: **396 across 30 files**.
+
+### Compatibility
+No runtime behavior change for production. The EPIPE fix is purely
+a code-path consolidation that strengthens the diagnostic message
+shape; happy-path runs never hit the listener. The e2e race fix
+only affects how the test captures + asserts on requests; the
+overlay's actual lazy-getToken behavior is unchanged.
+
+### Roadmap
+- **UX track entry now unblocked.** Codex round-7 confirmed the two
+  mediums were the only blockers; v0.9.0 = overlay accessibility
+  (focus trap, aria-live, keyboard nav) + i18n shim for status copy
+  strings. Codex round-3 #6 / round-7 closer.
+- **Optional pre-v0.9 polish** (Codex round-7 said "fine after
+  blockers, plus 1-2 overlay render snapshots + status-copy key
+  extraction"): may bundle into v0.9.0 or split as v0.8.3.
+- **Lower priority**: Docker-based runner sandbox for real
+  permission/filesystem semantics. Tracked, not blocking UX work.
+
 ## [0.8.1] - 2026-04-19
 
 Self-review of v0.8.0 (drafted before firing Codex round 7) surfaced

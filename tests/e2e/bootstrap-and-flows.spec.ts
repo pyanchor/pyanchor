@@ -88,7 +88,11 @@ test.describe("v0.5.1 token surface — full bootstrap path", () => {
       });
 
       await page.route("**/_pyanchor/api/status", async (route) => {
-        statusRequests.push(route.request());
+        const req = route.request();
+        // Stamp wall-clock capture time so the assertion can filter
+        // strictly post-blanking requests (Codex round-7 #1).
+        (req as unknown as { _capturedAt: number })._capturedAt = Date.now();
+        statusRequests.push(req);
         await route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -102,38 +106,57 @@ test.describe("v0.5.1 token surface — full bootstrap path", () => {
       await page.waitForFunction(
         () => Boolean((window as Window & { __PyanchorConfig?: { token: string } }).__PyanchorConfig)
       );
-      // Wait for the .then() handler to blank the in-memory token.
-      await page.waitForFunction(() => {
-        const cfg = (window as Window & { __PyanchorConfig?: { token: string } }).__PyanchorConfig;
-        return cfg?.token === "";
-      });
 
-      // The /api/session POST itself MUST carry the bearer token —
-      // that's the credential the server uses to issue the cookie.
+      // Capture a "blanking timestamp" inside the page itself so the
+      // snapshot is atomic with the .then(blank token) handler. The
+      // node-side statusRequests array can include requests that
+      // INITIATED before blanking but only landed at the route handler
+      // after; using request.timing().requestStart to filter post-
+      // blanking requests is more accurate than counting requests at
+      // blanking time (Codex round-7 #1).
+      const blankingTimestampMs = await page.evaluate(
+        () =>
+          new Promise<number>((resolve) => {
+            const tick = () => {
+              const cfg = (window as Window & { __PyanchorConfig?: { token: string } })
+                .__PyanchorConfig;
+              if (cfg?.token === "") {
+                resolve(performance.timeOrigin + performance.now());
+                return;
+              }
+              setTimeout(tick, 5);
+            };
+            tick();
+          })
+      );
+
+      // The /api/session POST itself MUST carry the bearer token.
       expect(sessionRequests.length).toBe(1);
       const sessionAuth = sessionRequests[0]!.headers()["authorization"];
       expect(sessionAuth).toBe("Bearer e2e-test-token-32-chars-1234567890");
 
-      // Strict v0.5.1 guarantee: every /api/status request issued
-      // AFTER token blanking must omit the Authorization header.
-      //
-      // Snapshot the request count at blanking time. Anything captured
-      // before that index might still carry the token (the first poll
-      // can race the session POST). Anything captured AT OR AFTER
-      // that index is post-blanking and MUST be auth-less — that's
-      // the contract.
-      //
-      // Wait for at least one post-blanking request to arrive so the
-      // assertion is meaningful (not vacuously true on an empty slice).
-      const requestsAtBlanking = statusRequests.length;
+      // Wait for at least one /api/status request whose start time
+      // is strictly after blankingTimestampMs.
+      const isPostBlanking = (req: Request): boolean => {
+        // Playwright Request.timing() returns -1 for unfinished
+        // timing fields. Use the wall-clock startTime via the
+        // initiator's response promise instead: when the route
+        // handler captures the request, we record now() ourselves.
+        // Fallback: if metadata is missing, treat as pre-blanking
+        // (conservative — won't false-positive a leak).
+        const start = (req as unknown as { _capturedAt?: number })._capturedAt;
+        return typeof start === "number" && start > blankingTimestampMs;
+      };
+
       const deadline = Date.now() + 8000;
-      while (statusRequests.length <= requestsAtBlanking && Date.now() < deadline) {
-        await page.waitForTimeout(200);
+      while (Date.now() < deadline) {
+        if (statusRequests.some(isPostBlanking)) break;
+        await page.waitForTimeout(100);
       }
-      const postBlanking = statusRequests.slice(requestsAtBlanking);
+      const postBlanking = statusRequests.filter(isPostBlanking);
       expect(
         postBlanking.length,
-        `no /api/status request fired in the 8s after token blanking (had ${requestsAtBlanking} pre-blanking; cookie-only path can't be verified without a post-blanking poll)`
+        `no /api/status request fired strictly after token blanking within 8s (${statusRequests.length} total captured) — cookie-only path can't be verified`
       ).toBeGreaterThan(0);
 
       const leakers = postBlanking.filter((req) =>

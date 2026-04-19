@@ -127,26 +127,20 @@ export function runCommand(
       reject(new Error(stderr.trim() || stdout.trim() || `${command} exited with ${code}`));
     });
 
-    // Capture (don't crash on) stdin errors. The close handler above
-    // already surfaces the non-zero exit through the normal failure
-    // path; without this listener Node would re-emit the stdin
-    // 'error' event as an uncaughtException and kill the worker.
-    //
-    // We retain the error code on the child object so failure paths
-    // can include it in their diagnostic message instead of silently
-    // dropping the EPIPE / EBADF / etc. signal.
-    let stdinError: NodeJS.ErrnoException | null = null;
+    // Capture (don't crash on) stdin errors AND fold the diagnostic
+    // into the stderr buffer. The first close handler above settles
+    // the promise from `stderr` directly, so attaching the note as a
+    // stderr chunk here ensures it lands BEFORE settle — which means
+    // the thrown error message (when exit code is non-zero) actually
+    // contains "[stdin closed early: EPIPE]" instead of just dropping
+    // it on the floor. Also serves callers that don't pass
+    // onStderrChunk (e.g. workspace.ts's prepare/sync/chown), since
+    // those still see the augmented `stderr` field on the resolved
+    // result.
     child.stdin.on("error", (err: NodeJS.ErrnoException) => {
-      stdinError = err;
-    });
-
-    // Augment the close handler's error message with the stdin error
-    // when both are present. Wraps the existing close listener instead
-    // of replacing it so the resolve/reject contract stays the same.
-    child.on("close", () => {
-      if (stdinError && options.onStderrChunk) {
-        options.onStderrChunk(`[stdin closed early: ${stdinError.code ?? stdinError.message}]\n`);
-      }
+      const note = `[stdin closed early: ${err.code ?? err.message}]\n`;
+      stderr += note;
+      options.onStderrChunk?.(note);
     });
 
     if (options.input) {
