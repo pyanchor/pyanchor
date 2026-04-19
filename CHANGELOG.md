@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-04-20
+
+PR mode + identity passthrough. v0.18.0 made room for these
+architecturally; v0.19.0 fills them in. After this release,
+"team" deployments have a complete story: agent edits → PR open →
+existing git review process → merge → deploy through normal
+pipeline. The audit log records who triggered what.
+
+### Added
+- **`PYANCHOR_OUTPUT_MODE=pr`** — actually implemented now (was a
+  loud "v0.19" throw in v0.18.0). After the agent finishes
+  editing the workspace + the build passes, runs:
+  - `git rev-parse --is-inside-work-tree` (sanity)
+  - `git status --porcelain` (skip PR if no changes)
+  - `git checkout -b ${PYANCHOR_GIT_BRANCH_PREFIX}${jobId}`
+  - `git add . && git commit -m "<title>" -m "<body>"`
+  - `git push ${PYANCHOR_GIT_REMOTE} <branch>`
+  - `gh pr create --base ${PYANCHOR_GIT_BASE_BRANCH} --head <branch> ...`
+  - Captures the PR url from `gh` stdout for the audit log.
+- **PR mode envs**: `PYANCHOR_GIT_BIN` (default `git`),
+  `PYANCHOR_GH_BIN` (default `gh`), `PYANCHOR_GIT_REMOTE`
+  (default `origin`), `PYANCHOR_GIT_BASE_BRANCH` (default
+  `main`), `PYANCHOR_GIT_BRANCH_PREFIX` (default `pyanchor/`).
+- **`X-Pyanchor-Actor`** request header on `/api/edit`. The host
+  app's auth middleware reads its session and injects this; pyanchor
+  records the value verbatim in the audit log + the PR body, but
+  does NOT verify it. Identity is the host's responsibility —
+  pyanchor records what it's told. Capped at 256 chars.
+- **`AiEditStartInput.actor`** + **`AiEditQueueItem.actor`** new
+  fields (both optional, both backwards-compatible).
+- **`spawnRunner` now threads actor → `PYANCHOR_JOB_ACTOR` env**;
+  the worker reads it and includes in audit emit + PR body.
+
+### Tests
+- **`tests/worker/output.test.ts`** — 6 new PR-mode cases:
+  rejects without prConfig, rejects with docs pointer when
+  workspace is not a git working tree, skips PR creation on
+  clean tree, happy-path captures the PR URL with correct branch
+  + gh args, title truncates to 72 chars, body includes Actor when
+  prConfig.actor is set.
+- **`tests/state.test.ts`** — 2 new actor cases: queued items
+  preserve actor field, omitted when no actor supplied.
+
+### Operator setup for PR mode
+Pyanchor doesn't auto-clone the workspace — operator opt-in
+required:
+
+```sh
+# One-time setup: make the workspace dir a git working tree.
+git clone <your-deployment-repo> $PYANCHOR_WORKSPACE_DIR
+
+# Configure gh + git auth as the pyanchor user
+sudo -u pyanchor gh auth login   # or set GH_TOKEN / SSH key
+
+# Enable PR mode + the git knobs
+PYANCHOR_OUTPUT_MODE=pr
+PYANCHOR_GIT_BASE_BRANCH=main
+PYANCHOR_GIT_BRANCH_PREFIX=pyanchor/
+```
+
+The `.git` dir survives subsequent `prepareWorkspace` rsync calls
+because `.git` is in `BASE_RSYNC_EXCLUDES` — pyanchor never
+overwrites the workspace's git history. See
+`docs/PRODUCTION-HARDENING.md` for the recommended sudoers + ssh
+key setup.
+
+### Migration
+- Defaults unchanged. `PYANCHOR_OUTPUT_MODE` defaults to `apply`
+  (existing rsync + restart behavior).
+- Hosts that don't set `X-Pyanchor-Actor` see no behavior change.
+  The actor field is omitted from audit events and PR bodies when
+  not provided.
+- Existing `state.json` files are forward-compatible: queue items
+  without `actor` are read as `actor: undefined` and the worker
+  audits with no actor field.
+
 ## [0.18.0] - 2026-04-20
 
 Team-ready foundation. Three things land together because they

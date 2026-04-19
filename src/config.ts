@@ -188,6 +188,18 @@ export const pyanchorConfig = {
   // session cookie. Flip this on only for legacy callers you control.
   allowQueryToken: optionalBool("PYANCHOR_ALLOW_QUERY_TOKEN", false),
 
+  // ─── PR mode (v0.19.0) ──────────────────────────────────────────
+  // Used when PYANCHOR_OUTPUT_MODE=pr. Edits land as a reviewable PR
+  // instead of being rsynced to the live app dir. Requires `git` and
+  // `gh` (GitHub CLI) on the worker user's PATH, and a workspace that
+  // contains a .git working tree (auto-included from rsync when
+  // outputMode === "pr"; see workspace.ts).
+  gitBin: optionalEnv("PYANCHOR_GIT_BIN", "git"),
+  ghBin: optionalEnv("PYANCHOR_GH_BIN", "gh"),
+  gitRemote: optionalEnv("PYANCHOR_GIT_REMOTE", "origin"),
+  gitBaseBranch: optionalEnv("PYANCHOR_GIT_BASE_BRANCH", "main"),
+  gitBranchPrefix: optionalEnv("PYANCHOR_GIT_BRANCH_PREFIX", "pyanchor/"),
+
   // ─── output mode (v0.18.0) ──────────────────────────────────────
   // What happens AFTER the agent finishes editing the workspace.
   //   "apply"  — current behavior: rsync workspace → app, restart.

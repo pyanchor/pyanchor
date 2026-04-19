@@ -88,7 +88,10 @@ const normalizeQueue = (value: unknown) =>
       prompt: typeof item.prompt === "string" ? item.prompt : "",
       targetPath: normalizeTargetPath(typeof item.targetPath === "string" ? item.targetPath : ""),
       enqueuedAt: typeof item.enqueuedAt === "string" ? item.enqueuedAt : new Date().toISOString(),
-      mode: (item.mode === "chat" ? "chat" : "edit") as AiEditMode
+      mode: (item.mode === "chat" ? "chat" : "edit") as AiEditMode,
+      // v0.19.0: preserve actor passthrough across state.json round-trips
+      // so queued jobs keep identity context until they actually run.
+      ...(typeof item.actor === "string" && item.actor ? { actor: item.actor } : {})
     }))
     .slice(-MAX_MESSAGES);
 
@@ -201,7 +204,13 @@ async function isPeerBusy() {
   }
 }
 
-function spawnRunner(jobId: string, prompt: string, targetPath: string, mode: AiEditMode) {
+function spawnRunner(
+  jobId: string,
+  prompt: string,
+  targetPath: string,
+  mode: AiEditMode,
+  actor: string | null
+) {
   const child = spawn(process.execPath, [pyanchorConfig.workerScript], {
     detached: true,
     stdio: "ignore",
@@ -211,7 +220,9 @@ function spawnRunner(jobId: string, prompt: string, targetPath: string, mode: Ai
       PYANCHOR_JOB_PROMPT: prompt,
       PYANCHOR_JOB_TARGET_PATH: targetPath,
       PYANCHOR_JOB_MODE: mode,
-      PYANCHOR_STATE_FILE_PATH: pyanchorConfig.stateFile
+      PYANCHOR_STATE_FILE_PATH: pyanchorConfig.stateFile,
+      // v0.19.0 passthrough — worker reads this and includes in audit.
+      ...(actor ? { PYANCHOR_JOB_ACTOR: actor } : {})
     }
   });
 
@@ -354,7 +365,7 @@ export async function readAiEditState(): Promise<AiEditState> {
     );
 
     await writeAiEditState(started);
-    const pid = spawnRunner(next.jobId, next.prompt, next.targetPath, next.mode);
+    const pid = spawnRunner(next.jobId, next.prompt, next.targetPath, next.mode, next.actor ?? null);
     return writeAiEditState({ ...started, pid });
   }
 
@@ -403,7 +414,8 @@ export async function startAiEdit(input: AiEditStartInput) {
       prompt,
       targetPath,
       enqueuedAt: new Date().toISOString(),
-      mode
+      mode,
+      ...(input.actor ? { actor: input.actor } : {})
     };
 
     return writeAiEditState(
@@ -453,7 +465,7 @@ export async function startAiEdit(input: AiEditStartInput) {
   );
 
   await writeAiEditState(nextState);
-  nextState.pid = spawnRunner(jobId, prompt, targetPath, mode);
+  nextState.pid = spawnRunner(jobId, prompt, targetPath, mode, input.actor ?? null);
   return writeAiEditState(nextState);
 }
 

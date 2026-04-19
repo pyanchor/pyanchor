@@ -195,7 +195,19 @@ for (const basePath of runtimeBases) {
     editLimiter,
     asyncRoute(async (request, response) => {
       setNoStore(response);
-      response.json(await startAiEdit(request.body as AiEditStartInput));
+      // v0.19.0: passthrough X-Pyanchor-Actor → AiEditStartInput.actor.
+      // Caps at 256 chars defensively (large headers waste audit log
+      // bytes; agents that want to encode IDs should use short ones).
+      // Pyanchor does NOT verify actor identity — host owns auth.
+      const rawActor = request.header("x-pyanchor-actor");
+      const actor =
+        typeof rawActor === "string" && rawActor.trim()
+          ? rawActor.trim().slice(0, 256)
+          : undefined;
+      const body = request.body as AiEditStartInput;
+      response.json(
+        await startAiEdit({ ...body, ...(actor !== undefined ? { actor } : {}) })
+      );
     })
   );
 

@@ -242,6 +242,27 @@ describe("startAiEdit", () => {
     expect(after.queue[0]?.prompt).toBe("second");
     expect(after.messages.find((m) => m.text === "second")?.status).toBe("queued");
   });
+
+  it("threads actor onto queued items (v0.19.0 passthrough)", async () => {
+    const { startAiEdit } = await import("../src/state");
+    await startAiEdit({ prompt: "first", mode: "edit", actor: "alice@example.com" });
+    const after = await startAiEdit({
+      prompt: "second",
+      mode: "edit",
+      actor: "bob@example.com"
+    });
+    // Second one queued. Its queue entry should remember bob's actor
+    // so when the worker pops it, the audit log records bob, not alice.
+    expect(after.queue).toHaveLength(1);
+    expect(after.queue[0]?.actor).toBe("bob@example.com");
+  });
+
+  it("omits actor field on queue items when no actor was supplied", async () => {
+    const { startAiEdit } = await import("../src/state");
+    await startAiEdit({ prompt: "first", mode: "edit" });
+    const after = await startAiEdit({ prompt: "second", mode: "edit" });
+    expect(after.queue[0]?.actor).toBeUndefined();
+  });
 });
 
 describe("cancelAiEdit", () => {

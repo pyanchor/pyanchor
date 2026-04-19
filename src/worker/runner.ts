@@ -92,7 +92,9 @@ const auditSink: AuditSink = pyanchorConfig.auditLogEnabled
   ? new FileAuditSink(pyanchorConfig.auditLogFile)
   : new NoopAuditSink();
 const jobStartedAtMs = Date.now();
+const jobActor = process.env.PYANCHOR_JOB_ACTOR || undefined;
 let auditEmitted = false;
+let lastPrUrl: string | undefined;
 const emitAuditOnce = async (
   outcome: "success" | "failed" | "canceled",
   error?: string
@@ -102,6 +104,7 @@ const emitAuditOnce = async (
   await auditSink.emit({
     ts: new Date().toISOString(),
     run_id: process.env.PYANCHOR_JOB_ID || "",
+    ...(jobActor ? { actor: jobActor } : {}),
     prompt_hash: sha256Hex(process.env.PYANCHOR_JOB_PROMPT || ""),
     target_path: process.env.PYANCHOR_JOB_TARGET_PATH || undefined,
     mode: process.env.PYANCHOR_JOB_MODE === "chat" ? "chat" : "edit",
@@ -109,6 +112,7 @@ const emitAuditOnce = async (
     outcome,
     duration_ms: Date.now() - jobStartedAtMs,
     agent: pyanchorConfig.agent,
+    ...(lastPrUrl ? { pr_url: lastPrUrl } : {}),
     ...(error ? { error } : {})
   });
 };
@@ -276,15 +280,34 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
   }
 
   // v0.18.0: output mode dispatch. apply (default) keeps the existing
-  // build → rsync → restart tail. dryrun stops after build. pr (v0.19+)
-  // throws "not implemented" so misconfigurations fail loud.
-  await executeOutput(outputMode, {
+  // build → rsync → restart tail. dryrun stops after build.
+  // v0.19.0: pr mode runs git checkout/commit/push + `gh pr create`
+  // in the workspace dir (which must be a git working tree —
+  // operator opt-in via docs/PRODUCTION-HARDENING.md).
+  const outputResult = await executeOutput(outputMode, {
     workspaceConfig,
     workspaceDeps,
     runBuild: !pyanchorConfig.fastReload,
     shouldRestart: shouldRestartAfterEdit && !pyanchorConfig.fastReload,
-    withHeartbeat
+    withHeartbeat,
+    prConfig:
+      outputMode === "pr"
+        ? {
+            gitBin: pyanchorConfig.gitBin,
+            ghBin: pyanchorConfig.ghBin,
+            gitRemote: pyanchorConfig.gitRemote,
+            gitBaseBranch: pyanchorConfig.gitBaseBranch,
+            gitBranchPrefix: pyanchorConfig.gitBranchPrefix,
+            jobId,
+            prompt: process.env.PYANCHOR_JOB_PROMPT || "",
+            mode,
+            ...(jobActor ? { actor: jobActor } : {})
+          }
+        : undefined
   });
+  if (outputResult.prUrl) {
+    lastPrUrl = outputResult.prUrl;
+  }
 
   // For apply mode with restart, the original code used to write the
   // "Restarting" heartbeat message via pushMessage (so the assistant

@@ -12,6 +12,10 @@ export interface AiEditQueueItem {
   targetPath: string;
   enqueuedAt: string;
   mode: AiEditMode;
+  /** Actor passthrough (v0.19.0+). Carried so queued jobs preserve
+   *  identity context until they actually run. Optional for backward
+   *  compatibility with state.json files written before v0.19. */
+  actor?: string;
 }
 
 export interface AiEditMessage {
@@ -49,6 +53,14 @@ export interface AiEditStartInput {
   prompt: string;
   targetPath?: string;
   mode?: AiEditMode;
+  /**
+   * Optional identity passthrough (v0.19.0+). The host app's auth
+   * middleware reads its own session and injects this via the
+   * `X-Pyanchor-Actor` request header; pyanchor records the value
+   * verbatim in the audit log + PR body, but does NOT verify it —
+   * identity is the host's responsibility. Maxes at 256 chars.
+   */
+  actor?: string;
 }
 
 export interface AiEditCancelInput {
