@@ -1,17 +1,14 @@
 import { type ChildProcess } from "node:child_process";
 import fsSync from "node:fs";
-import { randomUUID } from "node:crypto";
 
 import { pyanchorConfig } from "../config";
-import {
-  selectAgent,
-  type AgentEvent,
-  type AgentRunner
-} from "../agents";
+import { selectAgent } from "../agents";
 import { selectFramework } from "../frameworks";
-import type { AiEditMessage, AiEditMessageStatus, AiEditMode, AiEditState } from "../shared/types";
+import type { AiEditMode, AiEditState } from "../shared/types";
 
 import { cancelActiveChildren, runCommand, type RunCommandOptions } from "./child-process";
+import { createLifecycle } from "./lifecycle";
+import { createMessage, pushMessageWithCap, updateUserMessageStatus } from "./messages";
 import { createRuntimeBuffer } from "./runtime-buffer";
 import { createStateIO } from "./state-io";
 import {
@@ -98,43 +95,11 @@ let cancelHandled = false;
 const cancelController = new AbortController();
 const activeChildren = new Set<ChildProcess>();
 
-const createMessage = ({
-  jobId,
-  role,
-  mode,
-  text,
-  status
-}: {
-  jobId: string | null;
-  role: AiEditMessage["role"];
-  mode: AiEditMode;
-  text: string;
-  status: AiEditMessageStatus | null;
-}): AiEditMessage => ({
-  id: randomUUID(),
-  jobId,
-  role,
-  mode,
-  text,
-  createdAt: new Date().toISOString(),
-  status
-});
-
-const updateUserMessageStatus = (
-  state: AiEditState,
-  jobId: string,
-  status: AiEditMessageStatus
-) => ({
-  ...state,
-  messages: state.messages.map((message) =>
-    message.jobId === jobId && message.role === "user" ? { ...message, status } : message
-  )
-});
-
-const pushMessage = (state: AiEditState, message: AiEditMessage) => ({
-  ...state,
-  messages: [...state.messages, message].slice(-MAX_MESSAGES)
-});
+// Local pushMessage with the runner-side message cap baked in. The
+// pure form (with explicit cap) lives in worker/messages.ts; this
+// alias keeps the cancel-handler / processJob call sites compact.
+const pushMessage = (state: AiEditState, message: AiEditState["messages"][number]) =>
+  pushMessageWithCap(state, message, MAX_MESSAGES);
 
 async function finalizeCancellation(signal: NodeJS.Signals) {
   if (cancelHandled) {
@@ -197,186 +162,33 @@ const workspaceDeps: WorkspaceDeps = {
   log: (lines) => queueLog(lines)
 };
 
-async function dequeueNext() {
-  const state = await readState();
-  if (state.queue.length === 0) {
-    return null;
+const lifecycle = createLifecycle(
+  {
+    workspaceDir: pyanchorConfig.workspaceDir,
+    agentTimeoutMs: pyanchorConfig.agentTimeoutSeconds * 1000,
+    model: pyanchorConfig.model,
+    thinking: pyanchorConfig.thinking,
+    canceledError: CANCELED_ERROR,
+    jobIdForFinalize: activeJob.jobId,
+    jobModeForFinalize: activeJob.mode,
+    maxMessages: MAX_MESSAGES
+  },
+  {
+    readState,
+    writeState,
+    queueLog,
+    queueThinking,
+    pulseState,
+    flushRuntimeBuffers,
+    trimLog,
+    stampLogLine,
+    mergeThinking,
+    cancelSignal: cancelController.signal,
+    isCancelled: () => cancelRequested,
+    isCancelHandled: () => cancelHandled
   }
-
-  const [next, ...remaining] = state.queue;
-
-  await writeState(
-    updateUserMessageStatus(
-      {
-        ...state,
-        status: "running",
-        jobId: next.jobId,
-        pid: process.pid,
-        prompt: next.prompt,
-        targetPath: next.targetPath,
-        mode: next.mode,
-        currentStep: `Starting queued ${next.mode} job (${remaining.length} remaining).`,
-        heartbeatAt: null,
-        heartbeatLabel: null,
-        thinking: null,
-        error: null,
-        startedAt: new Date().toISOString(),
-        completedAt: null,
-        queue: remaining,
-        activityLog: trimLog([...state.activityLog, stampLogLine("Starting next queued job.")])
-      },
-      next.jobId,
-      "running"
-    )
-  );
-
-  return next;
-}
-
-async function finalizeSuccess(summary: string, thinking: string | null, mode: AiEditMode) {
-  await flushRuntimeBuffers();
-  const state = await readState();
-
-  await writeState(
-    pushMessage(
-      updateUserMessageStatus(
-        {
-          ...state,
-          status: "done",
-          pid: null,
-          currentStep: summary,
-          heartbeatAt: new Date().toISOString(),
-          heartbeatLabel: "Done",
-          thinking: mergeThinking(state.thinking, thinking),
-          error: null,
-          completedAt: new Date().toISOString(),
-          activityLog: trimLog([...state.activityLog, stampLogLine("Job complete.")])
-        },
-        activeJob.jobId,
-        "done"
-      ),
-      createMessage({
-        jobId: activeJob.jobId,
-        role: "assistant",
-        mode,
-        text: summary,
-        status: "done"
-      })
-    )
-  );
-}
-
-async function finalizeFailure(message: string, status: "failed" | "canceled", mode: AiEditMode) {
-  if (status === "canceled" && cancelHandled) {
-    return;
-  }
-
-  await flushRuntimeBuffers();
-  const state = await readState();
-
-  const nextState = updateUserMessageStatus(
-    {
-      ...state,
-      status,
-      pid: null,
-      currentStep: null,
-      heartbeatAt: new Date().toISOString(),
-      heartbeatLabel: status === "canceled" ? "Canceled" : "Failed",
-      error: message,
-      completedAt: new Date().toISOString(),
-      activityLog: trimLog([...state.activityLog, stampLogLine(message)])
-    },
-    activeJob.jobId,
-    status
-  );
-
-  await writeState(
-    pushMessage(
-      nextState,
-      createMessage({
-        jobId: activeJob.jobId,
-        role: status === "failed" ? "system" : "system",
-        mode,
-        text: message,
-        status
-      })
-    )
-  );
-}
-
-async function runAdapterAgent(
-  agent: AgentRunner,
-  jobId: string,
-  jobPrompt: string,
-  jobTargetPath: string,
-  mode: AiEditMode,
-  recentMessages: AiEditState["messages"]
-): Promise<{ summary: string; thinking: string | null; failure: string | null }> {
-  let summary = "";
-  let thinking: string | null = null;
-  const summaryParts: string[] = [];
-  const thinkingParts: string[] = [];
-
-  try {
-    if (agent.prepare) {
-      await agent.prepare({
-        workspaceDir: pyanchorConfig.workspaceDir,
-        timeoutMs: pyanchorConfig.agentTimeoutSeconds * 1000,
-        model: pyanchorConfig.model,
-        thinking: pyanchorConfig.thinking,
-        signal: cancelController.signal
-      });
-    }
-
-    const stream = agent.run(
-      {
-        prompt: jobPrompt,
-        targetPath: jobTargetPath,
-        mode,
-        recentMessages,
-        jobId
-      },
-      {
-        workspaceDir: pyanchorConfig.workspaceDir,
-        timeoutMs: pyanchorConfig.agentTimeoutSeconds * 1000,
-        model: pyanchorConfig.model,
-        thinking: pyanchorConfig.thinking,
-        signal: cancelController.signal
-      }
-    );
-
-    for await (const event of stream as AsyncIterable<AgentEvent>) {
-      if (cancelRequested) break;
-
-      switch (event.type) {
-        case "log":
-          queueLog([`[agent] ${event.text}`]);
-          break;
-        case "thinking":
-          queueThinking(event.text);
-          thinkingParts.push(event.text);
-          break;
-        case "step":
-          await pulseState({ step: event.description ?? event.label, label: event.label });
-          break;
-        case "result":
-          summaryParts.push(event.summary);
-          if (event.thinking) thinkingParts.push(event.thinking);
-          break;
-      }
-    }
-  } catch (error) {
-    if (cancelRequested) {
-      throw new Error(CANCELED_ERROR);
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    return { summary: "", thinking: null, failure: message };
-  }
-
-  summary = summaryParts.join("\n\n").trim() || (mode === "edit" ? "Edit complete." : "");
-  thinking = thinkingParts.join("\n\n").trim() || null;
-  return { summary, thinking, failure: null };
-}
+);
+const { dequeueNext, finalizeSuccess, finalizeFailure, runAdapterAgent } = lifecycle;
 
 async function processJob(jobId: string, jobPrompt: string, jobTargetPath: string, mode: AiEditMode) {
   const stateBefore = await readState();

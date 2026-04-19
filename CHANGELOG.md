@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-04-19
+
+Third (and final) slice of the worker decomposition tracked since
+v0.5.0. Lifecycle module extracted, the cancel-during-dequeue
+scenario from Codex round-4 covered. Combined with v0.6.0–v0.6.2,
+the original 860-LOC `worker/runner.ts` is now down to **348 LOC
+(-60%)** with the bulk of the displaced code at 100% test coverage.
+
+### Added
+- **`src/worker/messages.ts`** — three pure helpers
+  (`createMessage`, `updateUserMessageStatus`, `pushMessageWithCap`)
+  shared between the runner (cancel handler, processJob assistant
+  push) and the new lifecycle module. Mirror of the same-named
+  helpers in `src/state.ts`; kept duplicate in `worker/` so the
+  worker process doesn't have to reach into the sidecar's higher-level
+  state module (which has spawn / fetch side effects).
+- **`src/worker/lifecycle.ts`** — `createLifecycle(config, deps)`
+  factory returning `{ dequeueNext, finalizeSuccess, finalizeFailure,
+  runAdapterAgent }`. State I/O, runtime-buffer, and cancel signaling
+  are all dependency-injected:
+  - `readState` / `writeState` from `createStateIO`
+  - `queueLog` / `queueThinking` / `pulseState` / `flushRuntimeBuffers`
+    + the pure helpers (`trimLog` / `stampLogLine` / `mergeThinking`)
+    from `createRuntimeBuffer`
+  - `cancelSignal: AbortSignal`, `isCancelled()`, `isCancelHandled()`
+    callbacks owned by the runner
+
+  This is what makes the cancel-race scenarios from the Codex review
+  unit-testable end-to-end with a stub `AgentRunner` and an in-memory
+  state store.
+
+### Changed
+- **`src/worker/runner.ts`** went from **530 → 348 LOC** (-182 / -34%).
+  Cumulative since v0.6.0: **-60%** (860 → 348). What remains is
+  pure orchestration: env wiring, signal handlers, processJob
+  step sequencing, main loop. The lifecycle / state / runtime-buffer
+  / workspace / child-process modules each test independently to 100%.
+
+### Tests
+- `tests/worker/messages.test.ts` — **10 tests** for the pure
+  helpers (uuid uniqueness, role/status passthrough, in-place
+  immutability, cap-trim behavior).
+- `tests/worker/lifecycle.test.ts` — **19 tests** including:
+  - `dequeueNext`: empty-queue null return, queue-pop with running
+    state write + queued→running message status flip
+  - `finalizeSuccess`: done state with assistant message + Done
+    heartbeat, thinking merge with prior chunk
+  - `finalizeFailure`: failed state with system message,
+    short-circuit when `status='canceled'` and `isCancelHandled()`,
+    no short-circuit for `status='failed'`
+  - `runAdapterAgent`: result aggregation, step→pulseState
+    forwarding, edit-mode default summary fallback, chat-mode
+    empty-summary, throw-while-not-canceled returns failure,
+    throw-while-canceled rethrows `canceledError`, mid-stream
+    `isCancelled()` flip breaks the loop, `prepare()` invoked once
+  - **Scenario B (Codex round-4)**: cancel-during-dequeue boundary
+    races covered — the dequeue-wins path stays consistent (status
+    reflects the new running job), the cancel-wins path doesn't get
+    clobbered by a late `finalizeFailure('canceled')` echo, and a
+    real `failed` during cancel teardown still gets written.
+- Total: **266 passing tests** across 20 files (was 237 / 18).
+
+### Coverage
+- Whole-repo: 49.4% → **55.1%** (+5.7 pp).
+- `src/worker/` directory: 44.5% → **66.8%**.
+- All six extracted worker modules now at **100% statements**:
+  child-process, workspace, state-io, runtime-buffer, messages,
+  lifecycle.
+- `src/worker/runner.ts` itself remains at 0% — what's left is the
+  side-effectful orchestration (env wiring, signal handlers, real
+  spawn, real sudo). That's an integration-test surface, not a
+  unit-test one; tracked for v0.7.x with a sandboxed runner harness.
+
+### Compatibility
+No runtime behavior change. Same dequeue semantics, same final
+state shape on success / failure / cancel, same `runAdapterAgent`
+event handling. Verified by all 237 pre-existing tests remaining
+green throughout the diff.
+
+### Roadmap
+The worker decomposition track is now complete. Next:
+- **v0.6.4 / v0.7.0** (separate, bigger lift): `runtime/overlay.ts`
+  decomposition (1074 LOC) + Playwright e2e for the in-page overlay.
+- **v0.7.x**: sandboxed integration tests for `worker/runner.ts`'s
+  real-spawn / real-sudo orchestration paths.
+
 ## [0.6.2] - 2026-04-19
 
 Codex round-4 review of v0.6.1 (regression-focused) flagged three
