@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-04-20
+
+Docs + 1.0 trajectory. No code changes — this slice is the
+public-surface stability commitment that the 1.0 cut depends on.
+Now operators considering a long-running deployment have a
+documented contract for what we'll keep stable across upgrades.
+
+### Added
+- **`docs/API-STABILITY.md`** (new). Enumerates every public
+  surface across 9 categories: host-page globals, bootstrap
+  `data-` attributes, sidecar HTTP API, env vars, worker state.json
+  schema, audit log + webhook payloads, agent adapter contract,
+  locale bundle contract. Each item marked `Stable @ 1.0` /
+  `Pre-1.0` / `Internal`. Spells out 1.0 commitment: items marked
+  `Stable @ 1.0` will not rename / remove until 2.0; new optional
+  additions are minor bumps; behavior changes affecting defaults
+  get CHANGELOG callouts.
+
+### Changed
+- **`README.md`** — Status section refreshed from outdated v0.2.x /
+  v0.4.0 references to current cumulative state through v0.21.1
+  (21 locales, production gating, audit log, PR mode, actor
+  passthrough, webhooks, error classifier, 677 unit + 69 e2e). Now
+  lists what's coming + the explicit 1.0 criteria (docs +
+  non-author production deployment running cleanly for a calendar
+  month).
+- **`README.md`** — Multi-user section rewrote: instead of
+  promising never-shipped v0.3.0/v0.4.0 features, documents the
+  v0.19.0 building blocks already shipped (`X-Pyanchor-Actor`
+  header passthrough, `PYANCHOR_OUTPUT_MODE=pr`) as the team
+  adoption path, with multi-tenancy explicitly deferred.
+- **`README.md`** — Documentation table extended with links to
+  `docs/SECURITY.md`, `docs/PRODUCTION-HARDENING.md`,
+  `docs/API-STABILITY.md`, `docs/roadmap.md`, and the
+  `examples/nextjs-portfolio-gate/` example.
+- **`README.md`** — Security section's docs pointers refreshed:
+  threat model + recipes → `docs/SECURITY.md`, hardening playbook
+  → `docs/PRODUCTION-HARDENING.md`, vulnerability reporting →
+  root `SECURITY.md` (kept for GitHub Security tab discovery).
+
+### Migration
+- No code changes. No env changes. No behavior changes.
+- Operators considering an upgrade: nothing required from you.
+- Operators considering long-running adoption: read
+  [`docs/API-STABILITY.md`](./docs/API-STABILITY.md) and treat
+  the `Stable @ 1.0` items as the commitment we'll honor at the
+  1.0 cut.
+
+### Toward 1.0
+This release closes the "API stability commitment" 1.0 blocker.
+Remaining 1.0 blockers from the earlier readiness assessment:
+
+- ✅ Threat model docs (v0.17 + v0.18)
+- ✅ Production hardening guide (v0.18)
+- ✅ Public API contract pin (this release)
+- ⏳ README rewrite (this release — partial; quickstart still
+  fine, Status + Multi-user updated)
+- ⏳ First non-author production adopter running cleanly for a
+  calendar month (studio.pyan.kr currently runs v0.21.1 since
+  2026-04-20; counter starts now)
+
+1.0 cut targeted once the 30-day adoption window completes
+without surfacing anything that would force an API break.
+
 ## [0.21.1] - 2026-04-20
 
 Round-15 Codex patches. Three actual bugs (one of which was the

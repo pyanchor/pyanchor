@@ -241,7 +241,10 @@ Defaults that protect you out of the box:
 - **Origin allowlist (opt-in).** Set `PYANCHOR_ALLOWED_ORIGINS=...` to
   reject `/api/edit` calls whose `Origin` header isn't in the list.
 
-Full threat model and reporting policy: [`SECURITY.md`](./SECURITY.md).
+Full threat model + 3 deployment recipes: [`docs/SECURITY.md`](./docs/SECURITY.md).
+Operator hardening playbook (separate Unix user, systemd sandbox,
+audit shipping): [`docs/PRODUCTION-HARDENING.md`](./docs/PRODUCTION-HARDENING.md).
+Vulnerability reporting policy: [`SECURITY.md`](./SECURITY.md).
 
 ### Production safety checklist
 
@@ -263,25 +266,31 @@ Before deploying to anything reachable from the public internet:
 - [ ] Restart script (`PYANCHOR_RESTART_SCRIPT`) is owned by you and
       runs only the restart command — no shell injection surface.
 
-## 👥 Multi-user
+## 👥 Multi-user / team adoption
 
-`v0.1.0` is **single-tenant by design**: one bearer token, one queue,
-one workspace, one Next.js app. Anyone holding `PYANCHOR_TOKEN` has the
-same capabilities as the maintainer. This matches the "personal /
-small-team self-hosted" use case and keeps the threat model tight.
+Pyanchor is **single-tenant by default** — one bearer token, one
+queue, one workspace, one app. Anyone holding `PYANCHOR_TOKEN` can
+do everything. This matches the "personal / small-team self-hosted"
+use case and keeps the threat model tight.
 
-Multi-user is on the roadmap if there's demand:
+For team usage we ship two **opt-in** building blocks instead of a
+full multi-user system:
 
-| Level | What it adds | Tracked for |
-| --- | --- | --- |
-| 1 | Multiple named tokens + per-user audit log; shared workspace and queue | `v0.3.0` |
-| 2 | Per-user queues + simple route-level locking when two users target the same page | `v0.4.0` |
-| 3 | Per-user branches + PR-style approval flow (effectively a Git review platform) | likely a separate fork (`pyanchor-team`) |
-| 4 | Multi-tenant SaaS (multiple apps, multiple orgs, billing) | out of scope; that's a different product |
+- **`X-Pyanchor-Actor` header passthrough** (since v0.19.0) — your
+  host app's auth middleware injects an actor identifier; pyanchor
+  records it in the audit log + the PR body. Pyanchor doesn't
+  verify identity (your host owns auth); it records what it's told.
+- **`PYANCHOR_OUTPUT_MODE=pr`** (since v0.19.0) — agent edits land
+  as a reviewable GitHub PR via `git push` + `gh pr create` instead
+  of being rsynced to the live app. Reuses your existing git review
+  process for who-approves-what.
 
-If you need any of these, open an issue describing your workflow — the
-`v0.3.0` design will be informed by what people actually ask for, not
-by what I think the abstraction should be.
+Combined: **agent edit → PR opened with actor in body → existing
+git/GitHub review → merge → deploy via your normal pipeline**.
+
+Full multi-tenancy (one sidecar serving multiple workspaces, per-
+tenant tokens, etc.) is on the roadmap as v0.22+. See
+[`docs/roadmap.md`](./docs/roadmap.md).
 
 ## 📚 Documentation
 
@@ -291,32 +300,58 @@ by what I think the abstraction should be.
 | [`docs/openclaw-setup.md`](./docs/openclaw-setup.md) | Install OpenClaw and point pyanchor at it |
 | [`docs/claude-code-setup.md`](./docs/claude-code-setup.md) | Install the Anthropic Agent SDK and route pyanchor through Claude |
 | [`docs/adapters.md`](./docs/adapters.md) | Build your own agent adapter |
-| [`SECURITY.md`](./SECURITY.md) | Threat model + reporting |
+| [`docs/SECURITY.md`](./docs/SECURITY.md) | Threat model + 3 deployment recipes (loopback / production gate cookie / existing auth) |
+| [`docs/PRODUCTION-HARDENING.md`](./docs/PRODUCTION-HARDENING.md) | Operator playbook: separate Unix user, systemd sandbox, bubblewrap, sudoers, restart-script lockdown, audit log shipping |
+| [`docs/API-STABILITY.md`](./docs/API-STABILITY.md) | Public surface contract — what's `Stable @ 1.0` vs `Pre-1.0` vs `Internal` |
+| [`docs/roadmap.md`](./docs/roadmap.md) | What's coming + open questions |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Local dev, build, release flow |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Release notes |
-| [`examples/nextjs-minimal/`](./examples/nextjs-minimal) | A 5-file Next.js app wired to pyanchor |
+| [`examples/nextjs-minimal/`](./examples/nextjs-minimal) | A 5-file Next.js app wired to pyanchor (env-flag gate) |
+| [`examples/nextjs-portfolio-gate/`](./examples/nextjs-portfolio-gate) | Production gate cookie pattern for live-editing your deployed site |
 | [`examples/vite-react-minimal/`](./examples/vite-react-minimal) | A 6-file Vite + React app wired to pyanchor (`PYANCHOR_FRAMEWORK=vite`) |
 
 ## 🔭 Status
 
-`v0.x` is early. Expect API and config breaks between minor versions
-until `v1.0.0`.
+`v0.x` is pre-1.0. Public surfaces are documented in
+[`docs/API-STABILITY.md`](./docs/API-STABILITY.md) — items marked
+`Stable @ 1.0` will become the contract at the 1.0 cut. Items
+marked `Pre-1.0` are still under iteration.
 
-Shipped highlights so far:
+**Shipped highlights** (cumulative through v0.21.1):
 
-- `v0.2.x` — `AgentRunner` interface, codex / aider / claude-code adapters,
-  cookie-based sessions, atomic state writes, fast-reload mode, persistent
-  workspace caches.
-- `v0.4.0` — `PYANCHOR_FRAMEWORK` profile system + `PYANCHOR_BUILD_COMMAND` /
-  `PYANCHOR_INSTALL_COMMAND` overrides. Vite shipped as the second profile;
-  Astro / Remix / SvelteKit work today via the two command env vars.
+- **Adapters**: `openclaw` (default), `claude-code`, `codex`, `aider`,
+  pluggable third-party via the `AgentRunner` interface
+- **Frameworks**: `nextjs` (default), `vite`, with two-env override
+  (`PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND`) for any other
+- **i18n**: 21 built-in locales (LTR + RTL: ko / ja / zh-cn / es / de
+  / fr / pt-br / vi / id / ru / hi / th / tr / nl / pl / sv / it / ar /
+  he / fa / ur), code-split so the default English path is fetch-free
+- **Production gating**: `PYANCHOR_REQUIRE_GATE_COOKIE` + bootstrap
+  fail-safe — anonymous traffic can't even fetch the bootstrap script
+- **Audit log**: append-only JSONL with documented schema
+  ([`AuditEvent`](./src/audit.ts))
+- **Output modes**: `apply` (default rsync+restart), `pr` (git +
+  `gh pr create`), `dryrun`
+- **Identity passthrough**: `X-Pyanchor-Actor` header for team auth
+  flows; recorded in audit + PR body, not verified (host owns auth)
+- **Webhooks**: fire-and-forget Slack / Discord / raw JSON
+  notifications on `edit_requested` / `edit_applied` / `pr_opened`
+- **Agent error classifier**: detects transient OAuth race / rate
+  limit / timeout / network errors and appends actionable hints
+- **Tests**: 677 unit + 69 e2e + Node 18/20/22 matrix on every commit
 
-Coming:
+**Coming next** (no firm version commitment yet):
 
-- `v0.5.0` — test coverage push (Playwright e2e for the overlay,
-  integration tests for `worker/runner.ts`, mocked adapter tests).
-- Multi-user roadmap (see [Multi-user](#-multi-user)).
-- More framework profiles (PRs welcome — `src/frameworks/` is ~50 LOC each).
+- Multi-tenancy — one sidecar serving multiple workspaces (open
+  design questions; see [`docs/roadmap.md`](./docs/roadmap.md))
+- Visual regression + axe-core a11y in CI
+- More framework profiles (PRs welcome — `src/frameworks/` is ~50
+  LOC each)
+
+**1.0**: targeted once the README quickstart, API stability doc,
+and production-hardening docs all stabilize and at least one
+non-author production deployment runs cleanly for a calendar
+month. We're at the docs/adoption stage, not the code stage.
 
 ## License
 
