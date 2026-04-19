@@ -274,3 +274,88 @@ describe("requireToken", () => {
     expect(next).not.toHaveBeenCalled();
   });
 });
+
+describe("requireGateCookie (v0.17.0 production gating)", () => {
+  it("is a no-op pass-through when PYANCHOR_REQUIRE_GATE_COOKIE is unset", async () => {
+    delete process.env.PYANCHOR_REQUIRE_GATE_COOKIE;
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+
+    const req = makeRequest();
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("returns 403 when the gate cookie is enabled but absent", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+
+    const req = makeRequest({ cookies: {} });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    expect(res.statusCode).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.jsonBody).toMatchObject({ error: expect.stringContaining("gate cookie") });
+  });
+
+  it("returns 403 when the cookie value is the empty string", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+
+    const req = makeRequest({ cookies: { pyanchor_dev: "" } });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    expect(res.statusCode).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("calls next() when the named cookie has any non-empty value", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+
+    const req = makeRequest({ cookies: { pyanchor_dev: "1" } });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("respects PYANCHOR_GATE_COOKIE_NAME override", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_GATE_COOKIE_NAME = "my_custom_gate";
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+
+    // Wrong cookie name → still 403.
+    const reqWrong = makeRequest({ cookies: { pyanchor_dev: "1" } });
+    const resWrong = makeResponse();
+    const nextWrong = vi.fn() as NextFunction;
+    requireGateCookie(reqWrong, resWrong, nextWrong);
+    expect(resWrong.statusCode).toBe(403);
+    expect(nextWrong).not.toHaveBeenCalled();
+
+    // Correct custom name → pass.
+    const reqRight = makeRequest({ cookies: { my_custom_gate: "1" } });
+    const resRight = makeResponse();
+    const nextRight = vi.fn() as NextFunction;
+    requireGateCookie(reqRight, resRight, nextRight);
+    expect(nextRight).toHaveBeenCalledOnce();
+  });
+});

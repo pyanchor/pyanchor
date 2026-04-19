@@ -24,6 +24,42 @@ function safeEqual(provided: string): boolean {
 /** Cookie name set by `POST /api/session` and read by requireToken. */
 export const SESSION_COOKIE = "pyanchor_session";
 
+/**
+ * Express middleware that enforces the production gate cookie when
+ * `PYANCHOR_REQUIRE_GATE_COOKIE=true`. Host apps set the named cookie
+ * (default `pyanchor_dev`) via their own middleware after some
+ * human-gated step (magic-word URL, OAuth, etc.); the sidecar refuses
+ * to serve any asset or API until that cookie is present.
+ *
+ * When `requireGateCookie` is false (the default for loopback dev),
+ * this is a no-op pass-through.
+ *
+ * The check fires BEFORE `requireToken` so anonymous traffic gets a
+ * 403 without leaking whether the token was even configured.
+ */
+export function requireGateCookie(
+  request: Request,
+  response: Response,
+  next: NextFunction
+): void {
+  if (!pyanchorConfig.requireGateCookie) {
+    next();
+    return;
+  }
+  const cookies = (request as Request & { cookies?: Record<string, unknown> }).cookies;
+  const value = cookies?.[pyanchorConfig.gateCookieName];
+  if (typeof value !== "string" || value.length === 0) {
+    response
+      .status(403)
+      .json({
+        error:
+          "Production gate cookie missing. The host app must set this cookie before requests reach pyanchor."
+      });
+    return;
+  }
+  next();
+}
+
 function extractCookieSessionId(request: Request): string {
   const cookies = (request as Request & { cookies?: Record<string, unknown> }).cookies;
   const cookieValue = cookies?.[SESSION_COOKIE];

@@ -188,6 +188,24 @@ export const pyanchorConfig = {
   // session cookie. Flip this on only for legacy callers you control.
   allowQueryToken: optionalBool("PYANCHOR_ALLOW_QUERY_TOKEN", false),
 
+  // ─── production gating (defense in depth, v0.17.0) ─────────────
+  // When `requireGateCookie` is true, the sidecar requires a
+  // host-set cookie (default name `pyanchor_dev`) on every API +
+  // static-asset request BEFORE doing the token / session check.
+  // The cookie is set by the host app's middleware after some
+  // human-gated step (magic-word URL, OAuth, IP allowlist, etc.)
+  // so anonymous public-traffic visitors can't even load the
+  // bootstrap.js asset.
+  //
+  // The bootstrap script also reads this cookie via
+  // `data-pyanchor-require-gate-cookie="<name>"` so a host that
+  // accidentally renders the script tag unconditionally still
+  // skips the overlay mount when the cookie is absent.
+  //
+  // Default: off (loopback dev workflow doesn't need it).
+  requireGateCookie: optionalBool("PYANCHOR_REQUIRE_GATE_COOKIE", false),
+  gateCookieName: optionalEnv("PYANCHOR_GATE_COOKIE_NAME", "pyanchor_dev"),
+
   // ─── paths (derived / overridable) ─────────────────────────────
   stateDir,
   stateFile: path.join(stateDir, "state.json"),

@@ -3,12 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_TRUSTED_HOSTS,
+  hasGateCookie,
   isTrustedHost,
   runBootstrap
 } from "../../src/runtime/bootstrap";
 
 const makeScript = (
-  attributes: { src?: string; pyanchorToken?: string; pyanchorTrustedHosts?: string } = {}
+  attributes: {
+    src?: string;
+    pyanchorToken?: string;
+    pyanchorTrustedHosts?: string;
+    pyanchorRequireGateCookie?: string;
+  } = {}
 ): HTMLScriptElement => {
   const script = document.createElement("script");
   if (attributes.src) script.src = attributes.src;
@@ -18,7 +24,20 @@ const makeScript = (
   if (attributes.pyanchorTrustedHosts !== undefined) {
     script.dataset.pyanchorTrustedHosts = attributes.pyanchorTrustedHosts;
   }
+  if (attributes.pyanchorRequireGateCookie !== undefined) {
+    script.dataset.pyanchorRequireGateCookie = attributes.pyanchorRequireGateCookie;
+  }
   return script;
+};
+
+// happy-dom lets us write document.cookie like a browser. Helper
+// keeps test bodies short and clears cookies between tests.
+const setCookie = (cookie: string) => {
+  Object.defineProperty(document, "cookie", {
+    value: cookie,
+    writable: true,
+    configurable: true
+  });
 };
 
 const setHostname = (hostname: string) => {
@@ -37,10 +56,109 @@ beforeEach(() => {
   delete (window as Window & { __PyanchorBootstrapLoaded?: boolean }).__PyanchorBootstrapLoaded;
   delete (window as Window & { __PyanchorConfig?: unknown }).__PyanchorConfig;
   setHostname("localhost");
+  setCookie("");
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("hasGateCookie (v0.17.0 production gating fail-safe)", () => {
+  it("returns true when the named cookie is set with a non-empty value", () => {
+    expect(hasGateCookie("pyanchor_dev=1", "pyanchor_dev")).toBe(true);
+    expect(hasGateCookie("foo=bar; pyanchor_dev=abcd", "pyanchor_dev")).toBe(true);
+    expect(hasGateCookie("pyanchor_dev=abcd; foo=bar", "pyanchor_dev")).toBe(true);
+  });
+
+  it("returns false when the cookie is missing", () => {
+    expect(hasGateCookie("", "pyanchor_dev")).toBe(false);
+    expect(hasGateCookie("foo=bar", "pyanchor_dev")).toBe(false);
+  });
+
+  it("returns false when the cookie is present but empty (=)", () => {
+    expect(hasGateCookie("pyanchor_dev=", "pyanchor_dev")).toBe(false);
+  });
+
+  it("does not match a cookie with a name that's a prefix of another (no false positives)", () => {
+    // `pyanchor_dev_other=1` should NOT match a `pyanchor_dev` query.
+    expect(hasGateCookie("pyanchor_dev_other=1", "pyanchor_dev")).toBe(false);
+  });
+
+  it("returns false when the name argument is empty", () => {
+    expect(hasGateCookie("pyanchor_dev=1", "")).toBe(false);
+  });
+});
+
+describe("runBootstrap \u2014 production gate cookie fail-safe (v0.17.0)", () => {
+  it("returns 'skipped-missing-gate-cookie' when the attribute is set but the cookie is absent", () => {
+    setCookie("");
+    const script = makeScript({
+      src: "http://localhost/_pyanchor/bootstrap.js",
+      pyanchorToken: "tok",
+      pyanchorRequireGateCookie: "pyanchor_dev"
+    });
+    const result = runBootstrap({
+      window,
+      document,
+      fetch: vi.fn() as never,
+      currentScript: script
+    });
+
+    expect(result).toBe("skipped-missing-gate-cookie");
+    // No overlay tag, no config, no fetch call.
+    expect(document.head.querySelector("script[data-pyanchor-overlay]")).toBeNull();
+  });
+
+  it("loads normally when the gate cookie attribute is set AND the cookie is present", () => {
+    setCookie("pyanchor_dev=1");
+    const script = makeScript({
+      src: "http://localhost/_pyanchor/bootstrap.js",
+      pyanchorToken: "tok",
+      pyanchorRequireGateCookie: "pyanchor_dev"
+    });
+    const result = runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+
+    expect(result).toBe("loaded");
+    expect(document.head.querySelector("script[data-pyanchor-overlay]")).not.toBeNull();
+  });
+
+  it("loads normally when the gate-cookie attribute is NOT set (legacy / non-gated deployment)", () => {
+    setCookie("");
+    const script = makeScript({
+      src: "http://localhost/_pyanchor/bootstrap.js",
+      pyanchorToken: "tok"
+    });
+    const result = runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+
+    expect(result).toBe("loaded");
+  });
+
+  it("respects custom cookie names via the attribute value", () => {
+    setCookie("custom_gate_cookie=present");
+    const script = makeScript({
+      src: "http://localhost/_pyanchor/bootstrap.js",
+      pyanchorToken: "tok",
+      pyanchorRequireGateCookie: "custom_gate_cookie"
+    });
+    const result = runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+
+    expect(result).toBe("loaded");
+  });
 });
 
 describe("isTrustedHost", () => {

@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-04-20
+
+Production gating track. Pyanchor's defaults are still loopback-only,
+but if you want to live-edit your own deployed site, v0.17.0 is the
+first version with a documented and enforced "anonymous traffic
+never sees this" path. Four defense layers stack: host middleware →
+host layout → bootstrap fail-safe → sidecar middleware.
+
+### Added
+- **`PYANCHOR_REQUIRE_GATE_COOKIE`** + **`PYANCHOR_GATE_COOKIE_NAME`**
+  envs. When `requireGateCookie=true`, the sidecar's new
+  `requireGateCookie` middleware refuses every static asset
+  (bootstrap.js, overlay.js, locales/*.js) and every API call with
+  403 unless the named cookie (default `pyanchor_dev`) is present
+  with a non-empty value. The gate fires BEFORE the existing
+  `requireToken` check so anonymous traffic can't even probe whether
+  the token is configured. `/healthz` is intentionally exempt for
+  monitoring.
+- **`data-pyanchor-require-gate-cookie="<name>"`** attribute on the
+  bootstrap `<script>` tag. Bootstrap reads `document.cookie`,
+  refuses to mount the overlay when absent, and returns the new
+  `skipped-missing-gate-cookie` result. This is the client-side
+  fail-safe — even if the host accidentally renders the bootstrap
+  script unconditionally, the overlay won't mount for anonymous
+  visitors.
+- **`docs/SECURITY.md`** (new). Threat model table + three
+  deployment recipes: A (loopback only), B (production gate
+  cookie), C (existing auth as gate). Explicit list of what we will
+  not commit to pre-1.0.
+- **`examples/nextjs-portfolio-gate/`** (new). Complete Next.js 14
+  example implementing recipe B: middleware.ts (magic-word URL →
+  HttpOnly cookie), app/layout.tsx (cookie-conditional bootstrap
+  render with all three fail-safe attributes), README walking
+  through the four defense layers.
+- **`tests/auth.test.ts`** — 5 new cases for `requireGateCookie`:
+  no-op when env unset, 403 on missing cookie, 403 on empty value,
+  pass on any non-empty value, custom cookie name override.
+- **`tests/runtime/bootstrap.test.ts`** — 5 new cases for
+  `hasGateCookie` (the pure cookie-string parser) + 4 cases for
+  `runBootstrap`'s gate fail-safe (missing cookie skips mount,
+  cookie present allows load, attribute absent stays legacy, custom
+  cookie name).
+- **`tests/subprocess-smoke/server-gate-cookie.test.ts`** (new).
+  Boots the actual built `dist/server.cjs` with the gate enabled
+  and verifies: every gated route 403s anonymous, gate cookie
+  present allows the request through, the order vs `requireToken`
+  is correct (gate-first → cookie present + no token → 401, not
+  403), `/healthz` carve-out, empty cookie value rejected.
+
+### Translation
+- No locale changes in v0.17.0. Twenty-one built-in locales unchanged.
+
+### Migration
+- Defaults are unchanged. Existing loopback dev workflows continue
+  to work without any env additions.
+- To opt in: set `PYANCHOR_REQUIRE_GATE_COOKIE=true` on the sidecar
+  AND have your host app set the named cookie via its own middleware
+  AND add `data-pyanchor-require-gate-cookie="pyanchor_dev"` to your
+  bootstrap script tag. See `docs/SECURITY.md` recipe B and
+  `examples/nextjs-portfolio-gate/`.
+
 ## [0.16.0] - 2026-04-20
 
 Three new RTL locales (he / fa / ur) plus the round-12

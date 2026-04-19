@@ -58,8 +58,30 @@ export interface BootstrapDeps {
 export type BootstrapResult =
   | "skipped-already-loaded"
   | "skipped-untrusted-host"
+  | "skipped-missing-gate-cookie"
   | "loaded"
   | "loaded-overlay-already-present";
+
+/**
+ * Check `document.cookie` for a named cookie. Returns true iff the
+ * cookie is set with a non-empty value. Used by the v0.17.0
+ * production gating fail-safe so the overlay refuses to mount when
+ * the host gating cookie is absent.
+ *
+ * Pure on (cookieString, name); the IIFE entry point reads
+ * `document.cookie` and passes it in.
+ */
+export function hasGateCookie(cookieString: string, name: string): boolean {
+  if (!name) return false;
+  const target = `${name}=`;
+  for (const part of cookieString.split(";")) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(target) && trimmed.length > target.length) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
   const { window: win, document: doc, currentScript } = deps;
@@ -90,6 +112,23 @@ export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
         `Add it to data-pyanchor-trusted-hosts on the <script> tag if this is intentional.`
     );
     return "skipped-untrusted-host";
+  }
+
+  // v0.17.0: production gate cookie fail-safe. When
+  // data-pyanchor-require-gate-cookie="<name>" is present on the
+  // bootstrap <script>, the overlay refuses to mount unless the named
+  // cookie is set in document.cookie. Layered with the server-side
+  // requireGateCookie middleware so a host that accidentally renders
+  // the bootstrap script unconditionally still skips the overlay
+  // mount for anonymous traffic.
+  const gateCookieName = currentScript?.dataset.pyanchorRequireGateCookie?.trim();
+  if (gateCookieName && !hasGateCookie(doc.cookie, gateCookieName)) {
+    console.warn(
+      `[pyanchor] overlay disabled — gate cookie "${gateCookieName}" not set. ` +
+        `The host app should set this cookie after its production gating step ` +
+        `(magic-word URL, OAuth, etc.) before rendering the bootstrap script.`
+    );
+    return "skipped-missing-gate-cookie";
   }
 
   win.__PyanchorConfig = { baseUrl, token, ...(locale ? { locale } : {}) };

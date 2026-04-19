@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { renderAdminHtml } from "./admin";
 import { pyanchorConfig, validateConfig } from "./config";
-import { SESSION_COOKIE, requireToken } from "./auth";
+import { SESSION_COOKIE, requireGateCookie, requireToken } from "./auth";
 import { requireAllowedOrigin } from "./origin";
 import { tokenBucketMiddleware } from "./rate-limit";
 import { createSession, revokeSession } from "./sessions";
@@ -108,9 +108,14 @@ app.get("/healthz", (_request, response) => {
 // collapses it).
 
 for (const basePath of runtimeBases) {
-  app.get(`${basePath}/bootstrap.js`, serveRuntimeAsset("bootstrap.js"));
-  app.get(`${basePath}/overlay.js`, serveRuntimeAsset("overlay.js"));
-  app.get(`${basePath}/locales/:locale.js`, (request: Request, response: Response) => {
+  // v0.17.0: requireGateCookie sits in front of every static asset
+  // too, not just the API. Public anonymous traffic on a gated
+  // deployment can't even fetch bootstrap.js — they get a 403 before
+  // any sidecar code path runs. No-op when PYANCHOR_REQUIRE_GATE_COOKIE
+  // is unset (loopback dev default).
+  app.get(`${basePath}/bootstrap.js`, requireGateCookie, serveRuntimeAsset("bootstrap.js"));
+  app.get(`${basePath}/overlay.js`, requireGateCookie, serveRuntimeAsset("overlay.js"));
+  app.get(`${basePath}/locales/:locale.js`, requireGateCookie, (request: Request, response: Response) => {
     // Whitelist — never sendFile a path component derived from user
     // input without explicit allowlisting. The regex check below is a
     // belt-and-suspenders guard in case the set ever grows to include
@@ -140,6 +145,7 @@ for (const basePath of runtimeBases) {
   // when `trust proxy` is on, false on plain http://localhost dev).
   app.post(
     `${basePath}/api/session`,
+    requireGateCookie,
     requireAllowedOrigin,
     requireToken,
     (request: Request, response: Response) => {
@@ -173,6 +179,7 @@ for (const basePath of runtimeBases) {
 
   app.get(
     `${basePath}/api/status`,
+    requireGateCookie,
     requireToken,
     asyncRoute(async (_request, response) => {
       setNoStore(response);
@@ -182,6 +189,7 @@ for (const basePath of runtimeBases) {
 
   app.post(
     `${basePath}/api/edit`,
+    requireGateCookie,
     requireAllowedOrigin,
     requireToken,
     editLimiter,
@@ -193,6 +201,7 @@ for (const basePath of runtimeBases) {
 
   app.post(
     `${basePath}/api/cancel`,
+    requireGateCookie,
     requireAllowedOrigin,
     requireToken,
     cancelLimiter,
@@ -205,6 +214,7 @@ for (const basePath of runtimeBases) {
 
 app.get(
   "/api/admin/health",
+  requireGateCookie,
   requireToken,
   asyncRoute(async (_request, response) => {
     setNoStore(response);
@@ -214,6 +224,7 @@ app.get(
 
 app.get(
   "/api/admin/state",
+  requireGateCookie,
   requireToken,
   asyncRoute(async (_request, response) => {
     setNoStore(response);
@@ -223,6 +234,7 @@ app.get(
 
 app.get(
   "/",
+  requireGateCookie,
   requireToken,
   asyncRoute(async (_request, response) => {
     setNoStore(response);
