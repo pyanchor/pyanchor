@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-04-20
+
+Agent failure classification. The single most common transient
+issue with OAuth-backed agent backends (openclaw → openai-codex,
+etc.) is a token-refresh timing race that surfaces as
+`"Agent authentication failed."` in state.error. Without a hint,
+operators wrongly assume their auth is broken and waste time
+re-authenticating. v0.21.0 detects these cases and appends an
+actionable suggestion to state.error / audit log / activity log.
+
+### Added
+- **`src/worker/agent-error.ts`** (new). `classifyAgentFailure()`
+  returns `{ kind, hint, raw }` for one of:
+  - `transient_auth` — `auth failed`, `401`, `unauthorized`,
+    `invalid token`, `token expired`. Hint: "often a transient
+    OAuth token-refresh race; try once more before re-authenticating
+    (`openclaw login` / `codex login`)."
+  - `rate_limit` — `429`, `rate limit`, `quota exceeded`,
+    `too many requests`. Hint: "wait ~30s, check provider dashboard."
+  - `timeout` — `timed out`, `timeout`, `ETIMEDOUT`. Hint: "raise
+    `PYANCHOR_AGENT_TIMEOUT_S` (default 900) or check worker-host
+    network latency."
+  - `network` — `ENOTFOUND`, `ECONNREFUSED`, `EAI_AGAIN`,
+    `EHOSTUNREACH`, `ENETUNREACH`, `ECONNRESET`. Hint: "check DNS
+    / firewall / proxy from the worker host."
+  - `unknown` — anything else. Hint: empty (raw passthrough).
+- **`humanizeAgentFailure(raw)`** wraps the classifier:
+  `"<raw> (<hint>)"` when matched, raw passthrough otherwise.
+- **`tests/worker/agent-error.test.ts`** (new) — 36 cases. Each
+  kind gets multiple real-world strings, hint substring checks,
+  specificity ordering (`transient_auth` wins over `rate_limit`
+  when both keywords are present), and null/undefined input
+  defense.
+
+### Changed
+- **`src/worker/runner.ts`** — failure paths in the main loop +
+  the top-level `void main().catch(...)` now wrap the upstream
+  agent error with `humanizeAgentFailure()` BEFORE writing it to
+  state, audit log, and activity log. The hint is appended in
+  parentheses; raw error text is preserved verbatim so debugging
+  context never gets lost.
+
+### Why
+Real incident on the studio deployment (2026-04-19 16:41 UTC):
+openclaw's openai-codex OAuth access token expired the moment
+an edit landed. openclaw doesn't auto-refresh-and-retry on 401,
+so the worker received a raw "Agent authentication failed." and
+wrote it to state.json. The user spent time trying to figure
+out whether their OAuth was broken when the actual fix was
+"send the same edit one more time" (the next request triggered
+the agent's heartbeat-driven refresh path and worked). v0.21.0
+makes this visible upfront: the same error now reads:
+
+> Agent authentication failed. (This is often a transient OAuth
+> token-refresh race. Try once more before re-authenticating the
+> agent backend (e.g. `openclaw login` / `codex login`).)
+
+### Migration
+- Defaults unchanged. Behavior is purely additive: state.error,
+  audit `error` field, and activity log lines for failed jobs
+  carry the appended hint when classified, raw passthrough
+  otherwise.
+- No new envs.
+- Future versions may localize the hint per `__PyanchorConfig.locale`
+  (currently English-only to match the rest of the runner output).
+
 ## [0.20.1] - 2026-04-20
 
 Round-14 Codex patches. One high-severity correctness bug in

@@ -6,6 +6,7 @@ import { selectAgent } from "../agents";
 import { selectFramework } from "../frameworks";
 import type { AiEditMode, AiEditState } from "../shared/types";
 
+import { humanizeAgentFailure } from "./agent-error";
 import { FileAuditSink, NoopAuditSink, sha256Hex, type AuditSink } from "../audit";
 import {
   FetchWebhookSink,
@@ -427,7 +428,12 @@ async function main() {
         await finalizeFailure(CANCELED_ERROR, "canceled", currentMode);
         await emitAuditOnce("canceled", CANCELED_ERROR);
       } else {
-        const message = error instanceof Error ? error.message : "Unknown error.";
+        // v0.21.0: humanize the upstream agent error before it reaches
+        // state.error / audit log / activity log. Keeps the raw message
+        // and appends a kind-specific hint when the classifier matches
+        // (auth / rate_limit / timeout / network). Default = raw passthrough.
+        const raw = error instanceof Error ? error.message : "Unknown error.";
+        const message = humanizeAgentFailure(raw);
         await finalizeFailure(message, "failed", currentMode);
         await emitAuditOnce("failed", message);
       }
@@ -452,7 +458,8 @@ void main().catch(async (error) => {
     return;
   }
 
-  const message = error instanceof Error ? error.message : "Unknown error.";
+  const raw = error instanceof Error ? error.message : "Unknown error.";
+  const message = humanizeAgentFailure(raw);
   await finalizeFailure(message, "failed", activeJob.mode);
   await emitAuditOnce("failed", message);
 });
