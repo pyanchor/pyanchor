@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-04-20
+
+Realistic PR-mode smoke. Closes the highest-value test gap from
+the round-15 review: PR mode's `runCommand`-mock-only coverage
+left real-git quirks (quoting, branch parenting, status reporting,
+reset-hard semantics) untested. v0.24.0 adds a smoke that drives
+`preparePrWorkspace` + `executeOutput("pr", ...)` against a real
+local git binary + a fake `gh` script, so we catch the round-14
+high (branch parenting) on the actual code path it lives in.
+
+### Added
+- **`tests/subprocess-smoke/pr-mode-real-git.test.ts`** (new) —
+  4 cases, ~500ms total. Each spins up a tmpdir bare remote +
+  clones it as the workspace + writes a 6-line fake `gh` shell
+  script (logs argv, prints canned PR URL).
+  - `preparePrWorkspace` re-anchors a divergent local branch
+    back to `origin/<base>` (real git verifies HEAD + clean
+    working tree).
+  - **End-to-end branch-parent invariant**: after a previous
+    `pyanchor/old-job` PR leaves the workspace on its tip, the
+    next job's branch must come off `origin/main`, not the old
+    PR's tip. This is the round-14 high #1, now exercised on
+    actual `git rev-parse` output.
+  - Clean tree → no PR (gh script never invoked).
+  - Title + body argv inspection: confirms `gh pr create --base
+    main --head pyanchor/<jobId> --title <prompt-line> --body
+    <...actor + run id...>` lines up + the round-15 ZWSP escape
+    on `actor` is preserved through the real shell call.
+- Tests skip automatically if `git` is not on PATH (graceful on
+  minimal CI containers).
+
+### Why no nightly workflow
+The new smoke runs in ~500ms total — fast enough to stay in the
+default `pnpm test` lane on every commit, no separate nightly
+infrastructure needed. The "nightly" framing in the v0.23.x
+roadmap was hedging against a slower implementation; the actual
+real-git setup is cheap because tmpdir + bare-init + 1 commit is
+trivial.
+
+### Notes
+- `preparePrWorkspace` semantics confirmed: `app_dir` content
+  must match `origin/<base>` tip in any sane deployment;
+  otherwise unpushed-to-remote work in `app_dir` gets wiped by
+  `reset --hard`. The smoke models the supported case.
+- The build step is skipped in this smoke (build path shells
+  through `sudo -u <openClawUser>`; that surface lives in
+  `runner-subprocess.test.ts` against a fake openclaw script).
+  v0.24.0 targets the PR flow itself (git ops + gh dispatch).
+
+### Tests
+- 706 → **710 unit** (+4 real-git PR smoke), 69 e2e unchanged.
+
+### Migration
+- No env changes. No behavior change. New tests run in the same
+  `pnpm test` lane on every commit.
+
 ## [0.23.2] - 2026-04-20
 
 `overlay.ts` decomposition round 2. Pure refactor — no behavior
