@@ -34,6 +34,18 @@ import type { AiEditState } from "../../src/shared/types";
 
 const workerScript = path.resolve(process.cwd(), "dist", "worker", "runner.cjs");
 
+// Defensive precondition: every test script in package.json now runs
+// `node build.mjs` before vitest, but if someone invokes `vitest run`
+// directly on a fresh clone without building first, fail loud with a
+// clear message instead of letting spawn ENOENT make the test
+// timeout-look-like-a-hang.
+if (!existsSync(workerScript)) {
+  throw new Error(
+    `[subprocess-smoke] dist/worker/runner.cjs missing at ${workerScript}. ` +
+      `Run \`pnpm build\` first (or invoke \`pnpm test\` which builds + tests).`
+  );
+}
+
 const baseState = (overrides: Partial<AiEditState> = {}): AiEditState => ({
   configured: true,
   status: "running",

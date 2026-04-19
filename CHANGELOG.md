@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-04-19
+
+CI hotfix. The GitHub Actions `ci` and `release` workflows had been
+failing silently since v0.8.0 — the v0.8.0 subprocess-smoke test
+spawns `dist/worker/runner.cjs` but the workflows ran `pnpm test`
+BEFORE `pnpm build`. v0.7.4 was the last green run because the
+subprocess test didn't exist yet.
+
+Local runs always passed because `dist/` was already built from
+prior local `pnpm build` invocations. Only fresh-clone (CI) hit
+the gap.
+
+### Fixed
+- **`pnpm test` is now self-contained.** Inlined `node build.mjs &&`
+  in front of `vitest run` in the `test` and `test:coverage`
+  scripts. Both `test:e2e` and `test:e2e:ui` already did this, and
+  `test:all` got the same treatment for consistency. No CI workflow
+  edit needed — every test invocation now produces its own dist.
+- **Defensive precondition in `subprocess-smoke`** — the test now
+  throws a clear `dist/worker/runner.cjs missing` message if
+  someone bypasses the npm scripts and runs `vitest run` directly
+  on a clean clone. Replaces the previous behavior where a missing
+  binary caused spawn ENOENT to surface as a test timeout
+  (confusing).
+
+### Verified
+- `rm -rf dist && pnpm test` → 404/404 green from clean state
+- `pnpm typecheck` clean
+- The next CI / release run on this commit should pass
+
+### Compatibility
+No production / runtime change. Only affects test invocation
+mechanics. Bundle size unchanged (build emits the same dist).
+
+### Why this slipped past local runs
+`pnpm test` was always preceded — implicitly — by a recent
+`pnpm build` from manual development. Codex round 7 ran `pnpm
+test:all` which inlines the build, so it passed too. The exact
+combination "fresh clone + first invocation = pnpm test" is what
+CI does, and only what CI does. Adding a fresh-state test step
+to the local dev loop would catch this earlier next time.
+
 ## [0.9.0] - 2026-04-19
 
 UX track entry. Two long-tracked items land together:
