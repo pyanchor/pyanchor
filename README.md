@@ -107,32 +107,57 @@ trying pyanchor for the first time.
 
 ## 🚀 Quick start
 
+Five steps, ~5 minutes if your agent is already set up.
+
+### 1. Install
+
 ```bash
 pnpm add pyanchor
 # or: npm i pyanchor / yarn add pyanchor / bun add pyanchor
 ```
 
-Set the required environment, then start the sidecar:
+### 2. Generate a token + create scratch dir
 
 ```bash
 export PYANCHOR_TOKEN=$(openssl rand -hex 32)
+mkdir -p /abs/path/to/scratch-workspace
+```
+
+### 3. Write the restart script
+
+`restart-frontend.sh` — replace with your actual frontend reload
+command (e.g. `pm2 reload my-app`, `systemctl restart my-app`).
+For local `next dev`, a no-op is fine since dev server hot-reloads.
+
+```bash
+cat > /abs/path/to/restart-frontend.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exec /usr/bin/pm2 reload my-frontend
+EOF
+chmod +x /abs/path/to/restart-frontend.sh
+```
+
+### 4. Start the sidecar
+
+```bash
 export PYANCHOR_APP_DIR=/abs/path/to/your/nextjs-app
 export PYANCHOR_WORKSPACE_DIR=/abs/path/to/scratch-workspace
 export PYANCHOR_RESTART_SCRIPT=/abs/path/to/restart-frontend.sh
 export PYANCHOR_HEALTHCHECK_URL=http://127.0.0.1:3000/
-export PYANCHOR_AGENT=openclaw   # or claude-code
+export PYANCHOR_AGENT=openclaw   # or claude-code | codex | aider
 
 pyanchor
 ```
 
-If anything required is missing, the sidecar refuses to start and prints
-exactly which env var is missing. See [`.env.example`](./.env.example)
-for every supported variable.
+The sidecar refuses to start if anything required is missing and
+tells you exactly which env var is wrong. Full env reference:
+[`.env.example`](./.env.example).
 
-Inject the bootstrap into your Next.js app's root layout:
+### 5. Wire the bootstrap into your app
 
 ```tsx
-// app/layout.tsx
+// app/layout.tsx — Next.js example
 const devtoolsEnabled = process.env.NEXT_PUBLIC_PYANCHOR_DEVTOOLS_ENABLED === "true";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -149,7 +174,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-Reverse-proxy `/_pyanchor/*` to the sidecar in nginx:
+For Next.js dev, also add a `/_pyanchor/*` rewrite in `next.config.mjs`:
+
+```js
+async rewrites() {
+  return [{ source: "/_pyanchor/:path*", destination: "http://127.0.0.1:3010/_pyanchor/:path*" }];
+}
+```
+
+For production, reverse-proxy via nginx (snippet below) AND read
+[`docs/SECURITY.md`](./docs/SECURITY.md) for the production gate
+cookie pattern that stops anonymous traffic from seeing the overlay.
 
 ```nginx
 location /_pyanchor/ {
@@ -162,7 +197,13 @@ location /_pyanchor/ {
 }
 ```
 
+That's it. Open your app, you should see the floating Pyanchor
+trigger button at bottom-right. Click → describe a change → wait
+~30s for the agent to apply + build + restart.
+
 Full integration walk-through: [`docs/integrate-with-nextjs.md`](./docs/integrate-with-nextjs.md).
+Vite + React variant: [`examples/vite-react-minimal/`](./examples/vite-react-minimal).
+Production deploy with gate cookie: [`examples/nextjs-portfolio-gate/`](./examples/nextjs-portfolio-gate).
 
 ## Supported agents
 

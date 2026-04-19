@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-04-20
+
+Polish + multi-tenancy design draft. No production behavior change
+for existing single-tenant deployments — admin page gets a queue
+visualization, README quickstart is split into 5 explicit steps,
+CI gains a bundle-size regression guard, and a multi-tenancy design
+doc opens v1.1+ track conversation.
+
+### Added
+- **`docs/MULTI-TENANCY-DESIGN.md`** (new). Design draft for
+  v1.1+ multi-tenancy. Picks model B (single sidecar, multiple
+  workspaces) over per-process or control-plane alternatives.
+  Lays out tenant identification (path prefix recommended),
+  per-tenant config schema, state isolation, queue independence,
+  webhook routing, and single-tenant compatibility. Five open
+  questions tagged for community feedback. Explicit scope: this
+  is a Pre-1.0 surface per [`docs/API-STABILITY.md`](./docs/API-STABILITY.md);
+  the doc graduates to operator guide once multi-tenancy actually
+  lands. No code yet.
+- **`tests/bundle-size.test.ts`** (new). Guards bundle sizes on
+  every CI run:
+  - bootstrap.js ≤ 12KB (current ~5KB)
+  - overlay.js ≤ 80KB (current ~45KB)
+  - worker/runner.cjs ≤ 200KB (current ~86KB)
+  - Per-locale bundle ≤ 12KB (largest current is th 6.9KB)
+  - Plus a sync check: SHIPPED_LOCALES list matches
+    `BUILT_IN_LOCALES` in `src/shared/locales.ts`.
+  Catches accidental SDK pulls / duplicate-dep regressions
+  before they ship. Server.cjs is intentionally not guarded
+  (depends on dep updates we don't control).
+
+### Changed
+- **`README.md`** — Quick start rewritten as 5 explicit numbered
+  steps (install → token + workspace → restart script →
+  start sidecar → wire bootstrap). Added Next.js dev rewrite
+  snippet inline so reader doesn't have to chase. Added
+  pointers to portfolio-gate example for production.
+- **`src/admin.ts`** — Two new panels on the admin page:
+  - Queue panel: shows queued items (mode + target path + first
+    80 chars of prompt) instead of just a count.
+  - Recent messages panel: last 5 messages reversed (newest first),
+    each with role badge + status + truncated text.
+  Both panels auto-refresh on the existing 3s tick; defensive
+  `??` falls back if state.json fields go null between polls.
+
+### Tests
+- 25 new (21 locale bundle size + 3 main bundles + 1 sync check).
+  677 → 702 unit. 69 e2e unchanged.
+
+### Migration
+- No env changes. No behavior change for existing deployments.
+  Admin page polish is purely additive.
+- Bundle size guard runs as part of `pnpm test`; if you've
+  customized your build to add ~3-5x more code, the test will
+  fail. Adjust limits in `tests/bundle-size.test.ts` (and note
+  in your fork's CHANGELOG).
+
+### 1.0 trajectory
+This release closes the README polish blocker. Remaining:
+
+- ✅ Threat model docs
+- ✅ Production hardening guide
+- ✅ Public API contract pin (v0.22.0)
+- ✅ README rewrite (this release)
+- ⏳ First non-author production adopter — studio.pyan.kr
+  running on v0.22.x since 2026-04-20. 30-day window.
+
+**1.0 cut targeted ~2026-05-20** if no API-break-forcing issue
+surfaces in the adoption window.
+
 ## [0.22.0] - 2026-04-20
 
 Docs + 1.0 trajectory. No code changes — this slice is the

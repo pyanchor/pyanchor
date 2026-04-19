@@ -122,6 +122,45 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
           grid-template-columns: 1fr;
         }
       }
+      .queue, .messages {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+        font-size: 0.83rem;
+      }
+      .queue li, .messages li {
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(139, 157, 195, 0.12);
+        line-height: 1.5;
+      }
+      .queue__mode, .messages__role, .messages__status {
+        display: inline-block;
+        padding: 1px 7px;
+        margin-right: 6px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        background: rgba(125, 156, 255, 0.18);
+        color: #cbd6ff;
+      }
+      .queue__path {
+        background: rgba(0, 0, 0, 0.25);
+        padding: 1px 5px;
+        border-radius: 4px;
+        margin-right: 6px;
+      }
+      .queue__prompt, .messages__text {
+        color: #b8c2da;
+      }
+      .queue__empty, .messages__empty {
+        color: #6f7c9a;
+        font-style: italic;
+        background: transparent !important;
+        border-color: transparent !important;
+      }
     </style>
   </head>
   <body>
@@ -170,6 +209,46 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
           </dl>
         </article>
         <article class="panel stack">
+          <h2>Queue (${state.queue.length})</h2>
+          <ol class="queue" id="queue-list">
+            ${
+              state.queue.length === 0
+                ? '<li class="queue__empty">Empty.</li>'
+                : state.queue
+                    .map(
+                      (item) =>
+                        `<li><span class="queue__mode">${escapeHtml(item.mode)}</span> ` +
+                        `<code class="queue__path">${escapeHtml(item.targetPath || "/")}</code> ` +
+                        `<span class="queue__prompt">${escapeHtml(
+                          (item.prompt || "").slice(0, 80) + ((item.prompt || "").length > 80 ? "\u2026" : "")
+                        )}</span></li>`
+                    )
+                    .join("")
+            }
+          </ol>
+        </article>
+        <article class="panel stack">
+          <h2>Recent messages</h2>
+          <ol class="messages" id="messages-list">
+            ${
+              state.messages.length === 0
+                ? '<li class="messages__empty">No messages yet.</li>'
+                : state.messages
+                    .slice(-5)
+                    .reverse()
+                    .map(
+                      (msg) =>
+                        `<li><span class="messages__role">${escapeHtml(msg.role)}</span> ` +
+                        `<span class="messages__status">${escapeHtml(msg.status ?? "")}</span> ` +
+                        `<span class="messages__text">${escapeHtml(
+                          (msg.text || "").slice(0, 120) + ((msg.text || "").length > 120 ? "\u2026" : "")
+                        )}</span></li>`
+                    )
+                    .join("")
+            }
+          </ol>
+        </article>
+        <article class="panel stack">
           <h2>Health JSON</h2>
           <pre id="health-json">${escapeHtml(JSON.stringify(health, null, 2))}</pre>
         </article>
@@ -183,12 +262,18 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
       const healthTarget = document.getElementById("health-json");
       const stateTarget = document.getElementById("state-json");
       const summaryTarget = document.getElementById("state-summary");
-      const escapeHtml = (value) => value
+      const queueTarget = document.getElementById("queue-list");
+      const messagesTarget = document.getElementById("messages-list");
+      const escapeHtml = (value) => String(value ?? "")
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#39;");
+      const truncate = (text, max) => {
+        const s = String(text ?? "");
+        return s.length > max ? s.slice(0, max) + "\u2026" : s;
+      };
       async function refresh() {
         const [healthResponse, stateResponse] = await Promise.all([
           fetch("/api/admin/health", { cache: "no-store" }),
@@ -196,6 +281,8 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
         ]);
         const health = await healthResponse.json();
         const state = await stateResponse.json();
+        const queue = Array.isArray(state.queue) ? state.queue : [];
+        const messages = Array.isArray(state.messages) ? state.messages : [];
         healthTarget.textContent = JSON.stringify(health, null, 2);
         stateTarget.textContent = JSON.stringify(state, null, 2);
         summaryTarget.innerHTML = [
@@ -203,8 +290,22 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
           ["Target", state.targetPath || "-"],
           ["Step", state.currentStep || "-"],
           ["Heartbeat", [state.heartbeatLabel || "-", state.heartbeatAt || "-"].join(" / ")],
-          ["Queue", String(Array.isArray(state.queue) ? state.queue.length : 0)]
+          ["Queue", String(queue.length)]
         ].map(([label, value]) => "<dt>" + escapeHtml(label) + "</dt><dd>" + escapeHtml(value) + "</dd>").join("");
+        queueTarget.innerHTML = queue.length === 0
+          ? '<li class="queue__empty">Empty.</li>'
+          : queue.map((item) =>
+              "<li><span class=\"queue__mode\">" + escapeHtml(item.mode) + "</span> " +
+              "<code class=\"queue__path\">" + escapeHtml(item.targetPath || "/") + "</code> " +
+              "<span class=\"queue__prompt\">" + escapeHtml(truncate(item.prompt, 80)) + "</span></li>"
+            ).join("");
+        messagesTarget.innerHTML = messages.length === 0
+          ? '<li class="messages__empty">No messages yet.</li>'
+          : messages.slice(-5).reverse().map((msg) =>
+              "<li><span class=\"messages__role\">" + escapeHtml(msg.role) + "</span> " +
+              "<span class=\"messages__status\">" + escapeHtml(msg.status) + "</span> " +
+              "<span class=\"messages__text\">" + escapeHtml(truncate(msg.text, 120)) + "</span></li>"
+            ).join("");
       }
       refresh().catch(() => {});
       setInterval(() => { void refresh(); }, 3000);
