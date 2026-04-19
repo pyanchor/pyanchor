@@ -90,7 +90,16 @@ export function detectFormat(url: string, override?: WebhookFormat): WebhookForm
     return "raw";
   }
   if (host === "hooks.slack.com" || host.endsWith(".slack.com")) return "slack";
-  if (host.endsWith(".discord.com") || host.endsWith(".discordapp.com") || host === "discord.com") {
+  // Round-14 #4a: include the bare legacy `discordapp.com` host
+  // (no subdomain). v0.20.0 only matched `discord.com` exact +
+  // `*.discord.com` + `*.discordapp.com` — the bare apex
+  // `discordapp.com` fell through to raw.
+  if (
+    host === "discord.com" ||
+    host === "discordapp.com" ||
+    host.endsWith(".discord.com") ||
+    host.endsWith(".discordapp.com")
+  ) {
     return "discord";
   }
   return "raw";
@@ -106,7 +115,10 @@ export function renderSummary(payload: WebhookPayload): string {
   const where = payload.target_path ? ` on \`${payload.target_path}\`` : "";
   switch (payload.event) {
     case "edit_requested":
-      return `${who} requested a${payload.mode === "chat" ? "n" : "n"} ${payload.mode ?? "edit"}${where}.`;
+      // Round-14 #4b: article should be "an" before "edit" (vowel),
+      // "a" before "chat" (consonant). v0.20.0 had both branches
+      // emit "n", so chat requests rendered "an chat".
+      return `${who} requested a${payload.mode === "edit" ? "n" : ""} ${payload.mode ?? "edit"}${where}.`;
     case "edit_applied":
       return `${who}'s ${payload.mode ?? "edit"}${where} was applied.`;
     case "pr_opened":

@@ -172,6 +172,50 @@ Bad pattern (don't do this):
 exec "$@"   # <-- agent could feed any argv
 ```
 
+### 5b. PR mode setup (v0.19.0+)
+
+Before turning on `PYANCHOR_OUTPUT_MODE=pr`:
+
+```bash
+# 1. Workspace must be a git clone of your deployment repo. Pyanchor
+#    does NOT auto-clone; this is a one-time operator step. The .git
+#    dir survives subsequent rsyncs because it's in BASE_RSYNC_EXCLUDES.
+sudo -u pyanchor git clone <your-remote> /var/lib/pyanchor/workspace
+
+# 2. Configure git auth as the pyanchor user. Pick ONE:
+#    a) gh CLI authentication (recommended)
+sudo -u pyanchor gh auth login
+sudo -u pyanchor gh auth setup-git   # so `git push` uses gh's https creds
+
+#    b) GH_TOKEN env var (fine for systemd EnvironmentFile)
+echo 'GH_TOKEN=ghp_...' | sudo tee -a /etc/pyanchor.env
+
+#    c) SSH deploy key (the pyanchor user needs ~/.ssh/known_hosts +
+#       the key registered with the repo)
+```
+
+Then enable PR mode:
+
+```sh
+PYANCHOR_OUTPUT_MODE=pr
+PYANCHOR_GIT_BASE_BRANCH=main
+PYANCHOR_GIT_BRANCH_PREFIX=pyanchor/
+```
+
+What pyanchor does on each PR job (v0.20.1+):
+1. `git fetch origin main` + `git checkout main` + `git reset --hard origin/main` —
+   re-anchors the persistent workspace clone on the base branch.
+   Without this, the next PR's branch would have the previous PR's
+   tip as its parent (round-14 #1 fix).
+2. Agent runs and edits workspace files.
+3. `git status --porcelain` — if no changes, skip PR creation.
+4. `git checkout -b pyanchor/<jobId>` + `git add .` + `git commit`.
+5. `git push origin <branch>` + `gh pr create`.
+
+Webhook notifications about PR creation are **best-effort only**:
+5-second timeout, stderr logging on failure, no retry. If you need
+guaranteed delivery, tail the audit log instead.
+
 ### 6. sudo grants for the openclaw agent
 
 If you use `PYANCHOR_AGENT=openclaw`, the worker shells out under

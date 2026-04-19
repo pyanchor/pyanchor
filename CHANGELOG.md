@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-04-20
+
+Round-14 Codex patches. One high-severity correctness bug in
+PR mode + three medium/low fixes. v0.20.0 → v0.20.1 if you use
+PR mode (recommended) or webhooks (Discord apex / chat-mode
+summaries).
+
+### Fixed
+- **PR mode branch parenting (round-14 #1, HIGH)** —
+  v0.19.0/v0.20.0 left the persistent workspace on the previous
+  PR's branch after each job. The next `git checkout -b ${prefix}${jobId}`
+  cut a branch whose **parent commit was the previous PR's tip**,
+  not the configured base. Unmerged PRs accidentally stacked.
+  - New `preparePrWorkspace()` runs BEFORE the agent (between
+    `prepareWorkspace` and install): `git fetch <remote> <base>` →
+    `git checkout <base>` → `git reset --hard <remote>/<base>`.
+    Re-anchors the workspace .git on the base branch tip so the
+    next branch's parent is correct.
+  - `runPr()` no longer does the rev-parse sanity check
+    (moved into `preparePrWorkspace` so misconfigurations fail
+    before the agent runs, not after).
+  - The Codex-suggested patch reset INSIDE `runPr` after the
+    agent ran, which would have wiped the agent's edits. The
+    actual fix runs the reset BEFORE the agent — same architectural
+    intent, correct execution.
+- **PR body markdown injection (round-14 #3, MEDIUM)** —
+  v0.19.0/v0.20.0 spliced raw prompts and actor strings directly
+  into the PR body, which let backtick fences inside prompts break
+  the surrounding formatting and `@username` mentions in either
+  field generate real GitHub notifications.
+  - New `escapeGitHubBodyText()` inserts a zero-width space after
+    `@` so GitHub doesn't resolve it as a mention. Visible text
+    unchanged.
+  - New `renderQuotedBlock()` wraps the prompt as a markdown
+    block-quote (`> ` per line). Block-quotes ignore embedded
+    fences, so triple-backticks inside user prompts no longer
+    break the body's outer markdown structure.
+- **`detectFormat` missed bare `discordapp.com` (round-14 #4a, LOW)** —
+  v0.20.0 matched `discord.com` exact + `*.discord.com` +
+  `*.discordapp.com`, but the bare apex `discordapp.com`
+  (no subdomain) fell through to `raw`. Webhook URLs of the form
+  `https://discordapp.com/api/webhooks/...` now correctly format
+  as Discord `{ content }`.
+- **`renderSummary` article typo (round-14 #4b, LOW)** — v0.20.0
+  had both branches of the article logic emit `"n"`, so chat
+  requests rendered `"someone requested an chat."`. Now correctly
+  picks `an` for `edit` (vowel) and `a` for `chat` (consonant).
+
+### Documentation
+- **`.env.example`** — added all 14 envs that landed in v0.18.0
+  → v0.20.0 (output mode + audit log + PR mode + webhooks +
+  gate cookie). v0.20.0 shipped with sane code defaults but
+  the canonical config reference was stale; `validateConfig`
+  failure messages already pointed operators at this file
+  (round-14 #2).
+- **`docs/PRODUCTION-HARDENING.md`** — new "PR mode setup"
+  section walks through the one-time `git clone` +
+  `gh auth login` operator steps, documents the v0.20.1
+  re-anchor sequence, and notes that webhook delivery is
+  best-effort (5s timeout, no retry).
+
+### Tests
+- **`tests/worker/output.test.ts`** — 9 new cases:
+  `escapeGitHubBodyText` (3), `renderQuotedBlock` (2),
+  `preparePrWorkspace` (3 — workspace-not-git fail, fetch/
+  checkout/reset sequence, custom remote+base), PR body escape
+  end-to-end (1). Existing PR-mode tests updated to expect
+  the new escape (e.g. `alice@\u200bexample.com`) and to drop
+  the rev-parse check (moved out of `runPr`).
+- **`tests/webhooks.test.ts`** — 2 new cases for the discord
+  apex + chat-article fixes.
+
+### Migration
+- **PR mode users**: behavior change. v0.20.1 actively re-anchors
+  the workspace .git on each job. If your workspace had
+  uncommitted local commits on the previous PR branch (unusual —
+  pyanchor should be the only writer), they would be lost. The
+  pre-job rsync from app_dir already overwrites file content;
+  this fix just brings .git's HEAD into the same alignment.
+- **Webhook users on `discordapp.com`**: now correctly formatted
+  as Discord. Previously dispatched as raw JSON, which Discord
+  rejected.
+- All other deployments: no behavior change.
+
 ## [0.20.0] - 2026-04-20
 
 Webhook hooks. Three event types fire fire-and-forget POST

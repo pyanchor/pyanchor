@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { executeOutput, KNOWN_OUTPUT_MODES, resolveOutputMode } from "../../src/worker/output";
+import {
+  escapeGitHubBodyText,
+  executeOutput,
+  KNOWN_OUTPUT_MODES,
+  preparePrWorkspace,
+  renderQuotedBlock,
+  resolveOutputMode
+} from "../../src/worker/output";
 import type { WorkspaceConfig, WorkspaceDeps } from "../../src/worker/workspace";
 import { nextjsProfile } from "../../src/frameworks/nextjs";
 
@@ -147,6 +154,89 @@ describe("executeOutput \u2014 dryrun mode", () => {
   });
 });
 
+describe("escape helpers (v0.20.1 round-14 #3)", () => {
+  it("escapeGitHubBodyText inserts ZWSP after @ to disarm GH mentions", () => {
+    expect(escapeGitHubBodyText("@alice")).toBe("@\u200balice");
+    expect(escapeGitHubBodyText("hi @team and @bob")).toBe(
+      "hi @\u200bteam and @\u200bbob"
+    );
+  });
+
+  it("escapeGitHubBodyText leaves text without @ unchanged", () => {
+    expect(escapeGitHubBodyText("nothing here")).toBe("nothing here");
+    expect(escapeGitHubBodyText("")).toBe("");
+  });
+
+  it("renderQuotedBlock wraps every line with `> ` and escapes mentions per-line", () => {
+    const block = renderQuotedBlock("line one\n@user line two\nthird");
+    expect(block).toBe("> line one\n> @\u200buser line two\n> third");
+  });
+
+  it("renderQuotedBlock preserves backtick fences inside the quoted block (no formatting break)", () => {
+    const block = renderQuotedBlock("before\n```code```\nafter");
+    expect(block).toBe("> before\n> ```code```\n> after");
+  });
+});
+
+describe("preparePrWorkspace (v0.20.1 round-14 #1)", () => {
+  const stubPr = {
+    gitBin: "git",
+    ghBin: "gh",
+    gitRemote: "origin",
+    gitBaseBranch: "main",
+    gitBranchPrefix: "pyanchor/",
+    jobId: "test-job",
+    prompt: "x",
+    mode: "edit" as const
+  };
+
+  it("rejects with a docs-pointer when the workspace is not a git working tree", async () => {
+    const runCommand = vi.fn(async (_cmd: string, args: string[]) => {
+      if (args.includes("rev-parse")) {
+        throw new Error("fatal: not a git repository");
+      }
+      return { stdout: "", stderr: "" };
+    });
+    await expect(preparePrWorkspace("/tmp/ws", stubPr, runCommand)).rejects.toThrow(
+      /git working tree/
+    );
+  });
+
+  it("runs fetch + checkout + reset --hard origin/<base> in order", async () => {
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    const runCommand = vi.fn(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      if (args.includes("rev-parse")) return { stdout: "true", stderr: "" };
+      return { stdout: "", stderr: "" };
+    });
+
+    await preparePrWorkspace("/tmp/ws", stubPr, runCommand);
+
+    const sequence = calls.map((c) => c.args.find((a) => ["rev-parse", "fetch", "checkout", "reset"].includes(a)));
+    expect(sequence).toEqual(["rev-parse", "fetch", "checkout", "reset"]);
+
+    const reset = calls.find((c) => c.args.includes("reset"));
+    expect(reset?.args).toContain("--hard");
+    expect(reset?.args).toContain("origin/main");
+  });
+
+  it("uses the configured remote + base branch in the reset target", async () => {
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    const runCommand = vi.fn(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      if (args.includes("rev-parse")) return { stdout: "true", stderr: "" };
+      return { stdout: "", stderr: "" };
+    });
+
+    await preparePrWorkspace("/tmp/ws", { ...stubPr, gitRemote: "upstream", gitBaseBranch: "develop" }, runCommand);
+
+    const reset = calls.find((c) => c.args.includes("reset"));
+    expect(reset?.args).toContain("upstream/develop");
+    const fetch = calls.find((c) => c.args.includes("fetch"));
+    expect(fetch?.args).toEqual(expect.arrayContaining(["fetch", "upstream", "develop"]));
+  });
+});
+
 describe("executeOutput \u2014 pr mode (v0.19)", () => {
   const stubPrConfig = {
     gitBin: "git",
@@ -172,32 +262,14 @@ describe("executeOutput \u2014 pr mode (v0.19)", () => {
     ).rejects.toThrow(/PrConfig/);
   });
 
-  it("rejects with a docs-pointer when the workspace is not a git working tree", async () => {
-    const runCommand = vi.fn(async (_cmd: string, args: string[]) => {
-      // The first git call is `rev-parse --is-inside-work-tree`. Make it fail.
-      if (args.includes("rev-parse")) {
-        throw new Error("fatal: not a git repository");
-      }
-      return { stdout: "", stderr: "" };
-    });
-
-    await expect(
-      executeOutput("pr", {
-        workspaceConfig: stubConfig,
-        workspaceDeps: stubDeps(runCommand),
-        runBuild: false,
-        shouldRestart: false,
-        withHeartbeat: trackingHeartbeat([]),
-        prConfig: stubPrConfig
-      })
-    ).rejects.toThrow(/git working tree/);
-  });
+  // Note: the "not a git working tree" check moved out of runPr() into
+  // preparePrWorkspace() in v0.20.1 (round-14 #1 fix) so the failure
+  // surfaces BEFORE the agent runs. See preparePrWorkspace tests below.
 
   it("skips PR creation when git status reports no changes", async () => {
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const runCommand = vi.fn(async (cmd: string, args: string[]) => {
       calls.push({ cmd, args });
-      if (args.includes("rev-parse")) return { stdout: "true", stderr: "" };
       if (args.includes("status")) return { stdout: "", stderr: "" }; // clean tree
       return { stdout: "", stderr: "" };
     });
@@ -213,16 +285,16 @@ describe("executeOutput \u2014 pr mode (v0.19)", () => {
 
     expect(result.mode).toBe("pr");
     expect(result.prUrl).toBeUndefined();
-    // Only the two probe calls happened — no checkout/commit/push.
-    expect(calls.map((c) => c.args[c.args.length - 1])).not.toContain("commit");
-    expect(calls.map((c) => c.args[0])).not.toContain("push");
+    // Only the status probe ran — no checkout/commit/push.
+    expect(calls.find((c) => c.args.includes("checkout"))).toBeUndefined();
+    expect(calls.find((c) => c.args.includes("commit"))).toBeUndefined();
+    expect(calls.find((c) => c.args.includes("push"))).toBeUndefined();
   });
 
   it("happy path: runs checkout/add/commit/push then captures gh PR URL", async () => {
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const runCommand = vi.fn(async (cmd: string, args: string[]) => {
       calls.push({ cmd, args });
-      if (args.includes("rev-parse")) return { stdout: "true", stderr: "" };
       if (args.includes("status")) return { stdout: " M src/Header.tsx\n", stderr: "" };
       if (cmd === "gh") {
         // gh prints the PR URL on stdout
@@ -260,7 +332,6 @@ describe("executeOutput \u2014 pr mode (v0.19)", () => {
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const runCommand = vi.fn(async (cmd: string, args: string[]) => {
       calls.push({ cmd, args });
-      if (args.includes("rev-parse")) return { stdout: "true", stderr: "" };
       if (args.includes("status")) return { stdout: " M x", stderr: "" };
       if (cmd === "gh") return { stdout: "https://x/pull/1\n", stderr: "" };
       return { stdout: "", stderr: "" };
@@ -281,6 +352,41 @@ describe("executeOutput \u2014 pr mode (v0.19)", () => {
     const title = ghCall?.args[titleIdx + 1] ?? "";
     expect(title.length).toBe(72);
     expect(title).toBe("A".repeat(72));
+  });
+
+  it("PR body renders prompt as a quoted block + escapes @-mentions (v0.20.1 round-14 #3)", async () => {
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    const runCommand = vi.fn(async (cmd: string, args: string[]) => {
+      calls.push({ cmd, args });
+      if (args.includes("status")) return { stdout: " M x", stderr: "" };
+      if (cmd === "gh") return { stdout: "https://x/pull/3\n", stderr: "" };
+      return { stdout: "", stderr: "" };
+    });
+
+    const evilPrompt =
+      "first line @team\n```fence```\nlast line";
+    await executeOutput("pr", {
+      workspaceConfig: stubConfig,
+      workspaceDeps: stubDeps(runCommand),
+      runBuild: false,
+      shouldRestart: false,
+      withHeartbeat: trackingHeartbeat([]),
+      prConfig: { ...stubPrConfig, prompt: evilPrompt, actor: "@alice" }
+    });
+
+    const ghCall = calls.find((c) => c.cmd === "gh");
+    const bodyIdx = ghCall?.args.indexOf("--body") ?? -1;
+    const body = ghCall?.args[bodyIdx + 1] ?? "";
+
+    // Every prompt line is prefixed with `> ` (markdown blockquote)
+    expect(body).toContain("> first line @\u200bteam");
+    expect(body).toContain("> ```fence```"); // fence neutralized inside quote
+    expect(body).toContain("> last line");
+    // Actor's @ is escaped with zero-width space.
+    expect(body).toContain("Actor: @\u200balice");
+    // No raw @team / @alice anywhere — would otherwise notify users.
+    expect(body).not.toMatch(/(^|[^\u200b])@team/);
+    expect(body).not.toMatch(/(^|[^\u200b])@alice/);
   });
 
   it("PR body includes Actor when prConfig.actor is supplied (v0.19 passthrough)", async () => {
@@ -305,6 +411,8 @@ describe("executeOutput \u2014 pr mode (v0.19)", () => {
     const ghCall = calls.find((c) => c.cmd === "gh");
     const bodyIdx = ghCall?.args.indexOf("--body") ?? -1;
     const body = ghCall?.args[bodyIdx + 1] ?? "";
-    expect(body).toContain("alice@example.com");
+    // v0.20.1 round-14 #3: actor's @ is escaped with ZWSP so GitHub
+    // doesn't generate notifications for it.
+    expect(body).toContain("alice@\u200bexample.com");
   });
 });

@@ -17,7 +17,7 @@ import {
 import { cancelActiveChildren, runCommand, type RunCommandOptions } from "./child-process";
 import { createLifecycle } from "./lifecycle";
 import { createMessage, pushMessageWithCap, updateUserMessageStatus } from "./messages";
-import { executeOutput, resolveOutputMode } from "./output";
+import { executeOutput, preparePrWorkspace, resolveOutputMode } from "./output";
 import { createRuntimeBuffer } from "./runtime-buffer";
 import { createStateIO } from "./state-io";
 import {
@@ -266,6 +266,35 @@ async function processJob(jobId: string, jobPrompt: string, jobTargetPath: strin
     },
     () => prepareWorkspace(workspaceConfig, workspaceDeps)
   );
+
+  // Round-14 #1: PR mode re-anchors the persistent workspace's .git
+  // on the configured base branch BEFORE the agent runs. Without
+  // this, .git stays on the previous PR's branch (rsync excludes
+  // .git to preserve history) and the next branch we cut would have
+  // the previous PR's tip as its parent — accidentally stacked PRs.
+  if (mode === "edit" && outputMode === "pr") {
+    await withHeartbeat(
+      {
+        step: "Re-anchoring workspace on base branch.",
+        label: "Anchor"
+      },
+      () =>
+        preparePrWorkspace(
+          workspaceConfig.workspaceDir,
+          {
+            gitBin: pyanchorConfig.gitBin,
+            ghBin: pyanchorConfig.ghBin,
+            gitRemote: pyanchorConfig.gitRemote,
+            gitBaseBranch: pyanchorConfig.gitBaseBranch,
+            gitBranchPrefix: pyanchorConfig.gitBranchPrefix,
+            jobId,
+            prompt: process.env.PYANCHOR_JOB_PROMPT || "",
+            mode: "edit"
+          },
+          workspaceDeps.runCommand
+        )
+    );
+  }
 
   if (mode === "edit" && !pyanchorConfig.fastReload) {
     await withHeartbeat(

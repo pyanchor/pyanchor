@@ -30,6 +30,15 @@ describe("detectFormat", () => {
     expect(detectFormat("https://canary.discord.com/api/webhooks/x/y")).toBe("discord");
   });
 
+  it("returns discord for the bare legacy discordapp.com host (v0.20.1 round-14 #4a)", () => {
+    // v0.20.0 only matched `discord.com` exact + `*.discord.com` +
+    // `*.discordapp.com`; the bare `discordapp.com` apex fell through.
+    expect(detectFormat("https://discordapp.com/api/webhooks/1/2")).toBe("discord");
+    expect(detectFormat("https://canary.discordapp.com/api/webhooks/1/2")).toBe(
+      "discord"
+    );
+  });
+
   it("returns raw for unknown hosts", () => {
     expect(detectFormat("https://example.com/hook")).toBe("raw");
     expect(detectFormat("https://my-custom-pipeline.io/in")).toBe("raw");
@@ -65,6 +74,16 @@ describe("renderSummary", () => {
     expect(
       renderSummary(basePayload({ target_path: "/dashboard", actor: "x" }))
     ).toContain("/dashboard");
+  });
+
+  it("uses correct article — 'an edit' (vowel) vs 'a chat' (consonant) (v0.20.1 round-14 #4b)", () => {
+    // v0.20.0 had both branches emit "n" → "requested an chat".
+    expect(renderSummary(basePayload({ event: "edit_requested", mode: "edit" }))).toContain(
+      "requested an edit"
+    );
+    expect(renderSummary(basePayload({ event: "edit_requested", mode: "chat" }))).toContain(
+      "requested a chat"
+    );
   });
 
   it("pr_opened includes the PR URL", () => {

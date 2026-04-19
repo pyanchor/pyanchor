@@ -23,6 +23,84 @@
 import type { WorkspaceConfig, WorkspaceDeps } from "./workspace";
 import { buildWorkspace, restartFrontend, syncToAppDir } from "./workspace";
 
+/**
+ * Escape values that get spliced into a GitHub-flavored markdown
+ * body so they can't bend the surrounding structure.
+ *
+ * Two real risks (round-14 #3):
+ *   - `@username` in any field generates real notifications.
+ *   - Triple-backtick fences in user-supplied prompts close our
+ *     own outer formatting and can drag the rest of the body
+ *     into a code block (or the inverse).
+ *
+ * The fix:
+ *   - Insert a zero-width space after `@` so GitHub doesn't
+ *     resolve it as a mention but the visible text is unchanged.
+ *   - Render multi-line user input as a markdown block-quote
+ *     (`> ` prefix per line) — quote blocks ignore embedded
+ *     fences and are styled as a clear "this came from outside"
+ *     region in the rendered PR.
+ */
+export const escapeGitHubBodyText = (value: string): string =>
+  value.replace(/@/g, "@\u200b");
+
+export const renderQuotedBlock = (value: string): string =>
+  value
+    .split("\n")
+    .map((line) => `> ${escapeGitHubBodyText(line)}`)
+    .join("\n");
+
+/**
+ * Re-anchor a persistent PR-mode workspace on the configured base
+ * branch BEFORE the agent runs. Without this, the workspace .git
+ * stays on the previous PR's branch (since `prepareWorkspace`
+ * intentionally excludes .git from rsync to preserve history) and
+ * the next `git checkout -b ${prefix}${jobId}` makes a branch whose
+ * parent commit is the PREVIOUS PR's tip, not the configured base.
+ *
+ * Round-14 #1: this was the biggest coherence bug in the v0.19
+ * "team-ready PR mode" story — unmerged PRs accidentally stacked.
+ *
+ * Order of operations:
+ *   1. `git fetch <remote> <base>` — get latest base tip.
+ *   2. `git checkout <base>` — switch off the previous PR branch.
+ *   3. `git reset --hard <remote>/<base>` — discard any stale local
+ *      base commits AND clean the working tree. This is safe to call
+ *      BEFORE the agent runs: `prepareWorkspace` rsynced app→workspace
+ *      so the working tree already matches the deployed state, which
+ *      should match the base branch tip in any sane deployment.
+ *
+ * Calling AFTER the agent runs would wipe the agent's edits, which
+ * is why this is a separate pre-agent function and not part of
+ * `runPr()` itself.
+ */
+export async function preparePrWorkspace(
+  workspaceDir: string,
+  pr: PrConfig,
+  runCommand: WorkspaceDeps["runCommand"]
+): Promise<void> {
+  // Sanity check moved here from runPr() so the failure surfaces
+  // BEFORE the agent runs (saves the operator the wait if their git
+  // auth / clone is misconfigured).
+  try {
+    await runCommand(pr.gitBin, ["-C", workspaceDir, "rev-parse", "--is-inside-work-tree"]);
+  } catch {
+    throw new Error(
+      `PR mode: ${workspaceDir} is not a git working tree. ` +
+        `Initialize it once before enabling PYANCHOR_OUTPUT_MODE=pr ` +
+        `(e.g. \`git clone <your-remote> ${workspaceDir}\`). ` +
+        `See docs/PRODUCTION-HARDENING.md.`
+    );
+  }
+
+  await runCommand(pr.gitBin, ["-C", workspaceDir, "fetch", pr.gitRemote, pr.gitBaseBranch]);
+  await runCommand(pr.gitBin, ["-C", workspaceDir, "checkout", pr.gitBaseBranch]);
+  await runCommand(
+    pr.gitBin,
+    ["-C", workspaceDir, "reset", "--hard", `${pr.gitRemote}/${pr.gitBaseBranch}`]
+  );
+}
+
 export type OutputMode = "apply" | "pr" | "dryrun";
 
 export const KNOWN_OUTPUT_MODES: ReadonlyArray<OutputMode> = ["apply", "pr", "dryrun"];
@@ -172,20 +250,11 @@ async function runPr(ctx: OutputContext, pr: PrConfig): Promise<OutputResult> {
   const { workspaceDir } = ctx.workspaceConfig;
   const { runCommand } = ctx.workspaceDeps;
 
-  // 0. Sanity: workspace must be a git working tree. v0.19 doesn't
-  //    auto-clone; the operator pre-sets-up the workspace as a
-  //    checkout of the deployment repo. If missing, fail with a
-  //    pointer to the docs rather than silently doing nothing.
-  try {
-    await runCommand(pr.gitBin, ["-C", workspaceDir, "rev-parse", "--is-inside-work-tree"]);
-  } catch {
-    throw new Error(
-      `PR mode: ${workspaceDir} is not a git working tree. ` +
-        `Initialize it once before enabling PYANCHOR_OUTPUT_MODE=pr ` +
-        `(e.g. \`git clone <your-remote> ${workspaceDir}\`). ` +
-        `See docs/PRODUCTION-HARDENING.md.`
-    );
-  }
+  // Workspace sanity + base-branch re-anchor happen in
+  // preparePrWorkspace() BEFORE the agent runs (round-14 #1 fix).
+  // By the time we get here, .git is on origin/<base> and the agent
+  // has layered its edits on top — the working tree already shows
+  // the diff we want to ship.
 
   // 1. Quick-out: if the agent didn't actually change anything,
   //    skip the PR entirely. Audit still records the run as success
@@ -197,13 +266,17 @@ async function runPr(ctx: OutputContext, pr: PrConfig): Promise<OutputResult> {
 
   const branch = `${pr.gitBranchPrefix}${pr.jobId}`;
   const title = (pr.prompt.split("\n")[0] || "pyanchor edit").slice(0, 72);
+  // Round-14 #3: render the prompt as a quoted block + escape `@`
+  // mentions in actor/prompt. Backtick fences inside the prompt no
+  // longer break our outer body markdown; @-mentions don't generate
+  // real GitHub notifications.
   const body =
     `Generated by pyanchor.\n\n` +
-    `**Prompt**\n\n${pr.prompt}\n\n` +
+    `**Prompt**\n\n${renderQuotedBlock(pr.prompt)}\n\n` +
     `---\n` +
     `Run ID: \`${pr.jobId}\`\n` +
     `Mode: \`${pr.mode}\`\n` +
-    (pr.actor ? `Actor: \`${pr.actor}\`\n` : "");
+    (pr.actor ? `Actor: ${escapeGitHubBodyText(pr.actor)}\n` : "");
 
   await ctx.withHeartbeat({ step: "Creating branch.", label: "Branch" }, () =>
     runCommand(pr.gitBin, ["-C", workspaceDir, "checkout", "-b", branch])
