@@ -60,6 +60,29 @@ const bootstrapHtml = `<!doctype html>
   </body>
 </html>`;
 
+// Korean-locale fixture: same as the overlay-direct fixture but
+// pre-seeds __PyanchorConfig.locale = "ko" so the built-in Korean
+// bundle (v0.9.4) activates. Used by the i18n e2e test to prove
+// the bundle resolves end-to-end in a real browser, not just unit.
+const koLocaleHtml = `<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pyanchor e2e fixture (ko locale)</title>
+    <script>
+      window.__PyanchorConfig = {
+        baseUrl: "/_pyanchor",
+        token: "e2e-test-token-32-chars-1234567890",
+        locale: "ko"
+      };
+    </script>
+  </head>
+  <body>
+    <h1 id="page-heading">Korean locale fixture</h1>
+    <script src="/_pyanchor/overlay.js"></script>
+  </body>
+</html>`;
+
 const server = createServer((req, res) => {
   if (!req.url) {
     res.writeHead(400).end();
@@ -75,6 +98,12 @@ const server = createServer((req, res) => {
   if (req.url === "/bootstrap.html") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(bootstrapHtml);
+    return;
+  }
+
+  if (req.url === "/ko.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(koLocaleHtml);
     return;
   }
 

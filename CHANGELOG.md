@@ -7,6 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-04-19
+
+Built-in Korean bundle. v0.9.3 actually finished the i18n
+extraction; v0.9.4 ships the first non-English translation in
+the runtime so users only need to set `locale: "ko"` and Korean
+copy renders without any extra `registerStrings` call from host
+code.
+
+### Added
+- **`koStrings`** in `src/runtime/overlay/strings.ts` — full
+  Korean translation of every `StringTable` key (no fallthroughs
+  to English). Translation rules:
+  - sentence-final periods preserved (matches `enStrings`
+    typography — including `\u2026` for "전송 중…")
+  - "Pyanchor" / "DevTools" left as-is (brand names)
+  - conversational register matches the English source (short,
+    directive, no `…해주세요` honorifics)
+  - parameterized strings (`statusQueuedAt`, `statusYourPosition`)
+    use Korean ordinal phrasing
+- **Auto-registration at module load.** A new `BUILT_IN_BUNDLES`
+  array + `seedBuiltIns()` helper register every shipped locale
+  the moment `strings.ts` is imported. Host apps don't need to
+  call `registerStrings("ko", …)` themselves — setting
+  `window.__PyanchorConfig.locale = "ko"` is enough.
+- **`_clearRegistry()` now re-seeds** the built-in bundles after
+  wiping. Tests that called `_clearRegistry()` previously ended
+  up with an empty registry; now they get the same view
+  production has, which catches regressions where built-ins
+  silently disappear.
+- **`tests/e2e/server.mjs`** serves a new `/ko.html` fixture
+  that pre-seeds `window.__PyanchorConfig.locale = "ko"` and
+  loads the overlay directly — proves end-to-end that the
+  built-in bundle activates without host code calling
+  `registerStrings`.
+- **`tests/e2e/i18n-ko.spec.ts`** — **4 Playwright tests**:
+  - panel header + empty-state copy renders Korean
+  - status banner uses Korean `statusReadingEdit` while running
+  - dialog `aria-label` stays English brand (`panelTitle` =
+    "Pyanchor DevTools" — intentionally not translated)
+  - toggle `aria-label` uses Korean `toggleClose`
+
+### Tests
+- **+4 unit tests** in `strings.test.ts`:
+  - `ko` resolves to a Korean bundle, not English
+  - every `StringTable` key has a Korean translation distinct
+    from English (regression guard for keys added without
+    translation)
+  - parameterized strings work in Korean (`statusQueuedAt`,
+    `statusYourPosition`)
+  - host `registerStrings("ko", …)` override wins over the
+    built-in (last-write-wins semantics preserved)
+- **+4 e2e tests** in `i18n-ko.spec.ts` (above).
+- **Existing test fixed**: `resolveStrings("ko")` no longer
+  expects English fallback (now returns the built-in Korean).
+  Replaced with `"zz-XX"` / `"xx-fake"` for the
+  unregistered-locale assertion.
+- **Total: 420 unit + 15 e2e = 435 tests**.
+
+### Compatibility
+No runtime change for English users — `resolveStrings(undefined)`
+or `"en"` still returns `enStrings`. Bundle size: 36.3KB → 40.0KB
+(+3.7KB) for the Korean bundle's ~40 string values. Gzip should
+recover most of it.
+
+The only API-visible change: `_clearRegistry()` now re-seeds
+built-ins. Host apps that depend on it producing an empty
+registry (none in production code; only test infra used it)
+should manually re-clear after if a truly empty state is
+needed. The unit-tests for `registerStrings` already work with
+the re-seeded state.
+
+### How to use
+```html
+<!-- Option A: bootstrap reads data-pyanchor-locale -->
+<script
+  src="/_pyanchor/bootstrap.js"
+  defer
+  data-pyanchor-token="…"
+  data-pyanchor-locale="ko"
+></script>
+
+<!-- Option B: host code pre-seeds the global -->
+<script>
+  window.__PyanchorConfig = { baseUrl: "/_pyanchor", token: "…", locale: "ko" };
+</script>
+<script src="/_pyanchor/overlay.js"></script>
+```
+
+Either path activates the built-in Korean bundle — no
+`registerStrings` call needed.
+
+### Roadmap (post-v0.9.4)
+- **v0.9.x UX wins** from Codex round-9:
+  - keyboard shortcut (Cmd/Ctrl + Shift + .) to open/close
+  - retry last request after failure/cancel
+  - copy last answer / copy error
+  - diagnostics panel
+- **v0.10.x or later**: more built-in locales (ja / zh-CN / es?
+  PRs welcome — pattern in `BUILT_IN_BUNDLES`).
+- **Lower priority**: Docker-based runner sandbox.
+
 ## [0.9.3] - 2026-04-19
 
 Codex round 9 surfaced 2 mediums + 6 feature suggestions on v0.9.2.

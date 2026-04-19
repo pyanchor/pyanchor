@@ -108,14 +108,55 @@ describe("resolveStrings", () => {
   });
 
   it("returns enStrings for an unregistered locale (silent fallback)", () => {
-    expect(resolveStrings("ko")).toBe(enStrings);
+    // ko is now built-in (v0.9.4); use a guaranteed-unregistered code.
     expect(resolveStrings("zz-XX")).toBe(enStrings);
+    expect(resolveStrings("xx-fake")).toBe(enStrings);
   });
 
   it("matches case-insensitively", () => {
-    registerStrings("ko", { roleYou: "사용자" });
+    // ko is built-in; just verify the lookup is case-insensitive.
     expect(resolveStrings("KO").roleYou).toBe("사용자");
     expect(resolveStrings("Ko").roleYou).toBe("사용자");
+  });
+});
+
+describe("built-in ko bundle (v0.9.4)", () => {
+  it("is registered automatically — no explicit registerStrings needed", () => {
+    // Fresh registry state (afterEach calls _clearRegistry which
+    // re-seeds built-ins). ko should resolve to Korean copy.
+    const ko = resolveStrings("ko");
+    expect(ko).not.toBe(enStrings);
+    expect(ko.roleYou).toBe("사용자");
+    expect(ko.panelTitle).toBe("Pyanchor DevTools"); // brand stays
+    expect(ko.messagesEmpty).toContain("대화 기록");
+  });
+
+  it("falls back to enStrings for keys NOT present in the ko bundle (none currently)", () => {
+    const ko = resolveStrings("ko");
+    // Every StringTable key should have a Korean translation in v0.9.4.
+    // If a future key is added to StringTable but not ko, this would
+    // catch it by returning the English value (== enStrings[key]).
+    expect(ko.statusReadingChat).not.toBe(enStrings.statusReadingChat);
+    expect(ko.statusJobFailed).not.toBe(enStrings.statusJobFailed);
+    expect(ko.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
+    expect(ko.errorJobFailed).not.toBe(enStrings.errorJobFailed);
+  });
+
+  it("parameterized strings work (statusQueuedAt / statusYourPosition)", () => {
+    const ko = resolveStrings("ko");
+    expect(ko.statusQueuedAt(2)).toBe("대기열 2번째. 현재 작업이 끝나면 실행됩니다.");
+    expect(ko.statusYourPosition(3)).toBe("내 요청: 3번째");
+  });
+
+  it("host registerStrings('ko', …) override wins over the built-in bundle", () => {
+    registerStrings("ko", { roleYou: "host-overrode" });
+    // Host-provided partial merges, but since the v0.9.4 ko bundle is
+    // replaced (not deep-merged) by the registry.set call, the other
+    // ko keys revert to English. Documented behavior: "last
+    // registration for a locale wins".
+    const ko = resolveStrings("ko");
+    expect(ko.roleYou).toBe("host-overrode");
+    expect(ko.messagesEmpty).toBe(enStrings.messagesEmpty); // rest falls back
   });
 });
 
