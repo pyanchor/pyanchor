@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-04-19
+
+Codex round 9 surfaced 2 mediums + 6 feature suggestions on v0.9.2.
+Both blockers patched; one suggestion (focus return on close)
+bundled because it's tightly coupled to the focus-retention work.
+Plus a real Playwright keyboard-nav e2e — Codex flagged the
+absence of one as a blocker too.
+
+### Fixed
+- **Focus retention across re-renders for non-textarea controls.**
+  v0.9.2's `previousActive !== null` check fixed the textarea-steal
+  but didn't restore focus to other controls. When a user clicked a
+  mode-switch / cancel button, the re-render destroyed the DOM and
+  focus dropped to `<body>` — keyboard navigation broke as soon as
+  any in-panel button was used. v0.9.3 saves the focused element's
+  IDENTITY (textarea + selection, OR `data-action` attribute) before
+  the innerHTML wipe, then re-finds and re-focuses by selector after.
+  All interactive panel elements now have `data-action` (added
+  `submit-button` to the previously unidentified submit button).
+  Codex round-9 #1 — verified by new Playwright kbd-nav e2e
+  (`tests/e2e/keyboard-nav.spec.ts`).
+- **Fresh-open detection no longer misfires on external focus.**
+  v0.9.2's `previousActive === null` heuristic treated "panel still
+  open but focus moved outside the shadow tree" as a fresh open and
+  re-stole focus to the textarea. v0.9.3 tracks
+  `wasOpenLastRender` at module level and computes
+  `isFreshOpen = uiState.isOpen && !wasOpenLastRender` —
+  panel-already-open renders never re-trigger auto-focus regardless
+  of where the active element sits.
+- **i18n extraction is actually complete now.** Two more
+  hardcoded fallbacks moved into `StringTable`:
+  - `errorRequestFailed` ("Request failed.") — used by
+    `createFetchJson()` when a non-2xx response has no `{error}`
+    field. Now an optional `defaultErrorMessage` factory option,
+    wired from `s.errorRequestFailed`.
+  - `errorJobFailed` ("Job failed.") — used by
+    `createSyncStateClient()` when polling reports `failed` with
+    a null `error`. Now an optional `defaultJobFailedMessage`
+    factory option, wired from `s.errorJobFailed`.
+  v0.9.2's "i18n extraction completed" CHANGELOG claim is now
+  literally true; Korean bundle (v0.9.4) is unblocked.
+  Codex round-9 #2.
+
+### Added
+- **Focus return on close** (Codex round-9 feature suggestion #1).
+  When the panel transitions from open → closed, focus moves back
+  to the trigger button instead of dropping to `<body>`. Detected
+  via `justClosed = !uiState.isOpen && wasOpenLastRender` in the
+  same render cycle that handles the close. Bundled with the
+  focus-retention fix because both depend on the same
+  module-level `wasOpenLastRender` tracking.
+- **`data-action="submit-button"`** on the submit button so the
+  focus-identity restore can recognize it. Previously the only
+  unmarked interactive control.
+- **`tests/e2e/keyboard-nav.spec.ts`** — **4 Playwright tests**:
+  - mode-switch button click does NOT drop focus to BODY (the
+    exact regression Codex's manual Chromium repro hit)
+  - close → focus returns to toggle
+  - Tab past the last focusable wraps to the first
+  - Shift+Tab past the first wraps to the last
+- **+5 unit tests** across the touched modules:
+  - `strings.test.ts`: 2 new keys included in shape check, exact
+    English values asserted (regression guard)
+  - `fetch-helper.test.ts`: caller-supplied `defaultErrorMessage`
+    overrides the English fallback (Korean error in test)
+  - `polling.test.ts`: caller-supplied `defaultJobFailedMessage`
+    overrides the English fallback (Korean error in test)
+  - `bootstrap.test.ts`: empty-string `data-pyanchor-locale`
+    treated as "no locale" (Codex round-9 untested edge)
+
+### Tests
+- **Unit**: 412 → **416** (+4 — strings shape +1, strings values +1,
+  fetch override +1, polling override +1, bootstrap empty-locale +1
+  = 5 new but the strings shape and values share an `it`, so 4
+  observable additions).
+- **E2E (Playwright)**: 7 → **11** (+4 keyboard-nav tests).
+- **Total: 427 across 31 files**.
+
+### Compatibility
+No runtime behavior change for English users. The two new factory
+options (`defaultErrorMessage`, `defaultJobFailedMessage`) default
+to the prior English strings when not provided. Bundle size:
+35.1KB → 36.3KB (+1.2KB) for the focus-identity logic + the 2 new
+string keys + new factory options.
+
+### Roadmap (post-v0.9.3)
+- **v0.9.4** — built-in Korean bundle (`registerStrings("ko", { … })`
+  shipped alongside English). Now genuinely unblocked.
+- **v0.9.x** UX wins from Codex round-9 feature ideas:
+  - keyboard shortcut (Cmd/Ctrl + Shift + .) to open/close
+  - retry last request after failure/cancel
+  - copy last answer / copy error
+  - diagnostics panel (runtime config, locale, polling state)
+- **Lower priority**: Docker-based runner sandbox.
+
 ## [0.9.2] - 2026-04-19
 
 Codex round 8 surfaced 3 mediums on v0.9.0 — the i18n activation

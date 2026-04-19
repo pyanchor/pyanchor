@@ -518,7 +518,8 @@ let serverState: AiEditState = { ...emptyState };
 // at module-eval time would defeat the cookie-only fallback.
 const fetchJson = createFetchJson({
   baseUrl: config.baseUrl,
-  getToken: () => config.token || null
+  getToken: () => config.token || null,
+  defaultErrorMessage: s.errorRequestFailed
 });
 
 const runtimePath = (suffix: string) => buildRuntimePath(config.baseUrl, suffix);
@@ -582,6 +583,14 @@ const bindHistory = () => {
   window.addEventListener("popstate", dispatch);
 };
 
+// Module-level focus tracking for the panel a11y fix (Codex round-9 #1).
+// `wasOpenLastRender` lets isFreshOpen distinguish the first render
+// where the panel appears from later renders that happen while the
+// panel is still open but focus has drifted outside the shadow tree.
+// Without this, the v0.9.2 `previousActive === null` check would
+// re-steal focus to the textarea on any external-focus + render race.
+let wasOpenLastRender = false;
+
 const syncStateClient = createSyncStateClient({
   fetchJson,
   buildStatusUrl: () => runtimePath("/api/status"),
@@ -600,7 +609,8 @@ const syncStateClient = createSyncStateClient({
     } else {
       showToast(s.toastRequestCanceled, "info");
     }
-  }
+  },
+  defaultJobFailedMessage: s.errorJobFailed
 });
 
 const syncState = (withOutcomeToast = false) => syncStateClient.sync(withOutcomeToast);
@@ -622,26 +632,39 @@ const render = () => {
           AUTO_SCROLL_THRESHOLD_PX
       }
     : null;
-  const shouldRestoreTextareaFocus = previousActive?.classList.contains("textarea") ?? false;
-  const previousSelection =
-    shouldRestoreTextareaFocus && previousActive instanceof HTMLTextAreaElement
-      ? {
-          start: previousActive.selectionStart,
-          end: previousActive.selectionEnd
-        }
-      : null;
 
-  // a11y: detect a fresh panel open so we can auto-focus the textarea.
-  // "Fresh" = panel is now open and focus was NOT inside the shadow
-  // root before this render. ShadowRoot.activeElement returns null
-  // when the focused element is outside the shadow tree, so the
-  // simplest reliable check is `previousActive !== null`. (We can't
-  // use `root.contains(previousActive)` — host.contains() does NOT
-  // pierce the shadow boundary in real browsers, so it would return
-  // false for shadow descendants and re-trigger autofocus on every
-  // re-render. Codex round-8 #2.)
-  const wasFocusInsideOverlay = previousActive !== null;
-  const isFreshOpen = uiState.isOpen && !wasFocusInsideOverlay;
+  // Save the focused element's IDENTITY (not the DOM node — that
+  // gets destroyed by the innerHTML wipe below). After the wipe we
+  // re-find the element with the matching identity and restore
+  // focus, so keyboard nav stays inside the dialog across renders.
+  // Codex round-9 #1: v0.9.2 only restored textarea focus, leaving
+  // mode-button / cancel-button / etc. clicks dropping focus to BODY.
+  type FocusIdentity =
+    | { kind: "textarea"; selection: { start: number; end: number } | null }
+    | { kind: "action"; action: string }
+    | null;
+
+  let focusIdentity: FocusIdentity = null;
+  if (previousActive) {
+    if (
+      previousActive.classList.contains("textarea") &&
+      previousActive instanceof HTMLTextAreaElement
+    ) {
+      focusIdentity = {
+        kind: "textarea",
+        selection: { start: previousActive.selectionStart, end: previousActive.selectionEnd }
+      };
+    } else if (previousActive.dataset.action) {
+      focusIdentity = { kind: "action", action: previousActive.dataset.action };
+    }
+  }
+
+  // Fresh-open / just-closed transitions drive the auto-focus + close-
+  // return behavior. Track the previous render's open state separately
+  // from previousActive — externally-focused-while-still-open should
+  // NOT count as fresh open (Codex round-9 edge case).
+  const isFreshOpen = uiState.isOpen && !wasOpenLastRender;
+  const justClosed = !uiState.isOpen && wasOpenLastRender;
 
   shadowRoot.innerHTML = `
     <style>${styles}</style>
@@ -695,7 +718,7 @@ const render = () => {
               </div>
               <div class="actions">
                 ${canCancel ? `<button class="button button--danger" type="button" data-action="cancel" aria-label="${escapeHtml(s.composerCancelLabel)}" ${uiState.isCanceling ? "disabled" : ""}>${escapeHtml(s.composerCancelLabel)}</button>` : ""}
-                <button class="button button--primary" type="submit" ${!serverState.configured || isBusy || !uiState.prompt.trim() ? "disabled" : ""}>
+                <button class="button button--primary" type="submit" data-action="submit-button" ${!serverState.configured || isBusy || !uiState.prompt.trim() ? "disabled" : ""}>
                   ${escapeHtml(uiState.isSubmitting ? s.composerSubmitSending : uiState.mode === "chat" ? s.composerSubmitSend : s.composerSubmitRun)}
                 </button>
               </div>
@@ -714,13 +737,43 @@ const render = () => {
 
   if (promptField) {
     promptField.value = uiState.prompt;
-    if (shouldRestoreTextareaFocus || isFreshOpen) {
-      promptField.focus({ preventScroll: true });
-      if (previousSelection) {
-        promptField.setSelectionRange(previousSelection.start, previousSelection.end);
-      }
-    }
   }
+
+  // Focus restoration order:
+  //   1. Textarea identity → focus textarea, restore selection
+  //   2. Action identity → focus the matching button (still attached)
+  //   3. Action identity but element gone (e.g. cancel disappeared
+  //      after job finished) → fall back to textarea
+  //   4. Fresh open + no prior identity → auto-focus textarea
+  //   5. Just closed → return focus to the toggle button
+  //   6. Otherwise → leave focus alone (browser default)
+  if (focusIdentity?.kind === "textarea" && promptField) {
+    promptField.focus({ preventScroll: true });
+    if (focusIdentity.selection) {
+      promptField.setSelectionRange(focusIdentity.selection.start, focusIdentity.selection.end);
+    }
+  } else if (focusIdentity?.kind === "action") {
+    const target = shadowRoot.querySelector<HTMLElement>(
+      `[data-action='${focusIdentity.action}']`
+    );
+    if (target && !target.matches("[disabled]")) {
+      target.focus({ preventScroll: true });
+    } else if (uiState.isOpen && promptField) {
+      // Element disappeared (e.g. cancel after job done). Don't drop
+      // focus to BODY — keep it inside the dialog.
+      promptField.focus({ preventScroll: true });
+    }
+  } else if (isFreshOpen && promptField) {
+    promptField.focus({ preventScroll: true });
+  } else if (justClosed) {
+    // Focus return on close (Codex round-9 feature suggestion #1):
+    // Move focus back to the trigger button so keyboard users
+    // don't get dropped to <body>.
+    const toggle = shadowRoot.querySelector<HTMLElement>("[data-action='toggle']");
+    toggle?.focus({ preventScroll: true });
+  }
+
+  wasOpenLastRender = uiState.isOpen;
 
   if (messagesPanel) {
     if (!previousScrollState || previousScrollState.shouldStickToBottom) {

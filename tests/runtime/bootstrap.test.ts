@@ -316,6 +316,25 @@ describe("runBootstrap — locale propagation (v0.9.2 fix, Codex round-8 #1)", (
     );
     expect(overlayTag?.dataset.pyanchorLocale).toBeUndefined();
   });
+
+  it("treats empty-string data-pyanchor-locale as 'no locale' (Codex round-9 edge)", () => {
+    // dataset.pyanchorLocale === "" should not propagate as a real
+    // locale — `?.trim()` returns "" and the falsy gate omits it.
+    const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });
+    script.dataset.pyanchorLocale = "";
+    runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+    expect(window.__PyanchorConfig?.locale).toBeUndefined();
+
+    const overlayTag = document.head.querySelector<HTMLScriptElement>(
+      "script[data-pyanchor-overlay='1']"
+    );
+    expect(overlayTag?.dataset.pyanchorLocale).toBeUndefined();
+  });
 });
 
 describe("runBootstrap — overlay script injection", () => {

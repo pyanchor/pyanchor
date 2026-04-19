@@ -40,6 +40,12 @@ export interface SyncStateClientOptions {
    * Caller renders a toast.
    */
   onOutcome?: (outcome: SyncOutcome) => void;
+  /**
+   * Generic fallback message when a polling outcome reports `failed`
+   * with a null `error` field. Defaults to English "Job failed." for
+   * callers that don't pass a localized override.
+   */
+  defaultJobFailedMessage?: string;
 }
 
 export interface SyncStateClient {
@@ -88,7 +94,10 @@ export function createSyncStateClient(opts: SyncStateClientOptions): SyncStateCl
             return;
           }
           if (next.status === "failed") {
-            opts.onOutcome?.({ kind: "failed", error: next.error ?? "Job failed." });
+            opts.onOutcome?.({
+              kind: "failed",
+              error: next.error ?? opts.defaultJobFailedMessage ?? "Job failed."
+            });
             return;
           }
           if (next.status === "canceled") {

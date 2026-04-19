@@ -61,6 +61,9 @@ describe("enStrings (default English bundle)", () => {
     expect(enStrings.panelTitle).toBeTruthy();
     expect(enStrings.panelContextLabel).toBeTruthy();
     expect(typeof enStrings.statusYourPosition).toBe("function");
+    // v0.9.3 — i18n completion (Codex round-9 #2)
+    expect(enStrings.errorRequestFailed).toBeTruthy();
+    expect(enStrings.errorJobFailed).toBeTruthy();
   });
 
   it("statusQueuedAt formats the position into the message", () => {
@@ -74,6 +77,14 @@ describe("enStrings (default English bundle)", () => {
 
   it("panelTitle is the brand name (used as dialog aria-label)", () => {
     expect(enStrings.panelTitle).toBe("Pyanchor DevTools");
+  });
+
+  it("errorRequestFailed + errorJobFailed are the documented English fallbacks", () => {
+    // These match the v0.8.x hardcoded values that were extracted in
+    // v0.9.3. Regression guard against editor rewrites that would
+    // otherwise silently change the user-facing copy.
+    expect(enStrings.errorRequestFailed).toBe("Request failed.");
+    expect(enStrings.errorJobFailed).toBe("Job failed.");
   });
 
   it("composerSubmitSending uses the unicode horizontal ellipsis (no ASCII '...')", () => {

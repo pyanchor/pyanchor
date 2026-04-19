@@ -82,6 +82,12 @@ export interface StringTable {
   panelContextLabel: string;
   /** "Your request: position {N}" breadcrumb in getStatusMeta. */
   statusYourPosition: (position: number) => string;
+
+  // Error-path fallbacks (v0.9.3 — Codex round-9 #2 i18n completion)
+  /** Generic fallback when a non-2xx response has no {error} field (fetch-helper). */
+  errorRequestFailed: string;
+  /** Generic fallback when a polling outcome reports `failed` with null error (polling). */
+  errorJobFailed: string;
 }
 
 export const enStrings: StringTable = {
@@ -140,7 +146,10 @@ export const enStrings: StringTable = {
 
   panelTitle: "Pyanchor DevTools",
   panelContextLabel: "Current page",
-  statusYourPosition: (n) => `Your request: position ${n}`
+  statusYourPosition: (n) => `Your request: position ${n}`,
+
+  errorRequestFailed: "Request failed.",
+  errorJobFailed: "Job failed."
 };
 
 const registry = new Map<string, Partial<StringTable>>();

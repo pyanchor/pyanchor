@@ -188,6 +188,37 @@ describe("createSyncStateClient — outcome toasts", () => {
     expect(h.onOutcome).toHaveBeenCalledWith({ kind: "failed", error: "Job failed." });
   });
 
+  it("uses defaultJobFailedMessage override when {error} is null (i18n)", async () => {
+    const initialUI: Partial<UIState> = {};
+    const initialServer: Partial<AiEditState> = { status: "running", jobId: "j1" };
+
+    let serverState: AiEditState = { ...createEmptyServerState(), ...initialServer };
+    const fetchJson = vi.fn().mockResolvedValue({
+      ...createEmptyServerState(),
+      status: "failed",
+      jobId: "j1",
+      error: null
+    });
+    const onOutcome = vi.fn();
+    const client = createSyncStateClient({
+      fetchJson: fetchJson as unknown as Parameters<typeof createSyncStateClient>[0]["fetchJson"],
+      buildStatusUrl: () => "/_pyanchor/api/status",
+      getUIState: () => ({ ...createUIState(), ...initialUI }),
+      getServerState: () => serverState,
+      setServerState: (next) => {
+        serverState = next;
+      },
+      mutateUIState: () => undefined,
+      render: () => undefined,
+      onOutcome,
+      defaultJobFailedMessage: "작업 실패."
+    });
+
+    await client.sync(true);
+
+    expect(onOutcome).toHaveBeenCalledWith({ kind: "failed", error: "작업 실패." });
+  });
+
   it("emits 'canceled' outcome", async () => {
     const h = makeHarness({}, { status: "canceling", jobId: "j1" });
     h.fetchJson.mockResolvedValue({

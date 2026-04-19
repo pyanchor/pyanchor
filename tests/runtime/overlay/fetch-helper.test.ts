@@ -113,6 +113,19 @@ describe("createFetchJson", () => {
     await expect(fetchJson("/x")).rejects.toThrow("Request failed.");
   });
 
+  it("uses the caller-supplied defaultErrorMessage instead of the English default (i18n)", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(mockResponse({}, { ok: false, status: 500 }));
+    const fetchJson = createFetchJson({
+      baseUrl: "/_pyanchor",
+      getToken: () => null,
+      fetchImpl,
+      defaultErrorMessage: "요청 실패."
+    });
+    await expect(fetchJson("/x")).rejects.toThrow("요청 실패.");
+  });
+
   it("returns the JSON body on 2xx", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(mockResponse({ status: "idle", queue: [] }));
     const fetchJson = createFetchJson({

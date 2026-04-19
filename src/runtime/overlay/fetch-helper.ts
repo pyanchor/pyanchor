@@ -23,6 +23,12 @@ export interface FetchHelperOptions {
   getToken(): string | null;
   /** Optional fetch override — defaults to global fetch. Useful for tests. */
   fetchImpl?: typeof fetch;
+  /**
+   * Generic fallback message when a non-2xx response has no `{error}`
+   * field. Defaults to English "Request failed." for callers that
+   * don't pass a localized override.
+   */
+  defaultErrorMessage?: string;
 }
 
 export interface FetchJson {
@@ -42,6 +48,7 @@ const DEFAULT_ERROR_MESSAGE = "Request failed.";
  */
 export function createFetchJson(opts: FetchHelperOptions): FetchJson {
   const fetchImpl: typeof fetch = opts.fetchImpl ?? fetch;
+  const defaultError = opts.defaultErrorMessage ?? DEFAULT_ERROR_MESSAGE;
   return async <T>(input: string, init?: RequestInit): Promise<T> => {
     const token = opts.getToken();
     const response = await fetchImpl(input, {
@@ -55,7 +62,7 @@ export function createFetchJson(opts: FetchHelperOptions): FetchJson {
     });
     const data = (await response.json()) as T & { error?: string };
     if (!response.ok) {
-      throw new Error(data?.error ?? DEFAULT_ERROR_MESSAGE);
+      throw new Error(data?.error ?? defaultError);
     }
     return data;
   };
