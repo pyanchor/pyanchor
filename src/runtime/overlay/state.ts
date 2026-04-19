@@ -6,7 +6,13 @@
  * overlay.ts (they're tightly coupled to the render() loop), but
  * everything that derives FROM (uiState, serverState) is here so
  * the logic can be tested without DOM/jsdom.
+ *
+ * Since v0.9.0 every helper that returns a user-visible string takes
+ * a `StringTable` parameter so the overlay can render localized
+ * copy. Pass `enStrings` for the original English behavior.
  */
+
+import type { StringTable } from "./strings";
 
 // Re-declared inline so the overlay bundle stays self-contained
 // (no shared/types import — the runtime .ts is browser-bound).
@@ -153,7 +159,8 @@ export const getStatusHeadline = (
     AiEditState,
     "status" | "mode" | "queue" | "heartbeatLabel" | "currentStep" | "error"
   >,
-  deps: StatusHeadlineDeps
+  deps: StatusHeadlineDeps,
+  strings: StringTable
 ): string => {
   const queuePosition = getTrackedQueuePosition(uiState, serverState);
 
@@ -162,7 +169,7 @@ export const getStatusHeadline = (
     serverState.status !== "running" &&
     serverState.status !== "canceling"
   ) {
-    return `Queued at position ${queuePosition}. Will run after the current jobs finish.`;
+    return strings.statusQueuedAt(queuePosition);
   }
 
   if (serverState.status === "running" || serverState.status === "canceling") {
@@ -170,22 +177,20 @@ export const getStatusHeadline = (
       deps.thinkingPreview ||
       serverState.heartbeatLabel ||
       serverState.currentStep ||
-      (serverState.mode === "chat"
-        ? "Reading your question."
-        : "Reading the page and the code.")
+      (serverState.mode === "chat" ? strings.statusReadingChat : strings.statusReadingEdit)
     );
   }
 
   if (serverState.status === "failed") {
-    return serverState.error ?? "Job failed.";
+    return serverState.error ?? strings.statusJobFailed;
   }
 
   if (serverState.status === "canceled") {
-    return serverState.error ?? "Job canceled.";
+    return serverState.error ?? strings.statusJobCanceled;
   }
 
   if (serverState.status === "done") {
-    return serverState.mode === "chat" ? "Answer ready." : "Edit complete.";
+    return serverState.mode === "chat" ? strings.statusAnswerReady : strings.statusEditComplete;
   }
 
   return "";
@@ -205,6 +210,7 @@ export const getStatusMeta = (
   const pieces = [
     serverState.heartbeatLabel,
     formattedHeartbeatAt,
+    // Position breadcrumb is locale-independent (just a number).
     queuePosition > 0 ? `Your request: position ${queuePosition}` : null
   ].filter(Boolean);
   return pieces.join(" / ");
@@ -213,13 +219,11 @@ export const getStatusMeta = (
 /**
  * Default placeholder text for the prompt textarea, mode-aware.
  */
-export const getPlaceholder = (mode: AiEditMode): string =>
-  mode === "edit"
-    ? "e.g. make the login/signup tab transition smoother. Keep the existing structure intact."
-    : "e.g. explain why this page behaves the way it does. Cite the files.";
+export const getPlaceholder = (mode: AiEditMode, strings: StringTable): string =>
+  mode === "edit" ? strings.composerEditPlaceholder : strings.composerChatPlaceholder;
 
-export const getComposerTitle = (mode: AiEditMode): string =>
-  mode === "edit" ? "Edit request" : "Send a question";
+export const getComposerTitle = (mode: AiEditMode, strings: StringTable): string =>
+  mode === "edit" ? strings.composerEditTitle : strings.composerChatTitle;
 
 /**
  * Title used inside the "pending bubble" (the loading placeholder
@@ -228,9 +232,10 @@ export const getComposerTitle = (mode: AiEditMode): string =>
  */
 export const getPendingBubbleTitle = (
   uiState: Pick<UIState, "mode">,
-  serverState: Pick<AiEditState, "status" | "mode">
+  serverState: Pick<AiEditState, "status" | "mode">,
+  strings: StringTable
 ): string => {
-  if (serverState.status === "canceling") return "Drafting your request.";
-  if (serverState.mode === "edit" || uiState.mode === "edit") return "Reading page and code.";
-  return "Drafting an answer.";
+  if (serverState.status === "canceling") return strings.pendingDrafting;
+  if (serverState.mode === "edit" || uiState.mode === "edit") return strings.pendingReading;
+  return strings.pendingAnswering;
 };

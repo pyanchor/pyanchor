@@ -7,6 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-04-19
+
+UX track entry. Two long-tracked items land together:
+- **a11y phase 1** — focus trap, aria-live status announcer,
+  aria-labels on every interactive button, auto-focus the textarea
+  on first panel open. Codex round-3 #6.
+- **i18n shim foundation** — every user-visible string moved into
+  a `StringTable` with English defaults and a partial-override
+  registry. Locale resolves from `window.__PyanchorConfig.locale`
+  or `data-pyanchor-locale` on the runtime script tag. Untranslated
+  keys fall back to English silently.
+
+### Added
+- **`src/runtime/overlay/strings.ts`** — central string table:
+  - `StringTable` interface with **39 keys** covering status banner,
+    pending bubble, composer (title / placeholder / hint / submit /
+    cancel), mode switch, toggle button, toasts, empty state, role
+    labels, and boot-error copy
+  - `enStrings` — the English default bundle (verbatim copy of the
+    pre-v0.9.0 inline strings)
+  - `registerStrings(locale, partial)` — host apps register a
+    locale bundle; partial overrides merge over `enStrings`
+  - `resolveStrings(locale?)` — returns the merged table; empty /
+    null / `"en"` / unknown locale → `enStrings` verbatim,
+    case-insensitive
+- **`window.__PyanchorConfig.locale`** + **`data-pyanchor-locale`**
+  script attribute — both honored by overlay bootstrap (config
+  field takes precedence).
+- **a11y: focus trap on the panel.** When the panel is open and
+  the user Tabs past the last focusable element (or Shift+Tabs
+  past the first), focus wraps to the other end. Listener attached
+  once at module load on the shadow root; gates on `uiState.isOpen`.
+- **a11y: aria-live status announcer.** The status-line block is
+  now wrapped in `<div aria-live="polite" aria-atomic="true">` so
+  screen readers announce status transitions (running → done,
+  failed errors, queue position) without stealing focus.
+- **a11y: missing aria-labels filled in.** The mode-switch
+  buttons now have `aria-pressed` reflecting the active mode and
+  the `<div class="mode-switch">` has `role="group"`. The textarea
+  has both a `<label>` and an aria-label.
+- **a11y: auto-focus the textarea** when the panel opens fresh
+  (focus wasn't previously inside the overlay). Doesn't steal focus
+  on re-renders that originated from inside the panel.
+
+### Changed
+- `state.ts` derived helpers now take a `StringTable` parameter
+  (`getStatusHeadline`, `getPlaceholder`, `getComposerTitle`,
+  `getPendingBubbleTitle`). Pass `enStrings` for the original
+  English behavior.
+- `templates.ts` `RenderMessagesProps` adds a required `strings`
+  field. Empty-state copy and role labels (`You` / `Pyanchor`)
+  now come from the table.
+- `overlay.ts` resolves the table once at boot via `resolveStrings()`
+  and threads it through every template + closure.
+- `bootstrap.ts` `Window.__PyanchorConfig` type now includes
+  `locale?: string` (kept aligned with the overlay-side declaration).
+  Backwards-compatible: omitting `locale` is the same as English.
+
+### Tests
+- **`tests/runtime/overlay/strings.test.ts`** (**13 tests**):
+  - `enStrings` shape completeness across all 39 keys
+  - `statusQueuedAt` parameter formatting
+  - `composerSubmitSending` uses the unicode horizontal ellipsis
+    (regression guard against editor rewrites to `...`)
+  - `resolveStrings` fallback behavior (null/undefined/`en`/unknown)
+  - case-insensitive locale matching
+  - `registerStrings` partial-override merge with English fallback
+  - parameterized override (`statusQueuedAt`)
+  - last-registration-wins idempotency
+  - `enStrings` not mutated by registrations
+- **`tests/runtime/overlay/templates.test.ts`** — **+3 i18n tests**:
+  empty-state uses `strings.messagesEmpty`; role labels use
+  `strings.roleYou` / `strings.rolePyanchor`; a Korean override
+  bundle renders Korean copy in both empty + populated states.
+- **`tests/runtime/overlay/state.test.ts`** — every existing test
+  updated to pass `enStrings` as the new param. Behavior assertions
+  unchanged.
+- **Total**: **404 unit + 7 e2e = 411 tests**.
+
+### Compatibility
+No runtime behavior change for English users. The Korean (or any
+locale) bundle is opt-in via `window.__PyanchorConfig.locale =
+"ko"` + `registerStrings("ko", { … })` in host code. The bundle
+size grew from 30.7KB → 35.0KB (+14%) — the increase is the
+string table + a11y attribute serialization; gzip should bring
+most of it back.
+
+### Roadmap
+- **v0.9.1** (likely): ship a Korean bundle (`enStrings.ko`)
+  alongside English so users get bilingual support out of the box.
+  Currently each host app would have to call `registerStrings` to
+  add a locale.
+- **v0.9.x** UX polish:
+  - render snapshot tests for the panel template (Codex round-7
+    "있으면 좋은 것" #4)
+  - keyboard nav diagnostic (Tab through every focusable element
+    in CI to catch tab-order regressions)
+  - status copy key extraction tooling (a script that lists every
+    `s.xxx` reference so translators know which keys are live)
+- **Lower priority**: Docker-based runner sandbox for real
+  permission/filesystem semantics. Tracked, not blocking.
+
 ## [0.8.2] - 2026-04-19
 
 Codex round-7 review of v0.8.1 surfaced 3 findings — 2 mediums

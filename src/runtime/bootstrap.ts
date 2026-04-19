@@ -6,6 +6,8 @@ declare global {
     __PyanchorConfig?: {
       baseUrl: string;
       token: string;
+      /** Optional locale code (e.g. "ko", "en"). v0.9.0+. */
+      locale?: string;
     };
   }
 }

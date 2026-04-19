@@ -16,11 +16,14 @@ import {
   type AiEditMode,
   type AiEditState
 } from "./overlay/state";
+import { resolveStrings } from "./overlay/strings";
 import { renderMessagesTemplate } from "./overlay/templates";
 
 interface RuntimeConfig {
   baseUrl: string;
   token: string;
+  /** Optional locale code (e.g. "ko", "en"). Falls back to English when unset. */
+  locale?: string;
 }
 
 declare global {
@@ -488,8 +491,18 @@ const styles = `
 
 const config = window.__PyanchorConfig;
 
+// Resolve the localized string table once at boot. Order of preference:
+//   1. window.__PyanchorConfig.locale (host app sets it directly)
+//   2. data-pyanchor-locale on the runtime <script> tag
+//   3. English defaults
+const overlayScriptTag = document.querySelector<HTMLScriptElement>(
+  "script[data-pyanchor-overlay='1']"
+);
+const localeFromScript = overlayScriptTag?.dataset.pyanchorLocale?.trim();
+const s = resolveStrings(config?.locale ?? localeFromScript ?? null);
+
 if (!config || window.__PyanchorOverlayLoaded) {
-  throw new Error("Pyanchor devtools runtime is not configured.");
+  throw new Error(s.errorRuntimeNotConfigured);
 }
 
 window.__PyanchorOverlayLoaded = true;
@@ -523,20 +536,24 @@ const showToast = (message: string, tone: "info" | "success" | "error") => {
   render();
 };
 
-// Closures over the local mutable uiState + serverState. The pure
-// versions live in ./overlay/state.ts; these adapters keep call
-// sites compact and let the render() body stay readable.
+// Closures over the local mutable uiState + serverState + the
+// resolved string table. The pure versions live in ./overlay/state.ts;
+// these adapters keep call sites compact and let the render() body
+// stay readable.
 const trackedQueuePosition = () => getTrackedQueuePosition(uiState, serverState);
 const shouldPollNow = () => shouldPoll(uiState, serverState);
 const statusHeadline = () =>
-  getStatusHeadline(uiState, serverState, {
-    thinkingPreview: shorten(takeFirstLine(serverState.thinking))
-  });
+  getStatusHeadline(
+    uiState,
+    serverState,
+    { thinkingPreview: shorten(takeFirstLine(serverState.thinking)) },
+    s
+  );
 const statusMeta = () =>
   getStatusMeta(uiState, serverState, formatTime(serverState.heartbeatAt));
-const placeholder = () => getPlaceholder(uiState.mode);
-const composerTitle = () => getComposerTitle(uiState.mode);
-const pendingBubbleTitle = () => getPendingBubbleTitle(uiState, serverState);
+const placeholder = () => getPlaceholder(uiState.mode, s);
+const composerTitle = () => getComposerTitle(uiState.mode, s);
+const pendingBubbleTitle = () => getPendingBubbleTitle(uiState, serverState, s);
 
 const renderMessages = () =>
   renderMessagesTemplate({
@@ -545,7 +562,8 @@ const renderMessages = () =>
     serverStatus: serverState.status,
     heartbeatAt: serverState.heartbeatAt,
     startedAt: serverState.startedAt,
-    pendingBubbleTitle: pendingBubbleTitle()
+    pendingBubbleTitle: pendingBubbleTitle(),
+    strings: s
   });
 
 const bindHistory = () => {
@@ -576,11 +594,11 @@ const syncStateClient = createSyncStateClient({
   render: () => render(),
   onOutcome: (outcome) => {
     if (outcome.kind === "done") {
-      showToast(outcome.mode === "chat" ? "Answer received." : "Edit complete.", "success");
+      showToast(outcome.mode === "chat" ? s.toastAnswerReceived : s.toastEditComplete, "success");
     } else if (outcome.kind === "failed") {
       showToast(outcome.error, "error");
     } else {
-      showToast("Request canceled.", "info");
+      showToast(s.toastRequestCanceled, "info");
     }
   }
 });
@@ -613,12 +631,18 @@ const render = () => {
         }
       : null;
 
+  // a11y: detect a fresh panel open so we can auto-focus the textarea.
+  // "Fresh" = panel is now open and previousActive wasn't inside the
+  // overlay shadow root (i.e. the panel just appeared this render).
+  const wasFocusInsideOverlay = previousActive ? root.contains(previousActive) : false;
+  const isFreshOpen = uiState.isOpen && !wasFocusInsideOverlay;
+
   shadowRoot.innerHTML = `
     <style>${styles}</style>
     <div class="pyanchor-root">
       ${uiState.toast ? `<div class="toast toast--${uiState.toast.tone}">${escapeHtml(uiState.toast.message)}</div>` : ""}
       ${uiState.isOpen ? `
-        <div class="panel" role="dialog" aria-label="Pyanchor DevTools">
+        <div class="panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(s.toggleTitle)}" aria-describedby="pyanchor-status-line">
           <div class="panel__header">
             <div class="panel__title">
               <div class="panel__title-line">${sparkIcon}<span>Pyanchor DevTools</span></div>
@@ -627,14 +651,15 @@ const render = () => {
                 <code class="panel__path">${escapeHtml(currentPath())}</code>
               </div>
             </div>
-            <button class="icon-button" type="button" data-action="close" aria-label="Close">${closeIcon}</button>
+            <button class="icon-button" type="button" data-action="close" aria-label="${escapeHtml(s.toggleClose)}">${closeIcon}</button>
           </div>
 
-          <div class="mode-switch" title="${isBusy ? "Mode is locked while a job is in flight." : ""}">
-            <button class="mode-switch__button ${uiState.mode === "chat" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-chat" ${isBusy ? "disabled" : ""}>Chat</button>
-            <button class="mode-switch__button ${uiState.mode === "edit" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-edit" ${isBusy ? "disabled" : ""}>Edit</button>
+          <div class="mode-switch" role="group" aria-label="${escapeHtml(s.composerHeadlineEdit)} / ${escapeHtml(s.composerHeadlineChat)}" title="${isBusy ? escapeHtml(s.modeLockedTitle) : ""}">
+            <button class="mode-switch__button ${uiState.mode === "chat" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-chat" aria-pressed="${uiState.mode === "chat"}" ${isBusy ? "disabled" : ""}>${escapeHtml(s.modeAsk)}</button>
+            <button class="mode-switch__button ${uiState.mode === "edit" ? "mode-switch__button--active" : ""}" type="button" data-action="mode-edit" aria-pressed="${uiState.mode === "edit"}" ${isBusy ? "disabled" : ""}>${escapeHtml(s.modeEdit)}</button>
           </div>
 
+          <div id="pyanchor-status-line" aria-live="polite" aria-atomic="true">
           ${
             headline
               ? `
@@ -648,30 +673,31 @@ const render = () => {
               `
               : ""
           }
+          </div>
 
           ${renderMessages()}
 
           <form class="composer" data-action="submit">
             <div>
-              <span class="composer__title">${composerTitle()}</span>
-              <textarea class="textarea" rows="4" placeholder="${escapeHtml(placeholder())}" ${isBusy ? "disabled" : ""}></textarea>
+              <label class="composer__title" for="pyanchor-prompt">${escapeHtml(composerTitle())}</label>
+              <textarea id="pyanchor-prompt" class="textarea" rows="4" placeholder="${escapeHtml(placeholder())}" ${isBusy ? "disabled" : ""} aria-label="${escapeHtml(composerTitle())}"></textarea>
             </div>
             <div class="composer__footer">
               <div class="composer__hint">
-                <strong>${uiState.mode === "chat" ? "Ask / Explain" : "Edit page"}</strong>
-                <span>${serverState.configured ? "Ctrl/Cmd + Enter to send" : "Sidecar is not fully configured yet."}</span>
+                <strong>${escapeHtml(uiState.mode === "chat" ? s.composerHeadlineChat : s.composerHeadlineEdit)}</strong>
+                <span>${escapeHtml(serverState.configured ? s.composerSendHint : s.composerNotConfigured)}</span>
               </div>
               <div class="actions">
-                ${canCancel ? `<button class="button button--danger" type="button" data-action="cancel" ${uiState.isCanceling ? "disabled" : ""}>Cancel</button>` : ""}
+                ${canCancel ? `<button class="button button--danger" type="button" data-action="cancel" aria-label="${escapeHtml(s.composerCancelLabel)}" ${uiState.isCanceling ? "disabled" : ""}>${escapeHtml(s.composerCancelLabel)}</button>` : ""}
                 <button class="button button--primary" type="submit" ${!serverState.configured || isBusy || !uiState.prompt.trim() ? "disabled" : ""}>
-                  ${uiState.isSubmitting ? "Sending…" : uiState.mode === "chat" ? "Send" : "Run"}
+                  ${escapeHtml(uiState.isSubmitting ? s.composerSubmitSending : uiState.mode === "chat" ? s.composerSubmitSend : s.composerSubmitRun)}
                 </button>
               </div>
             </div>
           </form>
         </div>
       ` : ""}
-      <button class="trigger ${isWorking ? "trigger--busy" : ""}" type="button" data-action="toggle" aria-label="${uiState.isOpen ? "Close Pyanchor DevTools" : "Open Pyanchor DevTools"}" title="Ask about the current page or request a change">
+      <button class="trigger ${isWorking ? "trigger--busy" : ""}" type="button" data-action="toggle" aria-label="${escapeHtml(uiState.isOpen ? s.toggleClose : s.toggleOpen)}" title="${escapeHtml(s.toggleTitle)}">
         ${isWorking ? typingDots : sparkIcon}
       </button>
     </div>
@@ -682,7 +708,7 @@ const render = () => {
 
   if (promptField) {
     promptField.value = uiState.prompt;
-    if (shouldRestoreTextareaFocus) {
+    if (shouldRestoreTextareaFocus || isFreshOpen) {
       promptField.focus({ preventScroll: true });
       if (previousSelection) {
         promptField.setSelectionRange(previousSelection.start, previousSelection.end);
@@ -753,9 +779,9 @@ const render = () => {
         })
       });
       serverState = next;
-      showToast("Cancel request sent.", "info");
+      showToast(s.toastCancelSent, "info");
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Cancel request failed.", "error");
+      showToast(error instanceof Error ? error.message : s.toastCancelFailed, "error");
     } finally {
       uiState.isCanceling = false;
       render();
@@ -789,12 +815,12 @@ const render = () => {
       uiState.lastSubmittedJobId = lastQueued?.jobId ?? next.jobId ?? null;
 
       if (lastQueued) {
-        showToast(`Queued at position ${next.queue.length}.`, "info");
+        showToast(s.statusQueuedAt(next.queue.length), "info");
       } else {
-        showToast(uiState.mode === "chat" ? "Question sent." : "Edit started.", "info");
+        showToast(uiState.mode === "chat" ? s.toastQuestionSent : s.toastEditStarted, "info");
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to start the request.", "error");
+      showToast(error instanceof Error ? error.message : s.toastFailedToStart, "error");
     } finally {
       uiState.isSubmitting = false;
       render();
@@ -819,6 +845,38 @@ document.addEventListener("keydown", (event) => {
   if (!uiState.isOpen) return;
   uiState.isOpen = false;
   render();
+});
+
+// Focus trap (a11y). When the panel is open and the user Tabs past the
+// last focusable element (or Shift+Tabs past the first), wrap to the
+// other end so focus stays inside the dialog. Listener attached once
+// at module load to avoid stacking handlers across re-renders.
+shadowRoot.addEventListener("keydown", (event: Event) => {
+  const keyEvent = event as KeyboardEvent;
+  if (keyEvent.key !== "Tab") return;
+  if (!uiState.isOpen) return;
+
+  const panel = shadowRoot.querySelector<HTMLElement>(".panel");
+  if (!panel) return;
+
+  const focusable = Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((el) => !el.hasAttribute("aria-hidden"));
+  if (focusable.length === 0) return;
+
+  const first = focusable[0]!;
+  const last = focusable[focusable.length - 1]!;
+  const active = shadowRoot.activeElement as HTMLElement | null;
+
+  if (keyEvent.shiftKey && active === first) {
+    keyEvent.preventDefault();
+    last.focus({ preventScroll: true });
+  } else if (!keyEvent.shiftKey && active === last) {
+    keyEvent.preventDefault();
+    first.focus({ preventScroll: true });
+  }
 });
 
 window.addEventListener("pyanchor:navigation", () => {

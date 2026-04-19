@@ -14,6 +14,7 @@ import {
   type AiEditState,
   type UIState
 } from "../../../src/runtime/overlay/state";
+import { enStrings } from "../../../src/runtime/overlay/strings";
 
 const queueItem = (overrides: Partial<AiEditQueueItem> = {}): AiEditQueueItem => ({
   jobId: "q1",
@@ -116,61 +117,61 @@ describe("getStatusHeadline", () => {
       status: "idle",
       queue: [queueItem({ jobId: "other" }), queueItem({ jobId: "mine" })]
     });
-    const headline = getStatusHeadline(ui, s, { thinkingPreview: "" });
+    const headline = getStatusHeadline(ui, s, { thinkingPreview: "" }, enStrings);
     expect(headline).toContain("Queued at position 2");
   });
 
   it("prefers the live thinking preview while running", () => {
     const s = stateWith({ status: "running", heartbeatLabel: "Build" });
-    const headline = getStatusHeadline(uiWith(), s, { thinkingPreview: "scanning auth files" });
+    const headline = getStatusHeadline(uiWith(), s, { thinkingPreview: "scanning auth files" }, enStrings);
     expect(headline).toBe("scanning auth files");
   });
 
   it("falls back to heartbeatLabel when no thinking preview", () => {
     const s = stateWith({ status: "running", heartbeatLabel: "Install" });
-    const headline = getStatusHeadline(uiWith(), s, { thinkingPreview: "" });
+    const headline = getStatusHeadline(uiWith(), s, { thinkingPreview: "" }, enStrings);
     expect(headline).toBe("Install");
   });
 
   it("falls back to currentStep when no thinking + no heartbeat label", () => {
     const s = stateWith({ status: "running", currentStep: "Preparing workspace." });
-    const headline = getStatusHeadline(uiWith(), s, { thinkingPreview: "" });
+    const headline = getStatusHeadline(uiWith(), s, { thinkingPreview: "" }, enStrings);
     expect(headline).toBe("Preparing workspace.");
   });
 
   it("uses the chat-mode generic fallback when running with nothing else", () => {
     const s = stateWith({ status: "running", mode: "chat" });
-    expect(getStatusHeadline(uiWith(), s, { thinkingPreview: "" })).toBe(
+    expect(getStatusHeadline(uiWith(), s, { thinkingPreview: "" }, enStrings)).toBe(
       "Reading your question."
     );
   });
 
   it("uses the edit-mode generic fallback when running with nothing else", () => {
     const s = stateWith({ status: "running", mode: "edit" });
-    expect(getStatusHeadline(uiWith(), s, { thinkingPreview: "" })).toBe(
+    expect(getStatusHeadline(uiWith(), s, { thinkingPreview: "" }, enStrings)).toBe(
       "Reading the page and the code."
     );
   });
 
   it("shows the error message on failed", () => {
     const s = stateWith({ status: "failed", error: "build failed" });
-    expect(getStatusHeadline(uiWith(), s, { thinkingPreview: "" })).toBe("build failed");
+    expect(getStatusHeadline(uiWith(), s, { thinkingPreview: "" }, enStrings)).toBe("build failed");
   });
 
   it("shows a generic 'Job failed.' when failed with no error", () => {
     const s = stateWith({ status: "failed", error: null });
-    expect(getStatusHeadline(uiWith(), s, { thinkingPreview: "" })).toBe("Job failed.");
+    expect(getStatusHeadline(uiWith(), s, { thinkingPreview: "" }, enStrings)).toBe("Job failed.");
   });
 
   it("differentiates done summary by mode", () => {
     const chatDone = stateWith({ status: "done", mode: "chat" });
     const editDone = stateWith({ status: "done", mode: "edit" });
-    expect(getStatusHeadline(uiWith(), chatDone, { thinkingPreview: "" })).toBe("Answer ready.");
-    expect(getStatusHeadline(uiWith(), editDone, { thinkingPreview: "" })).toBe("Edit complete.");
+    expect(getStatusHeadline(uiWith(), chatDone, { thinkingPreview: "" }, enStrings)).toBe("Answer ready.");
+    expect(getStatusHeadline(uiWith(), editDone, { thinkingPreview: "" }, enStrings)).toBe("Edit complete.");
   });
 
   it("returns the empty string when idle and no tracked queue position", () => {
-    expect(getStatusHeadline(uiWith(), stateWith({ status: "idle" }), { thinkingPreview: "" })).toBe(
+    expect(getStatusHeadline(uiWith(), stateWith({ status: "idle" }), { thinkingPreview: "" }, enStrings)).toBe(
       ""
     );
   });
@@ -196,34 +197,34 @@ describe("getStatusMeta", () => {
 
 describe("getPlaceholder + getComposerTitle", () => {
   it("uses edit-flavored copy when mode is 'edit'", () => {
-    expect(getPlaceholder("edit")).toContain("login/signup");
-    expect(getComposerTitle("edit")).toBe("Edit request");
+    expect(getPlaceholder("edit", enStrings)).toContain("login/signup");
+    expect(getComposerTitle("edit", enStrings)).toBe("Edit request");
   });
 
   it("uses chat-flavored copy when mode is 'chat'", () => {
-    expect(getPlaceholder("chat")).toContain("explain why this page");
-    expect(getComposerTitle("chat")).toBe("Send a question");
+    expect(getPlaceholder("chat", enStrings)).toContain("explain why this page");
+    expect(getComposerTitle("chat", enStrings)).toBe("Send a question");
   });
 });
 
 describe("getPendingBubbleTitle", () => {
   it("shows 'Drafting your request.' while the server is canceling", () => {
     const s = stateWith({ status: "canceling", mode: "edit" });
-    expect(getPendingBubbleTitle(uiWith({ mode: "edit" }), s)).toBe("Drafting your request.");
+    expect(getPendingBubbleTitle(uiWith({ mode: "edit" }), s, enStrings)).toBe("Drafting your request.");
   });
 
   it("shows 'Reading page and code.' when the active job is in edit mode", () => {
     const s = stateWith({ status: "running", mode: "edit" });
-    expect(getPendingBubbleTitle(uiWith({ mode: "chat" }), s)).toBe("Reading page and code.");
+    expect(getPendingBubbleTitle(uiWith({ mode: "chat" }), s, enStrings)).toBe("Reading page and code.");
   });
 
   it("shows 'Reading page and code.' when the UI mode is edit (even if server hasn't started)", () => {
     const s = stateWith({ status: "running", mode: null });
-    expect(getPendingBubbleTitle(uiWith({ mode: "edit" }), s)).toBe("Reading page and code.");
+    expect(getPendingBubbleTitle(uiWith({ mode: "edit" }), s, enStrings)).toBe("Reading page and code.");
   });
 
   it("shows 'Drafting an answer.' for a chat-mode running job", () => {
     const s = stateWith({ status: "running", mode: "chat" });
-    expect(getPendingBubbleTitle(uiWith({ mode: "chat" }), s)).toBe("Drafting an answer.");
+    expect(getPendingBubbleTitle(uiWith({ mode: "chat" }), s, enStrings)).toBe("Drafting an answer.");
   });
 });

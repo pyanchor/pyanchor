@@ -9,6 +9,7 @@
 import { typingDots } from "./elements";
 import { escapeHtml, formatTime } from "./format";
 import type { AiEditMessage, AiEditState } from "./state";
+import type { StringTable } from "./strings";
 
 /** What `renderMessagesTemplate` needs to know about server-side state. */
 export interface RenderMessagesProps {
@@ -24,13 +25,14 @@ export interface RenderMessagesProps {
   pendingBubbleTitle: string;
   /** Trim window — keep only the most recent N. Default 18 (overlay original). */
   messageWindow?: number;
+  /** Localized strings. Pass enStrings for English defaults. */
+  strings: StringTable;
 }
 
-const ROLE_LABEL: Record<AiEditMessage["role"], string> = {
-  assistant: "Pyanchor",
-  system: "Pyanchor",
-  user: "You"
-};
+const roleLabelFor = (
+  role: AiEditMessage["role"],
+  strings: StringTable
+): string => (role === "user" ? strings.roleYou : strings.rolePyanchor);
 
 /**
  * Build the messages list markup. Returns:
@@ -49,7 +51,7 @@ export function renderMessagesTemplate(props: RenderMessagesProps): string {
     props.queuePosition > 0;
 
   if (messages.length === 0 && !showPendingMessage) {
-    return `<div class="messages messages--empty">Ask a question or request a change. Conversation history shows up here.</div>`;
+    return `<div class="messages messages--empty">${escapeHtml(props.strings.messagesEmpty)}</div>`;
   }
 
   const pendingTime =
@@ -57,18 +59,18 @@ export function renderMessagesTemplate(props: RenderMessagesProps): string {
 
   return `
     <div class="messages">
-      ${messages.map(renderMessageRow).join("")}
+      ${messages.map((m) => renderMessageRow(m, props.strings)).join("")}
       ${
         showPendingMessage
-          ? renderPendingBubble(pendingTime, props.pendingBubbleTitle)
+          ? renderPendingBubble(pendingTime, props.pendingBubbleTitle, props.strings)
           : ""
       }
     </div>
   `;
 }
 
-function renderMessageRow(message: AiEditMessage): string {
-  const roleLabel = ROLE_LABEL[message.role];
+function renderMessageRow(message: AiEditMessage, strings: StringTable): string {
+  const roleLabel = roleLabelFor(message.role, strings);
   return `
     <div class="message-row message-row--${message.role}">
       <article class="message message--${message.role}">
@@ -82,12 +84,16 @@ function renderMessageRow(message: AiEditMessage): string {
   `;
 }
 
-function renderPendingBubble(formattedTime: string, title: string): string {
+function renderPendingBubble(
+  formattedTime: string,
+  title: string,
+  strings: StringTable
+): string {
   return `
     <div class="message-row message-row--assistant">
       <article class="message message--assistant message--pending">
         <div class="message__head">
-          <span class="message__name">Pyanchor</span>
+          <span class="message__name">${escapeHtml(strings.rolePyanchor)}</span>
           <span class="message__time">${escapeHtml(formattedTime)}</span>
         </div>
         <div class="message__body message__body--pending">${typingDots}<span class="message__body--pending-text">${escapeHtml(title)}</span></div>

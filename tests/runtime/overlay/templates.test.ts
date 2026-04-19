@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { enStrings } from "../../../src/runtime/overlay/strings";
 import { renderMessagesTemplate } from "../../../src/runtime/overlay/templates";
 import type { AiEditMessage } from "../../../src/runtime/overlay/state";
 
@@ -20,7 +21,8 @@ const baseProps = {
   serverStatus: "idle" as const,
   heartbeatAt: null,
   startedAt: null,
-  pendingBubbleTitle: "Reading."
+  pendingBubbleTitle: "Reading.",
+  strings: enStrings
 };
 
 describe("renderMessagesTemplate", () => {
@@ -145,5 +147,48 @@ describe("renderMessagesTemplate", () => {
     });
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;");
+  });
+
+  // ─── i18n integration (v0.9.0) ────────────────────────────────
+
+  it("uses the strings table's empty-state copy (English default)", () => {
+    const html = renderMessagesTemplate(baseProps);
+    expect(html).toContain(enStrings.messagesEmpty);
+  });
+
+  it("uses the strings table's role labels (English default)", () => {
+    const html = renderMessagesTemplate({
+      ...baseProps,
+      messages: [
+        message({ role: "user", text: "hello" }),
+        message({ role: "assistant", text: "answer" })
+      ]
+    });
+    expect(html).toContain(`>${enStrings.roleYou}<`);
+    expect(html).toContain(`>${enStrings.rolePyanchor}<`);
+  });
+
+  it("renders a Korean override bundle for empty state + role labels", () => {
+    const koStrings = {
+      ...enStrings,
+      messagesEmpty: "질문하거나 변경을 요청하세요.",
+      roleYou: "사용자",
+      rolePyanchor: "파이앵커"
+    };
+    const empty = renderMessagesTemplate({ ...baseProps, strings: koStrings });
+    expect(empty).toContain("질문하거나 변경을 요청하세요.");
+    expect(empty).not.toContain(enStrings.messagesEmpty);
+
+    const withMessages = renderMessagesTemplate({
+      ...baseProps,
+      messages: [
+        message({ role: "user", text: "hi" }),
+        message({ role: "assistant", text: "answer" })
+      ],
+      strings: koStrings
+    });
+    expect(withMessages).toContain(">사용자<");
+    expect(withMessages).toContain(">파이앵커<");
+    expect(withMessages).not.toContain(`>${enStrings.roleYou}<`);
   });
 });
