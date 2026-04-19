@@ -299,13 +299,191 @@ export const koStrings: Partial<StringTable> = {
 };
 
 /**
+ * Built-in Japanese bundle (v0.10.0).
+ *
+ * Tone: concise, です/ます at instruction sentences, 体言止め at status
+ * labels — same register the official Chrome / VS Code Japanese UIs use.
+ * Brand "Pyanchor" / "DevTools" left as-is.
+ */
+export const jaStrings: Partial<StringTable> = {
+  statusReadingChat: "質問を読み込み中。",
+  statusReadingEdit: "ページとコードを読み込み中。",
+  statusJobFailed: "ジョブ失敗。",
+  statusJobCanceled: "ジョブをキャンセルしました。",
+  statusAnswerReady: "回答の準備ができました。",
+  statusEditComplete: "編集完了。",
+  statusQueuedAt: (n) => `キュー ${n} 番目。現在のジョブ完了後に実行されます。`,
+
+  pendingDrafting: "リクエストを整理中。",
+  pendingReading: "ページとコードを読み込み中。",
+  pendingAnswering: "回答を作成中。",
+
+  composerEditTitle: "編集リクエスト",
+  composerChatTitle: "質問を送信",
+  composerEditPlaceholder:
+    "例: ログイン/サインアップのタブ切り替えを滑らかに。既存の構造は維持。",
+  composerChatPlaceholder:
+    "例: このページがなぜこう動作するのか説明。ファイルパスを引用。",
+  composerSendHint: "Ctrl/Cmd + Enter で送信",
+  composerNotConfigured: "サイドカーがまだ設定されていません。",
+  composerSubmitSend: "送信",
+  composerSubmitRun: "実行",
+  composerSubmitSending: "送信中\u2026",
+  composerCancelLabel: "キャンセル",
+
+  modeAsk: "質問",
+  modeEdit: "編集",
+  modeLockedTitle: "ジョブ実行中はモードを変更できません。",
+
+  toggleOpen: "Pyanchor DevTools を開く",
+  toggleClose: "Pyanchor DevTools を閉じる",
+  toggleTitle: "現在のページに質問する、または変更をリクエスト",
+
+  toastAnswerReceived: "回答を受信しました。",
+  toastEditComplete: "編集が完了しました。",
+  toastQuestionSent: "質問を送信しました。",
+  toastEditStarted: "編集を開始しました。",
+  toastCancelSent: "キャンセルリクエストを送信しました。",
+  toastCancelFailed: "キャンセルリクエストに失敗しました。",
+  toastRequestCanceled: "リクエストをキャンセルしました。",
+  toastFailedToStart: "リクエストの開始に失敗しました。",
+
+  messagesEmpty: "質問または変更をリクエストすると、ここに会話履歴が表示されます。",
+  roleYou: "あなた",
+  rolePyanchor: "Pyanchor",
+
+  errorRuntimeNotConfigured: "Pyanchor devtools ランタイムが設定されていません。",
+
+  composerHeadlineChat: "質問 / 説明",
+  composerHeadlineEdit: "ページ編集",
+
+  panelTitle: "Pyanchor DevTools",
+  panelContextLabel: "現在のページ",
+  statusYourPosition: (n) => `あなたのリクエスト: ${n} 番目`,
+
+  errorRequestFailed: "リクエスト失敗。",
+  errorJobFailed: "ジョブ失敗。",
+
+  kbdShortcutHint: "Cmd/Ctrl + Shift + . で開閉",
+  retryLast: "前回のリクエストを再実行",
+  copyLast: "コピー",
+  toastCopied: "クリップボードにコピーしました。",
+  toastCopyFailed: "コピーに失敗しました。",
+
+  diagnosticsTitle: "診断情報",
+  diagRuntime: "ランタイム",
+  diagLocale: "ロケール",
+  diagAuth: "認証",
+  diagStatus: "ステータス",
+  diagJobId: "ジョブ ID",
+  diagMode: "モード",
+  diagQueue: "キュー",
+  diagLastUpdate: "最終更新",
+  diagAuthCookie: "Cookie セッション",
+  diagAuthBearer: "Bearer トークン"
+};
+
+/**
+ * Built-in Simplified Chinese bundle (v0.10.0).
+ *
+ * Tone: direct + concise, matching the English source. Half-width
+ * punctuation in technical contexts (e.g. "Cmd/Ctrl + Shift + .").
+ * Brand "Pyanchor" / "DevTools" left as-is.
+ */
+export const zhCNStrings: Partial<StringTable> = {
+  statusReadingChat: "正在阅读问题。",
+  statusReadingEdit: "正在阅读页面和代码。",
+  statusJobFailed: "任务失败。",
+  statusJobCanceled: "任务已取消。",
+  statusAnswerReady: "回答已就绪。",
+  statusEditComplete: "编辑完成。",
+  statusQueuedAt: (n) => `队列第 ${n} 位。当前任务结束后开始执行。`,
+
+  pendingDrafting: "正在整理请求。",
+  pendingReading: "正在阅读页面和代码。",
+  pendingAnswering: "正在撰写回答。",
+
+  composerEditTitle: "编辑请求",
+  composerChatTitle: "发送问题",
+  composerEditPlaceholder:
+    "示例：让登录/注册标签页切换更流畅。保留现有结构。",
+  composerChatPlaceholder:
+    "示例：解释为什么这个页面会这样表现。引用文件路径。",
+  composerSendHint: "Ctrl/Cmd + Enter 发送",
+  composerNotConfigured: "Sidecar 尚未完全配置。",
+  composerSubmitSend: "发送",
+  composerSubmitRun: "执行",
+  composerSubmitSending: "发送中\u2026",
+  composerCancelLabel: "取消",
+
+  modeAsk: "提问",
+  modeEdit: "编辑",
+  modeLockedTitle: "任务进行中无法切换模式。",
+
+  toggleOpen: "打开 Pyanchor DevTools",
+  toggleClose: "关闭 Pyanchor DevTools",
+  toggleTitle: "对当前页面提问或请求更改",
+
+  toastAnswerReceived: "已收到回答。",
+  toastEditComplete: "编辑已完成。",
+  toastQuestionSent: "问题已发送。",
+  toastEditStarted: "编辑已开始。",
+  toastCancelSent: "已发送取消请求。",
+  toastCancelFailed: "取消请求失败。",
+  toastRequestCanceled: "请求已取消。",
+  toastFailedToStart: "请求启动失败。",
+
+  messagesEmpty: "提问或请求更改后，对话历史将显示在这里。",
+  roleYou: "你",
+  rolePyanchor: "Pyanchor",
+
+  errorRuntimeNotConfigured: "Pyanchor devtools 运行时未配置。",
+
+  composerHeadlineChat: "提问 / 解释",
+  composerHeadlineEdit: "编辑页面",
+
+  panelTitle: "Pyanchor DevTools",
+  panelContextLabel: "当前页面",
+  statusYourPosition: (n) => `你的请求：第 ${n} 位`,
+
+  errorRequestFailed: "请求失败。",
+  errorJobFailed: "任务失败。",
+
+  kbdShortcutHint: "Cmd/Ctrl + Shift + . 切换",
+  retryLast: "重试上次请求",
+  copyLast: "复制",
+  toastCopied: "已复制到剪贴板。",
+  toastCopyFailed: "复制失败。",
+
+  diagnosticsTitle: "诊断",
+  diagRuntime: "运行时",
+  diagLocale: "区域",
+  diagAuth: "认证",
+  diagStatus: "状态",
+  diagJobId: "任务 ID",
+  diagMode: "模式",
+  diagQueue: "队列",
+  diagLastUpdate: "最近更新",
+  diagAuthCookie: "Cookie 会话",
+  diagAuthBearer: "Bearer 令牌"
+};
+
+/**
  * Built-in locale registry. Bundles registered here ship in the
  * runtime; host apps add more via the public `registerStrings`.
  * Reset by `_clearRegistry()` in tests, then re-registered in the
  * test setup.
+ *
+ * Locale code policy:
+ *   - "ko" — single Korean variant (no -KP / -KR distinction needed)
+ *   - "ja" — single Japanese variant
+ *   - "zh-cn" — Simplified Chinese (matched lowercased; "zh" alone
+ *     does NOT auto-resolve to zh-CN to keep the contract explicit)
  */
 const BUILT_IN_BUNDLES: ReadonlyArray<readonly [string, Partial<StringTable>]> = [
-  ["ko", koStrings]
+  ["ko", koStrings],
+  ["ja", jaStrings],
+  ["zh-cn", zhCNStrings]
 ];
 
 const registry = new Map<string, Partial<StringTable>>();

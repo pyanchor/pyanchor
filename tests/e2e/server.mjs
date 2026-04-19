@@ -83,6 +83,28 @@ const koLocaleHtml = `<!doctype html>
   </body>
 </html>`;
 
+const buildLocaleFixture = (locale, label) => `<!doctype html>
+<html lang="${locale}">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pyanchor e2e fixture (${locale} locale)</title>
+    <script>
+      window.__PyanchorConfig = {
+        baseUrl: "/_pyanchor",
+        token: "e2e-test-token-32-chars-1234567890",
+        locale: "${locale}"
+      };
+    </script>
+  </head>
+  <body>
+    <h1 id="page-heading">${label} locale fixture</h1>
+    <script src="/_pyanchor/overlay.js"></script>
+  </body>
+</html>`;
+
+const jaLocaleHtml = buildLocaleFixture("ja", "Japanese");
+const zhLocaleHtml = buildLocaleFixture("zh-cn", "Simplified Chinese");
+
 const server = createServer((req, res) => {
   if (!req.url) {
     res.writeHead(400).end();
@@ -104,6 +126,18 @@ const server = createServer((req, res) => {
   if (req.url === "/ko.html") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(koLocaleHtml);
+    return;
+  }
+
+  if (req.url === "/ja.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(jaLocaleHtml);
+    return;
+  }
+
+  if (req.url === "/zh.html") {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(zhLocaleHtml);
     return;
   }
 

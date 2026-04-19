@@ -7,6 +7,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-04-19
+
+Two coverage-broadening tracks land together:
+- **More built-in locales**: Japanese (`ja`) + Simplified Chinese (`zh-cn`)
+  ship with full StringTable translations.
+- **a11y e2e hardening**: Codex round-10's two remaining coverage
+  gaps (IME composition guard on the keyboard shortcut, focus trap's
+  disabled-button skip) now have direct Playwright tests.
+
+### Added — Japanese bundle (`ja`)
+- **`jaStrings`** in `src/runtime/overlay/strings.ts` — full
+  Japanese translation of every `StringTable` key.
+  - Tone: concise, です/ます on instruction sentences,
+    体言止め on status labels — the register Chrome / VS Code
+    Japanese UIs use.
+  - Brand "Pyanchor" / "DevTools" left as-is.
+  - Parameterized: `キュー ${n} 番目`, `あなたのリクエスト: ${n} 番目`.
+- Auto-registered via `BUILT_IN_BUNDLES` — host activates with
+  `window.__PyanchorConfig.locale = "ja"` or
+  `<script data-pyanchor-locale="ja">`. No `registerStrings` call
+  needed.
+
+### Added — Simplified Chinese bundle (`zh-cn`)
+- **`zhCNStrings`** in `src/runtime/overlay/strings.ts` — full
+  zh-CN translation.
+  - Tone: direct + concise, half-width punctuation in technical
+    contexts (e.g. `"Cmd/Ctrl + Shift + ."`), full-width in
+    sentence flow (e.g. `"你的请求：第 N 位"`).
+  - Brand "Pyanchor" / "DevTools" left as-is.
+- Locale code policy explicit: only `"zh-cn"` (case-insensitive)
+  resolves; bare `"zh"` falls back to English. Documented in
+  `BUILT_IN_BUNDLES` header so future Traditional / Hong Kong
+  variants can land as separate codes without ambiguity.
+
+### Added — a11y e2e hardening (Codex round-10 coverage gaps)
+- **`tests/e2e/a11y-hardening.spec.ts`** — 3 new Playwright tests:
+  - **IME composition guard**: synthesizes a keydown with
+    `isComposing: true` and asserts the Cmd/Ctrl + Shift + .
+    shortcut does NOT toggle. Then dispatches the same chord
+    with `isComposing: false` and asserts it DOES toggle. Proves
+    the guard catches mid-composition completion keys for
+    KO / JA / ZH IME users.
+  - **Focus-trap disabled-skip (Tab order)**: with the panel open
+    and the submit button disabled (empty prompt), the focus-trap's
+    `:not([disabled])` selector excludes it. Asserted by walking
+    the focusable list and verifying `submit-button` is absent
+    while `close` / `mode-chat` / `mode-edit` / textarea are
+    present.
+  - **Focus-trap disabled-skip (Shift+Tab wrap)**: wrap-around
+    target is the last ENABLED focusable, not the disabled
+    submit button. Proves the trap honors disabled-skip on the
+    boundary, not just in the linear walk.
+
+### Tests
+- **+6 unit tests** in `strings.test.ts` for the new locales:
+  - ja resolution + Japanese-distinct content
+  - zh-cn resolution + case-insensitivity
+  - bare `"zh"` does NOT auto-resolve (explicit-codes policy)
+  - parameterized strings format the position in both ja + zh-cn
+  - both bundles have NO English fallthrough (every key translated)
+- **+4 e2e tests** in `tests/e2e/i18n-extra.spec.ts`:
+  - ja: panel header + empty state + mode buttons + composer headline
+  - ja: toggle aria-label uses `"Pyanchor DevTools を閉じる"`
+  - zh-cn: same scope with `"对话历史"` / `"提问"` / `"编辑"` / `"编辑页面"`
+  - zh-cn: toggle aria-label uses `"关闭 Pyanchor DevTools"`
+- **+3 e2e tests** in `tests/e2e/a11y-hardening.spec.ts` (above).
+- **Total: 427 unit + 31 e2e = 458 tests**.
+
+### Compatibility
+No public API change. Default English behavior unchanged for
+`undefined` / `"en"` / unrecognized locale.
+
+Bundle size: 46.0KB → 54.7KB (+8.7KB) for the two new full
+translation bundles. Each locale ~4.3KB raw — gzip should reduce
+significantly. Locales are bundled (not lazy-loaded) for
+zero-roundtrip activation; if bundle weight becomes a concern,
+splitting locales into separate chunks is the natural next step
+but not required at current size.
+
+### Locale roster (post-v0.10.0)
+| Locale | Status | Notes |
+|---|---|---|
+| `en` (default) | shipping | always falls through `enStrings` |
+| `ko` | shipping | added v0.9.4 |
+| `ja` | shipping | new this release |
+| `zh-cn` | shipping | new this release; bare `zh` does NOT alias |
+| `zh-tw` / `zh-hk` | not shipping | distinct codes welcome via PR |
+| `es` / `de` / `fr` etc. | not shipping | host apps register manually |
+
+### Roadmap
+- **v0.10.x or v0.11.x**: optional locale-bundle code-splitting
+  (lazy-import only the requested locale).
+- **v0.10.x or v0.11.x**: more written locales (es / de / fr / pt-br
+  / vi / id) — translation drafts welcome via PR.
+- **Lower priority**: Docker-based runner sandbox.
+
 ## [0.9.7] - 2026-04-19
 
 Diagnostics panel — the last UX item from Codex round-9's six

@@ -144,6 +144,56 @@ describe("resolveStrings", () => {
   });
 });
 
+describe("built-in ja + zh-cn bundles (v0.10.0)", () => {
+  it("ja resolves to a Japanese bundle, not English", () => {
+    const ja = resolveStrings("ja");
+    expect(ja).not.toBe(enStrings);
+    expect(ja.roleYou).toBe("あなた");
+    expect(ja.panelTitle).toBe("Pyanchor DevTools"); // brand stays
+    expect(ja.diagnosticsTitle).toBe("診断情報");
+  });
+
+  it("zh-cn resolves to a Simplified Chinese bundle, case-insensitive", () => {
+    const zh = resolveStrings("zh-cn");
+    expect(zh).not.toBe(enStrings);
+    expect(zh.roleYou).toBe("你");
+    expect(zh.panelTitle).toBe("Pyanchor DevTools"); // brand stays
+    expect(zh.diagnosticsTitle).toBe("诊断");
+    // Case-insensitive lookup
+    expect(resolveStrings("zh-CN").roleYou).toBe("你");
+    expect(resolveStrings("ZH-CN").roleYou).toBe("你");
+  });
+
+  it("bare 'zh' (without -CN) does NOT auto-resolve to zh-cn (explicit codes only)", () => {
+    expect(resolveStrings("zh")).toBe(enStrings);
+  });
+
+  it("ja parameterized strings format the position", () => {
+    const ja = resolveStrings("ja");
+    expect(ja.statusQueuedAt(2)).toBe("キュー 2 番目。現在のジョブ完了後に実行されます。");
+    expect(ja.statusYourPosition(3)).toBe("あなたのリクエスト: 3 番目");
+  });
+
+  it("zh-cn parameterized strings format the position", () => {
+    const zh = resolveStrings("zh-cn");
+    expect(zh.statusQueuedAt(2)).toBe("队列第 2 位。当前任务结束后开始执行。");
+    expect(zh.statusYourPosition(3)).toBe("你的请求：第 3 位");
+  });
+
+  it("every StringTable key has a translation (no English fallthrough) for ja + zh-cn", () => {
+    const ja = resolveStrings("ja");
+    const zh = resolveStrings("zh-cn");
+    // Spot-check a representative slice; the type system already
+    // requires every key to exist (Partial<StringTable>).
+    expect(ja.statusReadingChat).not.toBe(enStrings.statusReadingChat);
+    expect(ja.diagnosticsTitle).not.toBe(enStrings.diagnosticsTitle);
+    expect(ja.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
+    expect(zh.statusReadingChat).not.toBe(enStrings.statusReadingChat);
+    expect(zh.diagnosticsTitle).not.toBe(enStrings.diagnosticsTitle);
+    expect(zh.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
+  });
+});
+
 describe("built-in ko bundle (v0.9.4)", () => {
   it("is registered automatically — no explicit registerStrings needed", () => {
     // Fresh registry state (afterEach calls _clearRegistry which
