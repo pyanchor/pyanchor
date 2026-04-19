@@ -12,7 +12,11 @@ import { createBrief } from "./brief";
 import { execBuffered, streamSpawn } from "./exec";
 import { extractAgentSignals, parseAgentResult } from "./parse";
 
-const SUDO_BIN = "/usr/bin/sudo";
+// Honor PYANCHOR_SUDO_BIN so test sandboxes that stub sudo with a
+// no-op (e.g. /bin/true or a wrapper script) see consistent behavior
+// across worker workspace ops AND agent subprocess calls. Production
+// keeps the /usr/bin/sudo default.
+const sudoBin = () => pyanchorConfig.sudoBin;
 
 interface AgentRecord {
   id?: string;
@@ -111,7 +115,7 @@ export class OpenClawAgentRunner implements AgentRunner {
       agentMessage
     ];
 
-    for await (const event of streamSpawn(SUDO_BIN, args, {
+    for await (const event of streamSpawn(sudoBin(), args, {
       signal: ctx.signal,
       timeoutMs: ctx.timeoutMs + 120_000
     })) {
@@ -155,7 +159,7 @@ export class OpenClawAgentRunner implements AgentRunner {
     args: string[],
     options: { signal?: AbortSignal; input?: string } = {}
   ) {
-    return execBuffered(SUDO_BIN, ["-u", pyanchorConfig.openClawUser, ...args], options);
+    return execBuffered(sudoBin(), ["-u", pyanchorConfig.openClawUser, ...args], options);
   }
 
   private async writeBrief(input: AgentRunInput, _ctx: AgentRunContext): Promise<void> {

@@ -127,6 +127,13 @@ export function runCommand(
       reject(new Error(stderr.trim() || stdout.trim() || `${command} exited with ${code}`));
     });
 
+    // Swallow EPIPE: if the child exits before reading stdin (e.g. a
+    // misconfigured wrapper script that returns immediately), Node
+    // raises an unhandled 'error' event on the stdin socket. The
+    // close handler above already records the non-zero exit; we just
+    // need to keep the error from killing the worker process.
+    child.stdin.on("error", () => undefined);
+
     if (options.input) {
       child.stdin.write(options.input);
     }

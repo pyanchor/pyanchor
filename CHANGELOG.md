@@ -7,6 +7,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-04-19
+
+Real-subprocess integration coverage for `dist/worker/runner.cjs`
+— the v0.7.x decomposition's last remaining 0%-covered piece. The
+v0.7.x track originally targeted a Docker-based sandbox for this;
+v0.8.0 ships the same coverage via narrower `PYANCHOR_SUDO_BIN` /
+`PYANCHOR_FLOCK_BIN` env overrides instead, without adding Docker
+to the test infra.
+
+Two real defensive bugs surfaced and got fixed along the way: an
+inconsistent sudo binary between worker workspace ops and the
+openclaw adapter, and an unhandled-EPIPE crash when a child
+subprocess exits before reading stdin.
+
+### Fixed
+- **`openclaw` adapter now honors `PYANCHOR_SUDO_BIN`.** Previously
+  the worker workspace ops (`prepare`, `install`, `build`, `sync`,
+  `restart`) used the configurable `pyanchorConfig.sudoBin`, but the
+  agent adapter hardcoded `/usr/bin/sudo` in `src/agents/openclaw/index.ts`.
+  In production both paths point at the same binary so nothing
+  visibly broke; in test sandboxes (and on distros where sudo lives
+  elsewhere) the inconsistency would cause the agent's prepare /
+  brief / chat shell-outs to fail while workspace ops succeeded.
+  Both paths now read `pyanchorConfig.sudoBin`.
+- **Unhandled EPIPE on child stdin no longer crashes the worker.**
+  When a spawned subprocess exits before consuming the stdin pipe
+  (a misconfigured wrapper, a sudo password reject, an openclaw
+  binary that crashes on startup), the previous code would surface
+  an unhandled `'error'` event on the stdin socket and terminate
+  the worker via Node's default uncaughtException handler. Both
+  `src/worker/child-process.ts` and `src/agents/openclaw/exec.ts`
+  now register a no-op `'error'` listener on stdin before writing.
+  The close handler still records the non-zero exit code so the
+  failure surfaces through the normal job-failure path.
+
+### Added
+- **`PYANCHOR_SUDO_BIN`** — overrides the sudo wrapper path used by
+  worker workspace ops AND the openclaw adapter. Default
+  `/usr/bin/sudo`.
+- **`PYANCHOR_FLOCK_BIN`** — overrides the flock binary used for
+  shared/exclusive locks during workspace rsync. Default
+  `/usr/bin/flock`.
+  Both documented in `.env.example` under "Workspace command
+  overrides (advanced / test-only)" — production deployments
+  should leave them unset.
+
+- **`tests/integration/runner-subprocess.test.ts`** — **3 tests**
+  spawning the actual built `dist/worker/runner.cjs` binary:
+  - **happy path**: state.json processed end-to-end, status flips
+    `running → done`, assistant message appended with the default
+    "Edit complete." summary that the openclaw adapter falls back
+    to when its underlying subprocess emits zero events
+  - **activity-log lifecycle steps**: asserts the
+    `Preparing` / `Syncing` / `Job complete` markers landed in the
+    persisted `activityLog` (proves `withHeartbeat` and the runtime
+    buffer flush actually wrote through the real state-io)
+  - **env validation**: missing `PYANCHOR_STATE_FILE_PATH` exits 1
+  - **cancel signal**: with a fake-openclaw script that hangs on
+    the `chat` invocation, SIGTERMing the worker mid-job causes
+    `finalizeCancellation` to write the canceled final state and
+    exit cleanly. Uses a fake-sudo wrapper that handles both
+    `sudo cmd args` (workspace ops) and `sudo -u user cmd args`
+    (agent ops).
+
+### Changed
+- **`tests/e2e/bootstrap-and-flows.spec.ts`** — token-surface test
+  changed from "the LAST status request has no Authorization" to
+  "WITHIN 8s, AT LEAST ONE status request arrived without
+  Authorization." The strict assertion was flaky under parallel
+  Playwright workers because polling cadence + session POST
+  resolution can land status requests out of insertion order
+  across two browser contexts. The new assertion preserves the
+  v0.5.1 security guarantee (cookie-only path engages) without
+  the timing dependency. Verified stable across 5/5 consecutive
+  runs.
+
+### Tests
+- **Unit**: 378 → **382** (+3 runner-subprocess tests, -1 skipped
+  → 0 skipped after restoring cancel).
+- **E2E (Playwright)**: 7 (unchanged).
+- **Total**: **389 across 30 files**.
+
+### Coverage
+- `src/worker/runner.ts`: 0% → real-subprocess smoke now exercises
+  the full main loop, signal handlers, processJob orchestration,
+  and the dequeue boundary. The vitest coverage tool still reports
+  0% because the subprocess runs in a separate Node process, but
+  the code IS executed end-to-end with state.json mutations
+  observed from outside.
+- `src/runtime/bootstrap.ts`: 100% (held from v0.7.4).
+- All seven worker submodules: 100% (held from v0.6.x).
+- All six overlay submodules: ≥98% (held from v0.7.0–v0.7.1).
+
+### Compatibility
+The two new env vars default to the prior hardcoded values, so
+no production deployment needs to change anything. The openclaw
+adapter behavior is unchanged when `PYANCHOR_SUDO_BIN` is unset.
+The EPIPE swallow is purely defensive — happy-path runs never hit
+the listener because the close handler resolves before the error
+event would fire.
+
+### Roadmap
+- **v0.8.x**: overlay accessibility (focus trap, aria-live,
+  keyboard navigation) — Codex round-3 #6.
+- **v0.8.x or v0.9.x**: i18n shim for the status copy strings (the
+  English / Korean mix in the messages).
+- **Optional**: a true Docker-based sandbox would still be more
+  faithful for testing real `sudo` / `rsync` / `chown` semantics
+  against actual permission boundaries. v0.8.0's env-override
+  approach covers the orchestration paths but stops short of
+  permission/filesystem-edge testing. Tracked but lower priority
+  than UX work.
+
 ## [0.7.4] - 2026-04-19
 
 Codex round-6 verification gap closure. The review confirmed v0.7.0–

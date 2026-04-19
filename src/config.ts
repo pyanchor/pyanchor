@@ -105,6 +105,18 @@ export const pyanchorConfig = {
   openClawBin: optionalEnv("PYANCHOR_OPENCLAW_BIN", "openclaw"),
   openClawUser: optionalEnv("PYANCHOR_OPENCLAW_USER", currentUser),
 
+  // ─── workspace command overrides (advanced) ────────────────────
+  // Override the binaries the worker uses to wrap workspace ops.
+  // The defaults (`/usr/bin/sudo`, `/usr/bin/flock`) match the
+  // production deployment model where the worker runs as a system
+  // user and shells out under sudo. Override to point at no-op
+  // wrappers in test sandboxes (e.g. `/bin/true`) or to relocated
+  // binaries on non-standard distros.
+  // PYANCHOR_SUDO_BIN=/usr/bin/sudo
+  sudoBin: optionalEnv("PYANCHOR_SUDO_BIN", "/usr/bin/sudo"),
+  // PYANCHOR_FLOCK_BIN=/usr/bin/flock
+  flockBin: optionalEnv("PYANCHOR_FLOCK_BIN", "/usr/bin/flock"),
+
   // ─── agent: shell-out adapters (codex, aider) ──────────────────
   // Path or basename of the OpenAI Codex CLI binary. Default: `codex` on PATH.
   // Install: `npm i -g @openai/codex`.

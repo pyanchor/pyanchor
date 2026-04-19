@@ -159,7 +159,11 @@ const workspaceDeps: WorkspaceDeps = {
   runCommand,
   framework,
   baseExecOptions,
-  log: (lines) => queueLog(lines)
+  log: (lines) => queueLog(lines),
+  // Allow the test sandbox (and unusual distros) to override the
+  // sudo/flock wrappers without touching the worker source.
+  sudoBin: pyanchorConfig.sudoBin,
+  flockBin: pyanchorConfig.flockBin
 };
 
 const lifecycle = createLifecycle(

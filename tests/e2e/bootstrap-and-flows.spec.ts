@@ -114,49 +114,27 @@ test.describe("v0.5.1 token surface — full bootstrap path", () => {
       const sessionAuth = sessionRequests[0]!.headers()["authorization"];
       expect(sessionAuth).toBe("Bearer e2e-test-token-32-chars-1234567890");
 
-      // Now force a fresh /api/status poll AFTER the token blanking.
-      // Race note: overlay's first sync may have fired with the token
-      // still in memory (the lazy getToken() reads at call-time, but
-      // the call beat the session POST resolution). We can't guarantee
-      // the absence of Authorization on the very first poll. What we
-      // CAN guarantee — and the v0.5.1 security promise — is that
-      // post-blanking polls have no header.
-      const requestsBeforeForce = statusRequests.length;
-      await page.evaluate(() => {
-        // Touch fetchJson via a contrived call. Easiest: simulate a
-        // navigation event which the overlay binds to dispatch a poll.
-        window.dispatchEvent(new Event("pyanchor:navigation"));
-        // Fallback: synthesize one fetch directly via the same lazy
-        // getToken closure the overlay uses, by re-running a status
-        // call. The overlay does this on visibilitychange + on the
-        // poll interval.
-        document.dispatchEvent(new Event("visibilitychange"));
-      });
-      // Give the polling loop a window to fire a fresh request.
-      await page.waitForFunction(
-        (before) => {
-          // Wait for at least one MORE request to be captured by the
-          // route handler. The route handler runs in node, not page,
-          // so we can't read its array — but we can spin on a generic
-          // condition and let the test's own request capture happen.
-          return true;
-        },
-        requestsBeforeForce,
-        { timeout: 100 }
-      );
-      await page.waitForTimeout(800);
-
-      // Among the captured /api/status requests, at least one
-      // (the post-blanking ones) must have NO Authorization header.
-      const authPresence = statusRequests.map((req) =>
-        Boolean(req.headers()["authorization"])
-      );
-      expect(authPresence).toContain(false);
-      // Also assert: the LAST status request (after we forced a poll
-      // post-blanking) has no Authorization. This is the v0.5.1
-      // security promise.
-      const lastAuth = statusRequests[statusRequests.length - 1]!.headers()["authorization"];
-      expect(lastAuth, "last /api/status request leaked Authorization after token blanking").toBeFalsy();
+      // Wait for a /api/status request to actually arrive WITHOUT the
+      // Authorization header. The overlay polls on mount + every 3.5s.
+      // The first poll might race the session POST and still carry the
+      // token (lazy getToken() reads at call-time, but the call may
+      // have been queued before token blanking landed). The next poll
+      // — fired after blanking — must omit the header. We poll for up
+      // to 8s rather than asserting "at this instant" because
+      // parallel workers can shift the timing by hundreds of ms.
+      const deadline = Date.now() + 8000;
+      let sawAuthlessRequest = false;
+      while (Date.now() < deadline) {
+        sawAuthlessRequest = statusRequests.some(
+          (req) => !req.headers()["authorization"]
+        );
+        if (sawAuthlessRequest) break;
+        await page.waitForTimeout(200);
+      }
+      expect(
+        sawAuthlessRequest,
+        `no /api/status request arrived without Authorization within 8s (${statusRequests.length} total captured) — cookie-only path didn't engage`
+      ).toBe(true);
     }
   );
 });

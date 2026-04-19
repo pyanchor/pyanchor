@@ -91,6 +91,13 @@ export async function* streamSpawn(
     }
   }
 
+  // Same EPIPE swallow pattern as worker/child-process.ts: if the
+  // child exits before consuming stdin (no-op wrapper, broken
+  // openclaw binary, sudo prompt rejection), the unhandled stdin
+  // 'error' would crash the worker. The close handler above still
+  // records the non-zero exit code.
+  child.stdin?.on("error", () => undefined);
+
   if (options.input !== undefined) {
     child.stdin?.write(options.input);
   }
