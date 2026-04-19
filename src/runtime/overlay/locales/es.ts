@@ -12,6 +12,7 @@ import type { StringTable } from "../strings";
 declare global {
   interface Window {
     __PyanchorPendingLocales?: Array<{ locale: string; bundle: Partial<StringTable> }>;
+    __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
   }
 }
 
@@ -77,7 +78,7 @@ export const esStrings: Partial<StringTable> = {
   errorJobFailed: "El trabajo falló.",
 
   kbdShortcutHint: "Cmd/Ctrl + Shift + . para alternar",
-  retryLast: "Reintentar última solicitud",
+  retryLast: "Reintentar la última solicitud",
   copyLast: "Copiar",
   toastCopied: "Copiado al portapapeles.",
   toastCopyFailed: "Falló la copia.",
@@ -91,10 +92,14 @@ export const esStrings: Partial<StringTable> = {
   diagMode: "Modo",
   diagQueue: "Cola",
   diagLastUpdate: "Última actualización",
-  diagAuthCookie: "sesión de cookie",
+  diagAuthCookie: "sesión por cookie",
   diagAuthBearer: "token bearer"
 };
 
 if (typeof window !== "undefined") {
-  (window.__PyanchorPendingLocales ||= []).push({ locale: "es", bundle: esStrings });
+  if (typeof window.__PyanchorRegisterStrings === "function") {
+    window.__PyanchorRegisterStrings("es", esStrings);
+  } else {
+    (window.__PyanchorPendingLocales ||= []).push({ locale: "es", bundle: esStrings });
+  }
 }

@@ -12,18 +12,19 @@ import type { StringTable } from "../strings";
 declare global {
   interface Window {
     __PyanchorPendingLocales?: Array<{ locale: string; bundle: Partial<StringTable> }>;
+    __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
   }
 }
 
 export const idStrings: Partial<StringTable> = {
   statusReadingChat: "Membaca pertanyaan Anda.",
   statusReadingEdit: "Membaca halaman dan kode.",
-  statusJobFailed: "Pekerjaan gagal.",
-  statusJobCanceled: "Pekerjaan dibatalkan.",
+  statusJobFailed: "Tugas gagal.",
+  statusJobCanceled: "Tugas dibatalkan.",
   statusAnswerReady: "Jawaban siap.",
   statusEditComplete: "Pengeditan selesai.",
   statusQueuedAt: (n) =>
-    `Dalam antrean, posisi ${n}. Akan dijalankan setelah pekerjaan saat ini selesai.`,
+    `Dalam antrean, posisi ${n}. Akan dijalankan setelah tugas saat ini selesai.`,
 
   pendingDrafting: "Menyiapkan permintaan Anda.",
   pendingReading: "Membaca halaman dan kode.",
@@ -44,7 +45,7 @@ export const idStrings: Partial<StringTable> = {
 
   modeAsk: "Tanya",
   modeEdit: "Edit",
-  modeLockedTitle: "Mode terkunci saat ada pekerjaan berjalan.",
+  modeLockedTitle: "Mode terkunci saat ada tugas berjalan.",
 
   toggleOpen: "Buka Pyanchor DevTools",
   toggleClose: "Tutup Pyanchor DevTools",
@@ -74,7 +75,7 @@ export const idStrings: Partial<StringTable> = {
   statusYourPosition: (n) => `Permintaan Anda: posisi ${n}`,
 
   errorRequestFailed: "Permintaan gagal.",
-  errorJobFailed: "Pekerjaan gagal.",
+  errorJobFailed: "Tugas gagal.",
 
   kbdShortcutHint: "Cmd/Ctrl + Shift + . untuk membuka/menutup",
   retryLast: "Coba lagi permintaan terakhir",
@@ -87,7 +88,7 @@ export const idStrings: Partial<StringTable> = {
   diagLocale: "Bahasa",
   diagAuth: "Auth",
   diagStatus: "Status",
-  diagJobId: "ID pekerjaan",
+  diagJobId: "ID tugas",
   diagMode: "Mode",
   diagQueue: "Antrean",
   diagLastUpdate: "Pembaruan terakhir",
@@ -96,5 +97,9 @@ export const idStrings: Partial<StringTable> = {
 };
 
 if (typeof window !== "undefined") {
-  (window.__PyanchorPendingLocales ||= []).push({ locale: "id", bundle: idStrings });
+  if (typeof window.__PyanchorRegisterStrings === "function") {
+    window.__PyanchorRegisterStrings("id", idStrings);
+  } else {
+    (window.__PyanchorPendingLocales ||= []).push({ locale: "id", bundle: idStrings });
+  }
 }

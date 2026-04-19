@@ -12,6 +12,7 @@ import type { StringTable } from "../strings";
 declare global {
   interface Window {
     __PyanchorPendingLocales?: Array<{ locale: string; bundle: Partial<StringTable> }>;
+    __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
   }
 }
 
@@ -96,5 +97,9 @@ export const viStrings: Partial<StringTable> = {
 };
 
 if (typeof window !== "undefined") {
-  (window.__PyanchorPendingLocales ||= []).push({ locale: "vi", bundle: viStrings });
+  if (typeof window.__PyanchorRegisterStrings === "function") {
+    window.__PyanchorRegisterStrings("vi", viStrings);
+  } else {
+    (window.__PyanchorPendingLocales ||= []).push({ locale: "vi", bundle: viStrings });
+  }
 }

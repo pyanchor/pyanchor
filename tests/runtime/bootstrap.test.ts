@@ -350,6 +350,69 @@ describe("runBootstrap — overlay script injection", () => {
     expect(overlayTag?.defer).toBe(true);
   });
 
+  // v0.12.1 — round-11 #3 follow-up. Lock the locale-script-before-
+  // overlay-script ordering for every built-in locale so the next
+  // person who edits BUILT_IN_LOCALES doesn't accidentally drop the
+  // injection (silent regression: locale 404s + UI stays English).
+  describe("auto-injects locale bundle script BEFORE overlay (built-in locales)", () => {
+    const builtIns = ["ko", "ja", "zh-cn", "es", "de", "fr", "pt-br", "vi", "id"];
+    it.each(builtIns)("locale=%s injects locales/%s.js with defer + correct attrs", (locale) => {
+      const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });
+      script.dataset.pyanchorLocale = locale;
+      runBootstrap({
+        window,
+        document,
+        fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+        currentScript: script
+      });
+
+      const localeTag = document.head.querySelector<HTMLScriptElement>(
+        `script[data-pyanchor-locale-bundle='${locale}']`
+      );
+      expect(localeTag).not.toBeNull();
+      expect(localeTag?.src).toBe(`http://localhost/_pyanchor/locales/${locale}.js`);
+      expect(localeTag?.defer).toBe(true);
+
+      // The overlay tag must be appended AFTER the locale tag —
+      // browsers execute deferred scripts in document order, so this
+      // ordering is what guarantees the locale bundle is in the queue
+      // when the overlay drains it.
+      const overlayTag = document.head.querySelector<HTMLScriptElement>(
+        "script[data-pyanchor-overlay='1']"
+      );
+      const positions = Array.from(document.head.children);
+      expect(positions.indexOf(localeTag!)).toBeLessThan(positions.indexOf(overlayTag!));
+    });
+
+    it("does NOT inject a locale bundle for unknown locales (silent fallback to English)", () => {
+      const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });
+      script.dataset.pyanchorLocale = "klingon";
+      runBootstrap({
+        window,
+        document,
+        fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+        currentScript: script
+      });
+
+      const anyLocaleBundle = document.head.querySelector("script[data-pyanchor-locale-bundle]");
+      expect(anyLocaleBundle).toBeNull();
+      // The overlay tag still lands and config still propagates the
+      // unknown locale; resolveStrings just returns enStrings.
+      expect(window.__PyanchorConfig?.locale).toBe("klingon");
+    });
+
+    it("does NOT inject a locale bundle when no locale is requested at all", () => {
+      const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });
+      runBootstrap({
+        window,
+        document,
+        fetch: vi.fn() as never,
+        currentScript: script
+      });
+      expect(document.head.querySelector("script[data-pyanchor-locale-bundle]")).toBeNull();
+    });
+  });
+
   it("dedups: returns 'loaded-overlay-already-present' if a <script data-pyanchor-overlay='1'> is present", () => {
     const existing = document.createElement("script");
     existing.dataset.pyanchorOverlay = "1";

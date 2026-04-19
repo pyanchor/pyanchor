@@ -15,6 +15,7 @@ import type { StringTable } from "../strings";
 declare global {
   interface Window {
     __PyanchorPendingLocales?: Array<{ locale: string; bundle: Partial<StringTable> }>;
+    __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
   }
 }
 
@@ -97,5 +98,9 @@ export const jaStrings: Partial<StringTable> = {
 };
 
 if (typeof window !== "undefined") {
-  (window.__PyanchorPendingLocales ||= []).push({ locale: "ja", bundle: jaStrings });
+  if (typeof window.__PyanchorRegisterStrings === "function") {
+    window.__PyanchorRegisterStrings("ja", jaStrings);
+  } else {
+    (window.__PyanchorPendingLocales ||= []).push({ locale: "ja", bundle: jaStrings });
+  }
 }

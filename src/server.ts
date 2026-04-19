@@ -101,9 +101,42 @@ app.get("/healthz", (_request, response) => {
   response.json({ ok: true });
 });
 
+// v0.12.1 — keep this list in sync with `BUILT_IN_LOCALES` in
+// `src/runtime/bootstrap.ts`. Bootstrap auto-injects
+// `<script src="${basePath}/locales/${locale}.js">` for these codes,
+// so the server has to actually serve them (round-11 #1: previously
+// the bootstrap path was wired but the route was missing in
+// production, only the e2e fixture had it — locales silently fell
+// back to English).
+const BUILT_IN_LOCALES = new Set([
+  "ko",
+  "ja",
+  "zh-cn",
+  "es",
+  "de",
+  "fr",
+  "pt-br",
+  "vi",
+  "id"
+]);
+
 for (const basePath of runtimeBases) {
   app.get(`${basePath}/bootstrap.js`, serveRuntimeAsset("bootstrap.js"));
   app.get(`${basePath}/overlay.js`, serveRuntimeAsset("overlay.js"));
+  app.get(`${basePath}/locales/:locale.js`, (request: Request, response: Response) => {
+    // Whitelist — never sendFile a path component derived from user
+    // input without explicit allowlisting. The regex check below is a
+    // belt-and-suspenders guard in case the set ever grows to include
+    // a value with unsafe characters.
+    const locale = (request.params.locale ?? "").toLowerCase();
+    if (!BUILT_IN_LOCALES.has(locale) || !/^[a-z][a-z-]*[a-z]$/.test(locale)) {
+      response.status(404).end();
+      return;
+    }
+    setNoStore(response);
+    response.type("application/javascript");
+    response.sendFile(path.join(pyanchorConfig.staticDir, "locales", `${locale}.js`));
+  });
 }
 
 // ─── authed: runtime + admin API ───────────────────────────────────────

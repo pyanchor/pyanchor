@@ -16,6 +16,7 @@ import type { StringTable } from "../strings";
 declare global {
   interface Window {
     __PyanchorPendingLocales?: Array<{ locale: string; bundle: Partial<StringTable> }>;
+    __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
   }
 }
 
@@ -86,7 +87,7 @@ export const zhCNStrings: Partial<StringTable> = {
 
   diagnosticsTitle: "诊断",
   diagRuntime: "运行时",
-  diagLocale: "区域",
+  diagLocale: "语言",
   diagAuth: "认证",
   diagStatus: "状态",
   diagJobId: "任务 ID",
@@ -98,5 +99,9 @@ export const zhCNStrings: Partial<StringTable> = {
 };
 
 if (typeof window !== "undefined") {
-  (window.__PyanchorPendingLocales ||= []).push({ locale: "zh-cn", bundle: zhCNStrings });
+  if (typeof window.__PyanchorRegisterStrings === "function") {
+    window.__PyanchorRegisterStrings("zh-cn", zhCNStrings);
+  } else {
+    (window.__PyanchorPendingLocales ||= []).push({ locale: "zh-cn", bundle: zhCNStrings });
+  }
 }

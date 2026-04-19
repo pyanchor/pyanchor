@@ -12,6 +12,7 @@ import type { StringTable } from "../strings";
 declare global {
   interface Window {
     __PyanchorPendingLocales?: Array<{ locale: string; bundle: Partial<StringTable> }>;
+    __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
   }
 }
 
@@ -77,7 +78,7 @@ export const ptBRStrings: Partial<StringTable> = {
   errorJobFailed: "Job falhou.",
 
   kbdShortcutHint: "Cmd/Ctrl + Shift + . para alternar",
-  retryLast: "Tentar última solicitação novamente",
+  retryLast: "Repetir última solicitação",
   copyLast: "Copiar",
   toastCopied: "Copiado para a área de transferência.",
   toastCopyFailed: "Falha ao copiar.",
@@ -96,5 +97,9 @@ export const ptBRStrings: Partial<StringTable> = {
 };
 
 if (typeof window !== "undefined") {
-  (window.__PyanchorPendingLocales ||= []).push({ locale: "pt-br", bundle: ptBRStrings });
+  if (typeof window.__PyanchorRegisterStrings === "function") {
+    window.__PyanchorRegisterStrings("pt-br", ptBRStrings);
+  } else {
+    (window.__PyanchorPendingLocales ||= []).push({ locale: "pt-br", bundle: ptBRStrings });
+  }
 }

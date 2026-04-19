@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   _clearRegistry,
@@ -330,6 +330,58 @@ describe("built-in Latin + SE-Asian bundles (v0.12.0)", () => {
       expect(t.errorRequestFailed).not.toBe(enStrings.errorRequestFailed);
     }
   );
+});
+
+describe("late-register hook (v0.12.1 \u2014 round-11 #2 fix)", () => {
+  // Codex round 11 found that locale bundles only pushed onto the
+  // pending queue, never called `__PyanchorRegisterStrings`. So if
+  // a bundle loaded AFTER the overlay (queue already drained), the
+  // locale silently fell back to English. The fix: each bundle now
+  // checks for the hook first and calls it when available.
+  //
+  // These tests cover the two activation paths each bundle exercises:
+  //   (a) hook present \u2192 register immediately, do not push
+  //   (b) hook absent  \u2192 push onto the pending queue (drained later)
+
+  it("(a) when __PyanchorRegisterStrings is present, locale modules call it directly", async () => {
+    // Wipe the queue so we can prove the locale didn't go through it.
+    type WindowWithGlobals = Window & {
+      __PyanchorPendingLocales?: unknown[];
+      __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
+    };
+    const w = window as WindowWithGlobals;
+    w.__PyanchorPendingLocales = [];
+    const calls: Array<[string, Partial<StringTable>]> = [];
+    w.__PyanchorRegisterStrings = (locale, bundle) => {
+      calls.push([locale, bundle]);
+    };
+
+    // Re-import the ko bundle from a fresh module graph so its
+    // top-level side effect re-runs. `vi.resetModules` clears the
+    // ESM cache; the dynamic import then re-evaluates the module.
+    vi.resetModules();
+    await import("../../../src/runtime/overlay/locales/ko");
+
+    // Hook was called \u2014 locale registered without touching the queue.
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    expect(calls.some(([locale]) => locale === "ko")).toBe(true);
+    expect(w.__PyanchorPendingLocales?.length ?? 0).toBe(0);
+  });
+
+  it("(b) when the hook is absent, locale modules fall back to queue push (legacy/early path)", async () => {
+    type WindowWithGlobals = Window & {
+      __PyanchorPendingLocales?: Array<{ locale: string; bundle: Partial<StringTable> }>;
+      __PyanchorRegisterStrings?: unknown;
+    };
+    const w = window as WindowWithGlobals;
+    w.__PyanchorPendingLocales = [];
+    delete w.__PyanchorRegisterStrings;
+
+    vi.resetModules();
+    await import("../../../src/runtime/overlay/locales/ja");
+
+    expect(w.__PyanchorPendingLocales?.some((entry) => entry.locale === "ja")).toBe(true);
+  });
 });
 
 describe("registerStrings", () => {

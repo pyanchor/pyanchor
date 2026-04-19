@@ -16,6 +16,7 @@ import type { StringTable } from "../strings";
 declare global {
   interface Window {
     __PyanchorPendingLocales?: Array<{ locale: string; bundle: Partial<StringTable> }>;
+    __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
   }
 }
 
@@ -97,10 +98,18 @@ export const koStrings: Partial<StringTable> = {
   diagAuthBearer: "Bearer 토큰"
 };
 
-// Self-register on script load. The overlay drains the queue on
-// boot; if this script loaded AFTER the overlay (uncommon — bootstrap
-// orders us first), the queue still works because the overlay also
-// exposes `window.__PyanchorRegisterStrings` for late additions.
+// Self-register on script load. Two paths, picked dynamically:
+//   1. Overlay already booted (`__PyanchorRegisterStrings` exposed)
+//      → call the hook directly. Covers the reverse-order case where
+//      the host injected `overlay.js` first and `ko.js` second.
+//   2. Overlay not yet booted → push onto the pending queue. The
+//      overlay drains it during its own module init.
+// Round-11 fix: the previous version only did (2), so reverse-order
+// loads silently fell back to English.
 if (typeof window !== "undefined") {
-  (window.__PyanchorPendingLocales ||= []).push({ locale: "ko", bundle: koStrings });
+  if (typeof window.__PyanchorRegisterStrings === "function") {
+    window.__PyanchorRegisterStrings("ko", koStrings);
+  } else {
+    (window.__PyanchorPendingLocales ||= []).push({ locale: "ko", bundle: koStrings });
+  }
 }

@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-04-19
+
+Round-11 Codex patches. Two real activation bugs in v0.11.0/v0.12.0
+plus translation polish. The locale code-split shipped a working
+client but a hole in the production server, so locale-tagged
+host pages silently fell back to English on real deployments.
+
+### Fixed
+- **`src/server.ts`** — added `${basePath}/locales/:locale.js` route
+  guarded by an explicit `BUILT_IN_LOCALES` whitelist + an extra
+  `^[a-z][a-z-]*[a-z]$` regex (belt-and-suspenders against path
+  traversal). Previously bootstrap auto-injected
+  `<script src="locales/{locale}.js">` but the Express server only
+  served `bootstrap.js` + `overlay.js`; the locale bundles 404'd in
+  production and the UI silently fell back to English. Verified via
+  real-server smoke (all 9 locales 200, `klingon.js` 404, encoded
+  `..%2Fetc%2Fpasswd.js` 404). **Round-11 #1 (high).**
+- **`src/runtime/overlay/locales/{ko,ja,zh-cn,es,de,fr,pt-br,vi,id}.ts`**
+  — every bundle now picks its activation path dynamically: if
+  `window.__PyanchorRegisterStrings` is present (overlay already
+  booted), call the hook directly; otherwise push onto the pending
+  queue (overlay drains later). Previously every bundle only pushed,
+  so a locale loaded AFTER the overlay was a dead write — the
+  documented late-register contract was half-implemented.
+  **Round-11 #2 (medium).**
+
+### Tests
+- **`tests/runtime/bootstrap.test.ts`** — 11 new cases:
+  parameterized over all 9 built-in locales, asserting bootstrap
+  injects `script[data-pyanchor-locale-bundle='{locale}']` with the
+  right `src` + `defer`, and that the locale tag lands BEFORE the
+  overlay tag (defer-document-order ordering guarantee). Plus
+  negative cases: unknown locales don't inject; no-locale doesn't
+  inject. **Round-11 #3 follow-up.**
+- **`tests/runtime/overlay/strings.test.ts`** — late-register hook
+  describe block. Two paths: (a) hook present → bundle calls it
+  directly, queue stays empty; (b) hook absent → bundle falls back
+  to queue push (legacy/early load). Uses `vi.resetModules` to
+  re-trigger module-init side effects.
+
+### Translation polish (round-11 review)
+- `es`: `Reintentar última solicitud` → `Reintentar la última
+  solicitud` (article needed); `sesión de cookie` → `sesión por
+  cookie` (less calqued).
+- `fr`: `session cookie` → `session par cookie`; `jeton bearer` →
+  `jeton Bearer` (capitalized — Bearer is the auth-scheme name, a
+  proper noun in this context).
+- `pt-br`: `Tentar última solicitação novamente` → `Repetir última
+  solicitação` (more natural word order).
+- `id`: `Pekerjaan` → `Tugas` for `statusJobFailed`,
+  `statusJobCanceled`, `errorJobFailed`, `modeLockedTitle`,
+  `statusQueuedAt`, `diagJobId`. `Pekerjaan` reads as "work" /
+  "occupation" rather than a runtime task.
+- `zh-cn`: `diagLocale: 区域` → `语言` (区域 = region, not language).
+
+### Notes
+- Adding a new built-in locale now requires updating two lists:
+  `BUILT_IN_LOCALES` in `bootstrap.ts` AND `BUILT_IN_LOCALES` in
+  `server.ts`. The bootstrap unit test parameterizes over both
+  implicitly (it iterates the same array), but the server route's
+  whitelist is hand-maintained — keep them in sync.
+- Future-work flag: a real-server vitest (e.g. supertest-based) for
+  the locale route would catch any whitelist drift directly. Today
+  it's covered by the v0.12.1 manual smoke + the bootstrap unit
+  test's URL-pattern assertion.
+
 ## [0.12.0] - 2026-04-19
 
 Latin + South-East Asian locale expansion. Six new built-in

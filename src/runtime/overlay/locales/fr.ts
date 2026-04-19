@@ -12,6 +12,7 @@ import type { StringTable } from "../strings";
 declare global {
   interface Window {
     __PyanchorPendingLocales?: Array<{ locale: string; bundle: Partial<StringTable> }>;
+    __PyanchorRegisterStrings?: (locale: string, bundle: Partial<StringTable>) => void;
   }
 }
 
@@ -91,10 +92,14 @@ export const frStrings: Partial<StringTable> = {
   diagMode: "Mode",
   diagQueue: "File",
   diagLastUpdate: "Dernière mise à jour",
-  diagAuthCookie: "session cookie",
-  diagAuthBearer: "jeton bearer"
+  diagAuthCookie: "session par cookie",
+  diagAuthBearer: "jeton Bearer"
 };
 
 if (typeof window !== "undefined") {
-  (window.__PyanchorPendingLocales ||= []).push({ locale: "fr", bundle: frStrings });
+  if (typeof window.__PyanchorRegisterStrings === "function") {
+    window.__PyanchorRegisterStrings("fr", frStrings);
+  } else {
+    (window.__PyanchorPendingLocales ||= []).push({ locale: "fr", bundle: frStrings });
+  }
 }
