@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-04-20
+
+Dependency stack refresh. **Express 4 → 5** transition (the npm
+`latest` dist-tag has been Express 5 since the v5.0 GA in Oct 2024)
+plus 10 sibling dev-dep / GitHub-Actions major bumps that landed
+in the v0.30.0 → v0.31.0 window via Dependabot's auto-merge lane
+or via the v0.30.0 batch-triage cycle.
+
+If you're already shipping with pyanchor, the only material change
+is the `express` peer bump. Reviewed against pyanchor's actual
+usage; no source code changes needed (CI green: 836 unit tests +
+69 e2e + Node 18/20/22 build matrix).
+
+### Changed
+- **Express 4.22.1 → 5.2.1** (PR #28). pyanchor's only public-
+  HTTP runtime dep. Reviewed Express 5 breaking changes against
+  our usage:
+  - Async error handling is now automatic (`next(err)` no longer
+    required for promise rejections in route handlers). We still
+    use explicit `next(err)` where present — the new behavior is
+    additive, not breaking.
+  - `req.body` is `{}` instead of `undefined` when no parser ran.
+    We always wire `express.json()` first, so this never affected us.
+  - `app.del()` removed — we already use `app.delete()`.
+  - `req.param()` removed — we use `request.params.<name>` style.
+  - `path-to-regexp` 6 → 8 wildcards: our routes are literal
+    paths (`/_pyanchor/api/edit`, `/healthz`, `/readyz`, etc).
+  - Unhandled promise rejections in middleware now propagate to
+    `app.use((err, req, res, next) => ...)` automatically. Our
+    error middleware already exists at the bottom of `src/server.ts`.
+- **TypeScript 5.9.3 → 6.0.3** (PRs #29 root + #7 #11 #20 examples).
+  Dev dep. tsc emits no new errors against our `src/` (CI typecheck
+  green).
+- **@types/node 22.19.17 → 25.6.0** (PRs #27 root + #8 #14 #26
+  examples). Types-only. Caught one signature drift handled at
+  the type-only level.
+- **GitHub Actions** (PRs #2 #3 #4):
+  - `actions/upload-artifact` v4 → v7
+  - `actions/setup-node` v4 → v6
+  - `actions/cache` v4 → v5
+  - All used by `.github/workflows/ci.yml`. CI green on the new
+    versions.
+
+### Closed (incompatible — re-open when their peers catch up)
+- **React 18 → 19** across 8 example directories (14 PRs total).
+  Our `nextjs-*` examples pin `next@14`, which has react@18 as a
+  peer dep. The `vite-react-*` examples pin react@18 indirectly
+  through `@types/react@18`. Until the example tree crosses to
+  `next@16+` with explicit react@19 opt-in, the bump deadlocks
+  `npm install --dry-run` (which is what the examples-smoke lane
+  catches). Tracked via `.github/dependabot.yml` ignore rules so
+  Dependabot doesn't re-propose every week.
+- **vite 5 → 6 in sveltekit-minimal** (PR #30).
+  `@sveltejs/vite-plugin-svelte` peer range stops at vite 5.x.
+  Re-open when SvelteKit advertises vite 6.
+
+### Added
+- **`.github/dependabot.yml` ignore-rule comments** anchoring when
+  to drop each ignore (e.g. "Drop the react ignores when examples
+  cross to next@16 with explicit react@19 opt-in"). Future-me
+  doesn't have to dig through commit history.
+
+### Tests
+- 836 unit + 69 e2e — same count as v0.30.0. The dep bumps didn't
+  require new tests; existing coverage was sufficient to validate
+  the Express 5 transition.
+
 ## [0.30.0] - 2026-04-20
 
 Operator CLI suite ship. Closes the four "추가로 할만한 것" items
