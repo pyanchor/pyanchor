@@ -1,0 +1,111 @@
+name: examples-smoke
+
+# Cheap CI lane that runs in parallel with the main `ci` workflow.
+# Verifies that every directory under examples/ resolves its
+# dependency graph (no broken peer deps, no missing packages on the
+# registry) and that the example index in examples/README.md doesn't
+# drift from the actual file tree.
+#
+# Does NOT actually `pnpm install` (too slow for 8 examples in CI).
+# Does NOT execute the example apps (would require sidecars + agents).
+# Catches the round-17 class of bugs cheaply: typo'd dep names,
+# stale Files counts, missing example links.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/**"
+      - ".github/workflows/examples.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "examples/**"
+      - ".github/workflows/examples.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-resolution:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        example:
+          - astro-minimal
+          - nextjs-minimal
+          - nextjs-multi-agent
+          - nextjs-nextauth-gate
+          - nextjs-portfolio-gate
+          - nextjs-pr-mode
+          - vite-react-minimal
+          - vite-react-portfolio-gate
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: dependency dry-run
+        working-directory: examples/${{ matrix.example }}
+        # --dry-run resolves the full dep graph without writing
+        # node_modules. --ignore-scripts skips postinstall hooks
+        # that would need network beyond npm registry.
+        # Catches: typo'd package names, deleted versions, peer dep
+        # conflicts.
+        run: npm install --dry-run --ignore-scripts
+
+  index-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: examples/README.md mentions every directory
+        # Every subdirectory under examples/ that has a package.json
+        # OR a README.md must be referenced in examples/README.md.
+        # The systemd template has only README.md (no package.json)
+        # but we still want it indexed.
+        run: |
+          set -euo pipefail
+          missing=0
+          for dir in examples/*/; do
+            name=$(basename "$dir")
+            if ! grep -q "$name" examples/README.md; then
+              echo "::error file=examples/README.md::example '$name' not referenced in examples/README.md"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ "$missing" -gt 0 ]; then
+            echo "::error::$missing example(s) missing from examples/README.md"
+            exit 1
+          fi
+
+      - name: Files counts in examples/README.md match actual tree
+        # Round-17 P3: the "All N examples at a glance" table had
+        # stale Files counts (5/6/5 listed, actual 7/7/8). Catch it.
+        run: |
+          set -euo pipefail
+          drift=0
+          # Parse table rows like:  | `nextjs-minimal` | 7 | ...
+          # and compare to `find examples/<name> -type f | wc -l`.
+          while IFS= read -r line; do
+            name=$(echo "$line" | sed -E 's/^\| `([^`]+)`.*/\1/')
+            claimed=$(echo "$line" | sed -E 's/^\| `[^`]+`[[:space:]]+\|[[:space:]]+([0-9]+).*/\1/')
+            if [ -d "examples/$name" ]; then
+              actual=$(find "examples/$name" -type f | wc -l | tr -d ' ')
+              if [ "$claimed" != "$actual" ]; then
+                echo "::error file=examples/README.md::$name file count drift: README says $claimed, actual $actual"
+                drift=$((drift + 1))
+              fi
+            fi
+          done < <(grep -E '^\| `[a-z]' examples/README.md || true)
+          if [ "$drift" -gt 0 ]; then
+            echo "::error::$drift example(s) have file count drift"
+            exit 1
+          fi

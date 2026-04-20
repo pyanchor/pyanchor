@@ -357,6 +357,7 @@ tenant tokens, etc.) is on the roadmap as v0.22+. See
 | [`examples/nextjs-nextauth-gate/`](./examples/nextjs-nextauth-gate) | Recipe C — NextAuth + email allowlist as the gate |
 | [`examples/nextjs-multi-agent/`](./examples/nextjs-multi-agent) | Same host, 5 interchangeable agents (one env var swap) |
 | [`examples/nextjs-pr-mode/`](./examples/nextjs-pr-mode) | `PYANCHOR_OUTPUT_MODE=pr` — edits land as reviewable GitHub PRs |
+| [`examples/systemd/`](./examples/systemd) | Production-hardened systemd unit + EnvironmentFile template |
 
 ## 🔭 Status
 

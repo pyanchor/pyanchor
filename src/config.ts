@@ -228,6 +228,16 @@ export const pyanchorConfig = {
   webhookEditAppliedFormat: optionalEnv("PYANCHOR_WEBHOOK_EDIT_APPLIED_FORMAT", "auto"),
   webhookPrOpenedFormat: optionalEnv("PYANCHOR_WEBHOOK_PR_OPENED_FORMAT", "auto"),
 
+  // ─── actor header signing (v0.27.0, opt-in) ─────────────────────
+  // When set, X-Pyanchor-Actor must be `<actor>.<hex-sha256-hmac>` —
+  // values without a valid signature for this secret are silently
+  // dropped from the audit trail (the edit still proceeds; we just
+  // don't trust the actor field). When unset (default), behavior is
+  // unchanged: header value is taken at face, capped at 256 chars,
+  // recorded as-is. See src/actor.ts for the rationale and the
+  // `signActor()` helper hosts can call to mint header values.
+  actorSigningSecret: optionalEnv("PYANCHOR_ACTOR_SIGNING_SECRET", ""),
+
   // ─── audit log (v0.18.0) ────────────────────────────────────────
   // Append-only JSON-lines log of every edit outcome. Disabled by
   // default in current ergonomics so existing setups don't grow a

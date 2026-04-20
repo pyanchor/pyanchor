@@ -39,6 +39,14 @@ starting point for your integration.
 | `astro-minimal`               | 7     | Non-built-in framework via `PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND` overrides |
 | `nextjs-pr-mode`              | 6     | `PYANCHOR_OUTPUT_MODE=pr` — edits land as GitHub PRs        |
 
+## Operations templates
+
+Not host-app examples — copy/paste-ready deploy artifacts.
+
+| Template                      | Files | Headline                                                    |
+| ----------------------------- | ----- | ----------------------------------------------------------- |
+| [`systemd/`](./systemd/)      | 3     | Production-hardened systemd unit + EnvironmentFile + install README |
+
 ## Mix and match
 
 The features are orthogonal:

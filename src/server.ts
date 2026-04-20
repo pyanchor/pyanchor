@@ -3,7 +3,8 @@ import express, { type NextFunction, type Request, type Response } from "express
 import path from "node:path";
 
 import { renderAdminHtml } from "./admin";
-import { pyanchorConfig, validateConfig } from "./config";
+import { verifyActorHeader } from "./actor";
+import { isPyanchorConfigured, pyanchorConfig, validateConfig } from "./config";
 import { SESSION_COOKIE, requireGateCookie, requireToken } from "./auth";
 import { requireAllowedOrigin } from "./origin";
 import { tokenBucketMiddleware } from "./rate-limit";
@@ -114,10 +115,30 @@ const serverWebhookSink: WebhookSink = pyanchorConfig.webhookEditRequestedUrl
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
-// ─── public: liveness + static runtime bundles ─────────────────────────
+// ─── public: liveness + readiness + static runtime bundles ────────────
+//
+// /healthz — liveness. Always 200 if the process is running and able
+// to handle a request. Used by container orchestrators to decide when
+// to restart the pod / process.
+//
+// /readyz — readiness. Returns 200 only when isPyanchorConfigured()
+// passes (workspace dir + app dir + restart script + agent binary all
+// resolvable). 503 otherwise. Used by orchestrators to decide when to
+// route traffic to this instance — a sidecar that fails readyz is
+// alive but can't actually run an edit yet (e.g. agent CLI install
+// in progress, workspace dir not mounted yet).
+//
+// Both endpoints are intentionally unauthenticated. They expose only
+// boolean status and a `ready` flag — no config, no state, no audit.
 app.get("/healthz", (_request, response) => {
   setNoStore(response);
   response.json({ ok: true });
+});
+
+app.get("/readyz", (_request, response) => {
+  setNoStore(response);
+  const ready = isPyanchorConfigured();
+  response.status(ready ? 200 : 503).json({ ok: ready, ready });
 });
 
 // v0.16.0: BUILT_IN_LOCALE_SET imported from `src/shared/locales.ts`
@@ -216,11 +237,22 @@ for (const basePath of runtimeBases) {
       // v0.19.0: passthrough X-Pyanchor-Actor → AiEditStartInput.actor.
       // Caps at 256 chars defensively (large headers waste audit log
       // bytes; agents that want to encode IDs should use short ones).
-      // Pyanchor does NOT verify actor identity — host owns auth.
+      //
+      // v0.27.0: If PYANCHOR_ACTOR_SIGNING_SECRET is set, the header
+      // is treated as `<actor>.<hex-sha256-hmac>` and rejected on
+      // mismatch. When unset (default), behavior is unchanged
+      // ("unsigned" pass-through). Pyanchor does NOT verify actor
+      // identity in either path — the HMAC just binds the audit trail
+      // to a key only the host knows, so a leaked pyanchor token
+      // can't fabricate audit lines for arbitrary users.
       const rawActor = request.header("x-pyanchor-actor");
+      const actorVerification = verifyActorHeader(
+        typeof rawActor === "string" ? rawActor : null,
+        pyanchorConfig.actorSigningSecret || null
+      );
       const actor =
-        typeof rawActor === "string" && rawActor.trim()
-          ? rawActor.trim().slice(0, 256)
+        actorVerification.kind === "ok" || actorVerification.kind === "unsigned"
+          ? actorVerification.actor
           : undefined;
       const body = request.body as AiEditStartInput;
       const result = await startAiEdit({

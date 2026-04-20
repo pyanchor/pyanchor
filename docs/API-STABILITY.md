@@ -56,14 +56,15 @@ Routes mounted under `runtimeBasePath` (default `/_pyanchor`) and
 
 | Route | Method | Auth | Status | Notes |
 |---|---|---|---|---|
-| `/healthz` | GET | none | **Stable @ 1.0** | `{ ok: true }`. For liveness checks. Always open even when gate cookie is required. |
+| `/healthz` | GET | none | **Stable @ 1.0** | `{ ok: true }`. Liveness — always 200 if process is alive. Open even when gate cookie is required. |
+| `/readyz` | GET | none | **Stable @ 1.0** | v0.27.0+. `{ ok, ready }`. 200 when `isPyanchorConfigured()` passes (workspace + app dir + restart script + agent CLI all resolvable), 503 otherwise. For k8s/orchestrator readiness probes. Open even when gate cookie is required. |
 | `/_pyanchor/bootstrap.js` | GET | gate cookie if `requireGateCookie` | **Stable @ 1.0** | Bootstrap IIFE. |
 | `/_pyanchor/overlay.js` | GET | gate cookie if `requireGateCookie` | **Stable @ 1.0** | Overlay IIFE. |
 | `/_pyanchor/locales/:locale.js` | GET | gate cookie if `requireGateCookie` | **Stable @ 1.0** | Per-locale bundle IIFE. Whitelist + regex guarded. |
 | `/_pyanchor/api/session` | POST | gate + origin + bearer | **Stable @ 1.0** | Exchange bearer token for HttpOnly opaque session cookie (`pyanchor_session`). Returns `{ ok: true, ttlMs }`. |
 | `/_pyanchor/api/session` | DELETE | gate + origin | **Stable @ 1.0** | Logout. Clears session cookie + revokes server-side. |
 | `/_pyanchor/api/status` | GET | gate + bearer/cookie | **Stable @ 1.0** | Returns the current `AiEditState`. Overlay polls at `POLL_INTERVAL_MS`. |
-| `/_pyanchor/api/edit` | POST | gate + origin + bearer/cookie | **Stable @ 1.0** | Body: `AiEditStartInput`. Header: optional `X-Pyanchor-Actor` (≤256 chars). Returns the new `AiEditState`. |
+| `/_pyanchor/api/edit` | POST | gate + origin + bearer/cookie | **Stable @ 1.0** | Body: `AiEditStartInput`. Header: optional `X-Pyanchor-Actor` (≤256 chars; v0.27.0+ supports HMAC verification when `PYANCHOR_ACTOR_SIGNING_SECRET` is set — header value becomes `<actor>.<hex-sha256-hmac>`). Returns the new `AiEditState`. |
 | `/_pyanchor/api/cancel` | POST | gate + origin + bearer/cookie | **Stable @ 1.0** | Body: `AiEditCancelInput`. |
 | `/api/admin/health` | GET | gate + bearer/cookie | Pre-1.0 | `AdminHealth` JSON. Shape may change; admin surface is in flux. |
 | `/api/admin/state` | GET | gate + bearer/cookie | Pre-1.0 | Same as `/api/status` for now. May be removed if duplicate. |

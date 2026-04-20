@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-04-20
+
+1.0 readiness polish ship. Four small additions targeting operator
+ergonomics and API surface hardening, plus a CI lane that catches
+the round-17 class of bugs cheaply. No breaking changes — all new
+surfaces are additive and opt-in. **Studio adoption window safe to
+upgrade** (HMAC actor signing defaults to off, `/readyz` is a new
+public endpoint, no existing semantics change).
+
+### Added
+- **`/readyz` readiness probe** — k8s/orchestrator-friendly endpoint
+  that returns 200 only when `isPyanchorConfigured()` passes
+  (workspace dir + app dir + restart script + agent CLI all
+  resolvable). 503 otherwise. Pairs with the existing `/healthz`
+  liveness endpoint. Both unauthenticated; both Stable @ 1.0 in
+  `docs/API-STABILITY.md`. 6 subprocess smoke tests cover the
+  happy path, 503 case, and isolation from `/healthz`.
+- **HMAC-signed `X-Pyanchor-Actor` header** (opt-in via
+  `PYANCHOR_ACTOR_SIGNING_SECRET`) — when set, the header value is
+  parsed as `<actor>.<hex-sha256-hmac>` and rejected on mismatch.
+  When unset (default), behavior is unchanged: header value is
+  taken at face, capped at 256 chars, recorded as-is. Backward
+  compatible with all existing v0.19+ deployments. New
+  `src/actor.ts` exports `signActor(actor, secret)` for hosts to
+  mint header values. 17 unit tests cover unsigned pass-through,
+  signed verification, dotted actor strings (emails), constant-time
+  compare, tamper detection. Documented in `API-STABILITY.md`.
+- **`examples/systemd/` operations template** — production-hardened
+  `pyanchor.service` + `pyanchor.env.example` + install README.
+  Same hardening block from `docs/PRODUCTION-HARDENING.md` pulled
+  into copy/paste-ready files (NoNewPrivileges, ProtectSystem,
+  SystemCallFilter, IPAddressDeny, MemoryMax, etc.). README
+  includes k8s probe YAML for users running pyanchor in a pod.
+- **`.github/workflows/examples.yml` smoke lane** — runs in parallel
+  with `ci.yml`, scoped to changes under `examples/**`. Two checks:
+  (1) per-example matrix `npm install --dry-run --ignore-scripts`
+  catches typo'd dep names / deleted versions / peer conflicts;
+  (2) `examples/README.md` index sync — every directory is
+  referenced AND the "All N examples" table file counts match
+  `find -type f` actuals. Catches the round-17 P3 class of drift
+  cheaply, no lockfile or node_modules write.
+
+### Changed
+- `docs/API-STABILITY.md` — `/readyz` row added (Stable @ 1.0);
+  `/_pyanchor/api/edit` row updated to mention HMAC verification
+  on `X-Pyanchor-Actor` when signing is enabled.
+- `.env.example` — new `PYANCHOR_ACTOR_SIGNING_SECRET` block with
+  rationale + `openssl rand -hex 32` snippet.
+- `examples/README.md` — new "Operations templates" section with
+  the systemd row.
+
+### Tests
+- 720 → 743 (+23: 17 unit for actor.ts + 6 subprocess smoke for
+  /readyz). All 42 test files pass.
+
 ## [0.26.1] - 2026-04-20
 
 Round-17 Codex patches. Two P1 (changelog narrative + Vite example

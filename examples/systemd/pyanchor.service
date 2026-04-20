@@ -1,0 +1,84 @@
+# /etc/systemd/system/pyanchor.service
+#
+# pyanchor sidecar systemd unit — production-hardened template.
+#
+# This is the same hardening block from docs/PRODUCTION-HARDENING.md
+# pulled into a standalone file so you can `cp` it directly without
+# copy/pasting from a markdown doc. Pair with pyanchor.env.example
+# (in this same directory) for the matching EnvironmentFile.
+#
+# Quick start (after editing both files for your paths):
+#   sudo cp pyanchor.service /etc/systemd/system/
+#   sudo cp pyanchor.env.example /etc/pyanchor.env
+#   sudo nano /etc/pyanchor.env       # fill in tokens / paths
+#   sudo chmod 600 /etc/pyanchor.env  # secrets, root-only
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pyanchor
+#   sudo systemctl status pyanchor
+#   curl http://127.0.0.1:3010/healthz   # liveness
+#   curl http://127.0.0.1:3010/readyz    # readiness (200 only when fully configured)
+#
+# Verify the sandbox is active (lower is better):
+#   systemd-analyze security pyanchor
+
+[Unit]
+Description=pyanchor sidecar (AI live-edit for Next.js / Vite)
+Documentation=https://github.com/pyanchor/pyanchor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pyanchor
+Group=pyanchor
+
+# Working directory + env. Adjust paths for your install layout.
+WorkingDirectory=/opt/pyanchor
+EnvironmentFile=/etc/pyanchor.env
+ExecStart=/usr/bin/node /opt/pyanchor/dist/server.cjs
+
+# Restart policy. RestartSec=5s prevents tight-loop crash restarts
+# from drowning the journal when the agent CLI is missing.
+Restart=on-failure
+RestartSec=5s
+
+# ─── Sandbox (free, fail-closed, survives code bugs) ───
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+# Allow writes ONLY to the workspace + state dirs the worker needs.
+# If your workspace lives elsewhere (e.g. /srv/myapp/workspace), edit
+# this line — pyanchor will get EROFS on any other path.
+ReadWritePaths=/var/lib/pyanchor/workspace /var/lib/pyanchor/state
+
+# Network: bind only loopback by default. The reverse proxy (nginx /
+# caddy) handles the public face. If you bind 0.0.0.0 directly,
+# pyanchor refuses to start unless PYANCHOR_ALLOWED_ORIGINS is set.
+IPAddressDeny=any
+IPAddressAllow=127.0.0.0/8 ::1/128
+
+# Resource limits. The worker can spawn agents that allocate large
+# context windows; bump MemoryMax if you see OOM kills under load.
+LimitNOFILE=4096
+MemoryMax=2G
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target
