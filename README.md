@@ -215,6 +215,7 @@ Pick a backend with `PYANCHOR_AGENT`:
 | `claude-code` | ✅ shipped | install peer dep `@anthropic-ai/claude-agent-sdk` + `ANTHROPIC_API_KEY`. Setup: [`docs/claude-code-setup.md`](./docs/claude-code-setup.md) |
 | `codex` | ✅ shipped | OpenAI Codex CLI on `PATH`. Install: `npm i -g @openai/codex`. Override binary with `PYANCHOR_CODEX_BIN`. |
 | `aider` | ✅ shipped | aider-chat CLI on `PATH`. Install: `pip install aider-chat`. Workspace should be a git repo. Override binary with `PYANCHOR_AIDER_BIN`. |
+| `gemini` | ✅ shipped | Google Gemini CLI on `PATH`. Install: `npm i -g @google/gemini-cli`. Auth: `GEMINI_API_KEY` env, `gemini auth login` (OAuth), or Vertex AI. Setup: [`docs/gemini-setup.md`](./docs/gemini-setup.md) |
 | Goose, Cline, custom | 🟡 | implement the [`AgentRunner`](./src/agents/types.ts) interface — see [`docs/adapters.md`](./docs/adapters.md) |
 
 The interface is ~70 lines; a working adapter is typically ~100-200.

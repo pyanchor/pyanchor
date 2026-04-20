@@ -3,6 +3,7 @@ import { pyanchorConfig } from "../config";
 import { AiderAgentRunner } from "./aider";
 import { ClaudeCodeAgentRunner } from "./claude-code";
 import { CodexAgentRunner } from "./codex";
+import { GeminiAgentRunner } from "./gemini";
 import { OpenClawAgentRunner } from "./openclaw";
 import type { AgentRunner } from "./types";
 
@@ -13,7 +14,8 @@ const adapters = new Map<string, () => AgentRunner>([
   ["openclaw", () => new OpenClawAgentRunner()],
   ["claude-code", () => new ClaudeCodeAgentRunner()],
   ["codex", () => new CodexAgentRunner()],
-  ["aider", () => new AiderAgentRunner()]
+  ["aider", () => new AiderAgentRunner()],
+  ["gemini", () => new GeminiAgentRunner()]
 ]);
 
 export function selectAgent(): AgentRunner {

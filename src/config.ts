@@ -117,13 +117,19 @@ export const pyanchorConfig = {
   // PYANCHOR_FLOCK_BIN=/usr/bin/flock
   flockBin: optionalEnv("PYANCHOR_FLOCK_BIN", "/usr/bin/flock"),
 
-  // ─── agent: shell-out adapters (codex, aider) ──────────────────
+  // ─── agent: shell-out adapters (codex, aider, gemini) ─────────
   // Path or basename of the OpenAI Codex CLI binary. Default: `codex` on PATH.
   // Install: `npm i -g @openai/codex`.
   codexBin: optionalEnv("PYANCHOR_CODEX_BIN", "codex"),
   // Path or basename of the aider-chat CLI binary. Default: `aider` on PATH.
   // Install: `pip install aider-chat`.
   aiderBin: optionalEnv("PYANCHOR_AIDER_BIN", "aider"),
+  // Path or basename of the Google Gemini CLI binary. Default: `gemini`
+  // on PATH. Install: `npm i -g @google/gemini-cli`.
+  // Auth: `export GEMINI_API_KEY=...` (from aistudio.google.com), OR
+  // `gemini auth login` (OAuth, persists), OR Vertex AI via
+  // GOOGLE_API_KEY + GOOGLE_GENAI_USE_VERTEXAI=true.
+  geminiBin: optionalEnv("PYANCHOR_GEMINI_BIN", "gemini"),
 
   // ─── cross-user / file ownership (default: same user) ──────────
   appDirOwner: optionalEnv("PYANCHOR_APP_DIR_OWNER", `${currentUser}:${currentUser}`),
@@ -289,6 +295,8 @@ function getAgentBin(): string | null {
       return pyanchorConfig.codexBin;
     case "aider":
       return pyanchorConfig.aiderBin;
+    case "gemini":
+      return pyanchorConfig.geminiBin;
     case "claude-code":
       return null;
     default:

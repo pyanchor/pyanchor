@@ -184,3 +184,47 @@ describe("claude-code.buildBrief", () => {
     expect(brief).toContain("msg-9");
   });
 });
+
+describe("gemini.buildBrief (v0.25.0)", () => {
+  // Same brief contract as the codex / aider / claude-code adapters.
+  // Brief is identical across shell-out adapters by design — the
+  // workspace context + framework hint + mode-specific constraint is
+  // backend-agnostic.
+  it("includes target route, mode, and the user request", async () => {
+    const { buildBrief } = await import("../../src/agents/gemini");
+    const brief = buildBrief(baseInput());
+    expect(brief).toContain("Target route: /dashboard");
+    expect(brief).toContain("Mode: edit");
+    expect(brief).toContain("make the button blue");
+  });
+
+  it("emits chat-mode constraints (no edits)", async () => {
+    const { buildBrief } = await import("../../src/agents/gemini");
+    const brief = buildBrief(baseInput({ mode: "chat" }));
+    expect(brief).toContain("Mode: chat");
+    expect(brief).toContain("Do not modify files");
+  });
+
+  it("splices the framework's build hint in edit mode", async () => {
+    const { buildBrief } = await import("../../src/agents/gemini");
+    const brief = buildBrief(baseInput({ mode: "edit" }));
+    expect(brief).toContain("next build");
+  });
+
+  it("truncates conversation history to the last 6 turns", async () => {
+    const { buildBrief } = await import("../../src/agents/gemini");
+    const messages = Array.from({ length: 10 }, (_, i) => ({
+      id: String(i),
+      jobId: "j",
+      role: "user" as const,
+      mode: "edit" as const,
+      text: `msg-${i}`,
+      createdAt: new Date(0).toISOString(),
+      status: null
+    }));
+    const brief = buildBrief(baseInput({ recentMessages: messages }));
+    expect(brief).not.toContain("msg-3");
+    expect(brief).toContain("msg-4");
+    expect(brief).toContain("msg-9");
+  });
+});

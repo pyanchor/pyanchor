@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-04-20
+
+Fifth built-in agent adapter: **Google Gemini CLI**. Mirror of the
+codex shell-out pattern (CLI + NDJSON event stream). Same
+`AgentRunner` contract, same brief shape, same hardening playbook.
+
+### Added
+- **`src/agents/gemini.ts`** (new). Spawns `gemini -p "<prompt>"
+  --output-format stream-json --yolo [-m <model>]` in the workspace
+  dir; parses the NDJSON stream into `summary` (assistant text) +
+  `thinking` (`thought` events).
+  - `--yolo` flag = "yes-to-everything" tool permission, mirrors
+    codex `--full-auto`. Brief constraints (edit-mode workspace
+    scope / chat-mode no-edit) are the actual safety boundary.
+  - Tolerates schema variants (top-level `text` / nested
+    `message.content` string / nested array of blocks) so future
+    Gemini CLI versions don't break the worker.
+- **`PYANCHOR_GEMINI_BIN` env** (default: `gemini` on PATH).
+- **`PYANCHOR_AGENT=gemini`** registered in `src/agents/index.ts`.
+- **`docs/gemini-setup.md`** (new). Three auth options (API key /
+  OAuth / Vertex AI), env wiring, model override, troubleshooting,
+  comparison table against the other 4 adapters.
+- **README** agent table: new `gemini` row pointing at the setup doc.
+
+### Tests
+- `tests/agents/adapter-briefs.test.ts` — 4 new cases: gemini
+  buildBrief contract (target route + mode + recent + framework
+  build hint + 6-turn truncation). Same shape as the other
+  adapters since the brief is backend-agnostic.
+- `tests/agents/registry.test.ts` — 1 new case
+  (`PYANCHOR_AGENT=gemini` selects `GeminiAgentRunner`) + updated
+  unknown-agent error assertion to include `gemini` in the
+  available list.
+- 710 → **715 unit** (+5), 69 e2e unchanged.
+
+### Why a CLI adapter, not an SDK adapter
+Gemini publishes a standalone CLI (`@google/gemini-cli`) whose
+`-p` non-interactive mode is the natural seam for "give me a
+prompt + a workspace" — same shape as openclaw / codex. The
+Generative Language API JS SDK ships the model client but not
+the workspace-edit tool loop; the CLI bundles that. Same
+trade-off the codex adapter made — follow the CLI to get the
+tool loop for free.
+
+### Migration
+- No env changes for existing deployments (`gemini` is opt-in).
+- Set `PYANCHOR_AGENT=gemini` after installing the CLI to switch.
+- The CLI must be on PATH or pointed at via `PYANCHOR_GEMINI_BIN`.
+
 ## [0.24.0] - 2026-04-20
 
 Realistic PR-mode smoke. Closes the highest-value test gap from

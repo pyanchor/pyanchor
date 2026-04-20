@@ -62,6 +62,13 @@ describe("selectAgent", () => {
     expect(selectAgent().name).toBe("claude-code");
   });
 
+  it("returns the gemini runner when PYANCHOR_AGENT=gemini (v0.25.0)", async () => {
+    setEnv({ PYANCHOR_AGENT: "gemini" });
+    vi.resetModules();
+    const { selectAgent } = await import("../../src/agents");
+    expect(selectAgent().name).toBe("gemini");
+  });
+
   it("matches case-insensitively", async () => {
     setEnv({ PYANCHOR_AGENT: "OpenClaw" });
     vi.resetModules();
@@ -74,6 +81,6 @@ describe("selectAgent", () => {
     vi.resetModules();
     const { selectAgent } = await import("../../src/agents");
     expect(() => selectAgent()).toThrow(/Unknown agent "ghost-agent"/);
-    expect(() => selectAgent()).toThrow(/openclaw, claude-code, codex, aider/);
+    expect(() => selectAgent()).toThrow(/openclaw, claude-code, codex, aider, gemini/);
   });
 });
