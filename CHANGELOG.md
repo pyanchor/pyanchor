@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-04-20
+
+Examples expansion. Five new runnable examples + an index — covers the
+gaps that previous releases papered over with docs-only references:
+Vite gating, existing-auth gating, multi-agent swap, non-built-in
+frameworks, and PR mode walkthroughs. No source changes; the package
+on npm is byte-identical to 0.25.1, only the published `examples/`
+tree grows.
+
+If you're already shipping with pyanchor, this release is **safe to
+skip**. The version bump exists so external links into
+`examples/<name>/` resolve at a stable tag.
+
+### Added
+- **`examples/vite-react-portfolio-gate/`** (9 files) — Vite + React
+  with a standalone Node gate server (port 5174 → vite 5173) plus
+  the `pyanchor_dev` cookie pattern. Closes the gap where Vite users
+  had no equivalent of `nextjs-portfolio-gate`. Includes an
+  nginx-equivalent block in comments for production.
+- **`examples/nextjs-nextauth-gate/`** (9 files) — Concrete
+  implementation of `docs/SECURITY.md` recipe C ("existing auth as
+  the gate"). NextAuth v4 + GitHub provider + email allowlist +
+  `/api/pyanchor-gate` issues the cookie after server-side session
+  + allowlist check. 5-layer defense walkthrough in the README.
+- **`examples/nextjs-multi-agent/`** (6 files) — Same host code,
+  five interchangeable agent backends. Demonstrates that the host
+  integration is truly agent-agnostic — only the sidecar's
+  `PYANCHOR_AGENT` env var changes between openclaw / claude-code /
+  codex / aider / gemini.
+- **`examples/astro-minimal/`** (7 files) — Astro 4 wired through
+  the explicit `PYANCHOR_INSTALL_COMMAND` + `PYANCHOR_BUILD_COMMAND`
+  override path. Proves the fallback works for any framework
+  pyanchor doesn't ship a built-in profile for (SvelteKit, Remix,
+  Nuxt, …) — same template applies.
+- **`examples/nextjs-pr-mode/`** (6 files) — End-to-end walkthrough
+  of `PYANCHOR_OUTPUT_MODE=pr`: prerequisites (`gh auth status`),
+  first-time workspace clone, the run-time flow (fetch → reset
+  → agent → commit → push → PR), and a common-errors table.
+- **`examples/README.md`** — Index across all 8 examples organised
+  by framework + by feature. Linked from the main README.
+
+### Changed
+- `README.md` — replaced the 3-link examples blurb and the 3-row
+  examples table with a single "browse all 8" pointer + 9-row
+  table covering the new ones.
+
 ## [0.25.1] - 2026-04-20
 
 Round-16 Codex patches. One P1 (Gemini happy path broken) + two P2

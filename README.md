@@ -202,8 +202,8 @@ trigger button at bottom-right. Click → describe a change → wait
 ~30s for the agent to apply + build + restart.
 
 Full integration walk-through: [`docs/integrate-with-nextjs.md`](./docs/integrate-with-nextjs.md).
-Vite + React variant: [`examples/vite-react-minimal/`](./examples/vite-react-minimal).
-Production deploy with gate cookie: [`examples/nextjs-portfolio-gate/`](./examples/nextjs-portfolio-gate).
+Browse all 8 runnable examples: [`examples/`](./examples/) (Next.js, Vite, Astro,
+NextAuth gate, multi-agent swap, PR mode, …).
 
 ## Supported agents
 
@@ -348,9 +348,15 @@ tenant tokens, etc.) is on the roadmap as v0.22+. See
 | [`docs/roadmap.md`](./docs/roadmap.md) | What's coming + open questions |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Local dev, build, release flow |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Release notes |
-| [`examples/nextjs-minimal/`](./examples/nextjs-minimal) | A 5-file Next.js app wired to pyanchor (env-flag gate) |
-| [`examples/nextjs-portfolio-gate/`](./examples/nextjs-portfolio-gate) | Production gate cookie pattern for live-editing your deployed site |
-| [`examples/vite-react-minimal/`](./examples/vite-react-minimal) | A 6-file Vite + React app wired to pyanchor (`PYANCHOR_FRAMEWORK=vite`) |
+| [`examples/`](./examples/) | Index of all 8 runnable examples (start here) |
+| [`examples/nextjs-minimal/`](./examples/nextjs-minimal) | 5-file Next.js app wired to pyanchor (env-flag gate) |
+| [`examples/vite-react-minimal/`](./examples/vite-react-minimal) | 6-file Vite + React equivalent (`PYANCHOR_FRAMEWORK=vite`) |
+| [`examples/astro-minimal/`](./examples/astro-minimal) | Non-built-in framework via `PYANCHOR_INSTALL/BUILD_COMMAND` overrides |
+| [`examples/nextjs-portfolio-gate/`](./examples/nextjs-portfolio-gate) | Production gate cookie pattern for live-editing deployed sites |
+| [`examples/vite-react-portfolio-gate/`](./examples/vite-react-portfolio-gate) | Vite + standalone Node gate server (5174 → 5173) |
+| [`examples/nextjs-nextauth-gate/`](./examples/nextjs-nextauth-gate) | Recipe C — NextAuth + email allowlist as the gate |
+| [`examples/nextjs-multi-agent/`](./examples/nextjs-multi-agent) | Same host, 5 interchangeable agents (one env var swap) |
+| [`examples/nextjs-pr-mode/`](./examples/nextjs-pr-mode) | `PYANCHOR_OUTPUT_MODE=pr` — edits land as reviewable GitHub PRs |
 
 ## 🔭 Status
 

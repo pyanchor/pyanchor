@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>pyanchor vite-react portfolio-gate example</title>
+    <!--
+      Bootstrap script with the v0.17.0 production-gate fail-safe.
+      data-pyanchor-require-gate-cookie="pyanchor_dev" makes the
+      overlay refuse to mount unless the named cookie is present —
+      so even if you forget to conditionally render this script tag
+      OR the gate server is bypassed, anonymous traffic sees nothing.
+
+      The token MUST match PYANCHOR_TOKEN on the sidecar. For real
+      deployments, inject via build-time env (vite's `define` plugin
+      with `import.meta.env.VITE_PYANCHOR_TOKEN`) so the value isn't
+      committed.
+    -->
+    <script
+      src="/_pyanchor/bootstrap.js"
+      defer
+      data-pyanchor-token="replace-with-32-byte-random"
+      data-pyanchor-trusted-hosts="localhost,127.0.0.1,your-portfolio.com"
+      data-pyanchor-require-gate-cookie="pyanchor_dev"
+    ></script>
+  </head>
+  <body style="margin:0;background:#0b1020;color:#edf1ff;font-family:system-ui,sans-serif">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

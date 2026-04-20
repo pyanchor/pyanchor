@@ -1,0 +1,47 @@
+---
+// Astro reads env vars at build/dev time. The PUBLIC_* prefix exposes
+// them to client-side code; here we only need them in the SSR layer
+// to decide whether to render the bootstrap script tag.
+const devtoolsEnabled = import.meta.env.PUBLIC_PYANCHOR_DEVTOOLS_ENABLED === "true";
+const devtoolsToken = import.meta.env.PUBLIC_PYANCHOR_TOKEN ?? "";
+
+interface Props {
+  title?: string;
+}
+
+const { title = "pyanchor — astro example" } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{title}</title>
+    {devtoolsEnabled && devtoolsToken && (
+      <script
+        src="/_pyanchor/bootstrap.js"
+        defer
+        data-pyanchor-token={devtoolsToken}
+        data-pyanchor-trusted-hosts="localhost,127.0.0.1"
+      />
+    )}
+  </head>
+  <body>
+    <slot />
+    <style is:global>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #0b1020;
+        color: #edf1ff;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+      }
+    </style>
+  </body>
+</html>
