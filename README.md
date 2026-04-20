@@ -20,55 +20,86 @@
 
 ---
 
-> Pyanchor is a small Express sidecar you bolt on to a running Next.js app.
+> Pyanchor is a small Express sidecar you bolt on to a running web app
+> (Next.js, Vite, Astro, or anything with an install + build command).
 > A one-line `<script>` tag injects an in-page overlay (Shadow DOM, no
 > styling collisions). You point at any UI element, describe a change in
 > plain language, and your AI coding agent of choice does the edit, builds
-> the project, and restarts the frontend — all without you ever leaving
-> the browser.
+> the project, and either restarts the frontend or opens a PR — all without
+> anyone leaving the browser.
 
 Designed for **self-hosted, prod-attached** workflows. Not a SaaS, not
 an IDE plugin.
 
+## Who is this for?
+
+Three overlapping use cases. Pyanchor is one tool for all three because
+the wedge is **the page itself becomes the editor** — no IDE required.
+
+- **Solo devs dogfooding their own deploy.** Fastest "see → click →
+  ship" loop. `apply` mode rsyncs straight to the live app.
+- **Frontend devs tired of being a "can you change this copy" service
+  desk.** Hand the requester a token, point at the page, let them
+  self-serve. Set `PYANCHOR_OUTPUT_MODE=pr` and every edit lands as a
+  PR you review on your normal cadence — no surprise prod writes.
+- **Designers, PMs, backend devs** who want to make a small UI tweak
+  themselves without poking the frontend team. Open the page, click
+  the floating button, type *"make this button purple and add a
+  loading spinner"*, get a PR within a minute.
+
+That last one is the actual reason pyanchor exists. The author got
+tired of *"hey can you change the copy on the about page"* Slack
+pings. Now the requester does it; the frontend reviews the PR.
+
 ## Why not just use Cursor / v0 / Lovable?
 
-|                              | Where it lives           | What it edits                     |
-| ---------------------------- | ------------------------ | --------------------------------- |
-| Cursor / Windsurf            | Your editor              | Files in a workspace              |
-| v0 / Lovable / bolt.new      | The vendor's cloud       | Brand-new apps                    |
-| **Pyanchor**                 | The page you're looking at | The app you already shipped     |
+|                         | Where it lives             | What it edits                 | Who can edit                                        |
+| ----------------------- | -------------------------- | ----------------------------- | --------------------------------------------------- |
+| Cursor / Windsurf       | Your editor                | Files in a workspace          | The dev who has the IDE open                        |
+| v0 / Lovable / bolt.new | The vendor's cloud         | Brand-new apps                | Whoever owns the vendor account                     |
+| **Pyanchor**            | The page you're looking at | The app you already shipped   | **Anyone with a token + (optional) PR review gate** |
 
 If you want to point at the live login page on your staging server and
 say *"make this dark mode"*, and you don't want your code to ever leave
-your machine, this is for you.
+your infra **or** be limited to people who own a Cursor seat, this is
+for you.
 
 ## How it works
 
 ```
 ┌─────────────────────────┐     ┌──────────────────────────┐
-│  Your Next.js app       │     │  Pyanchor sidecar        │
-│  (port 3000)            │     │  (port 3010, localhost)  │
-│                         │     │                          │
-│  layout.tsx injects:    │     │  Express server          │
-│   <script               │ ──> │   /_pyanchor/bootstrap.js│
-│     src="/_pyanchor/    │     │   /_pyanchor/overlay.js  │
-│     bootstrap.js"       │     │   /_pyanchor/api/edit    │
-│     defer />            │     │   /api/admin/*           │
+│  Your web app           │     │  Pyanchor sidecar        │
+│  (Next.js / Vite /      │     │  (port 3010, localhost)  │
+│   Astro / your stack)   │     │                          │
+│                         │     │  Express server          │
+│  layout/index injects:  │     │   /_pyanchor/bootstrap.js│
+│   <script               │ ──> │   /_pyanchor/overlay.js  │
+│     src="/_pyanchor/    │     │   /_pyanchor/api/edit    │
+│     bootstrap.js"       │     │   /api/admin/*           │
+│     defer />            │     │   /healthz + /readyz     │
 │                         │     │                          │
 │  Reverse-proxy /_pyanchor/* to the sidecar in nginx.     │
 └─────────────────────────┘     └──────────────┬───────────┘
                                                │ spawns worker
                                                ▼
                             ┌──────────────────────────────┐
-                            │  Agent (OpenClaw or          │
-                            │   Claude Code)               │
+                            │  Agent (any of 5 built-in:   │
+                            │   openclaw / claude-code /   │
+                            │   codex / aider / gemini)    │
                             │                              │
                             │  1. mutate code in workspace │
-                            │  2. next build               │
-                            │  3. rsync workspace → app    │
-                            │  4. restart frontend         │
+                            │  2. install + build          │
+                            │  3. EITHER:                  │
+                            │     apply → rsync + restart  │
+                            │     pr → git push + open PR  │
+                            │     dryrun → stop here       │
                             └──────────────────────────────┘
 ```
+
+**Output mode is the difference between a solo dev tool and a
+collaboration tool.** `apply` is for you-on-your-own-deploy. `pr` is
+for "let other team members propose changes via the overlay; I review
+on GitHub". Switch with one env var (`PYANCHOR_OUTPUT_MODE`).
 
 ## Prerequisites: pick an agent first
 
@@ -141,11 +172,12 @@ chmod +x /abs/path/to/restart-frontend.sh
 ### 4. Start the sidecar
 
 ```bash
-export PYANCHOR_APP_DIR=/abs/path/to/your/nextjs-app
+export PYANCHOR_APP_DIR=/abs/path/to/your/app          # Next.js, Vite, Astro, anything
 export PYANCHOR_WORKSPACE_DIR=/abs/path/to/scratch-workspace
 export PYANCHOR_RESTART_SCRIPT=/abs/path/to/restart-frontend.sh
 export PYANCHOR_HEALTHCHECK_URL=http://127.0.0.1:3000/
-export PYANCHOR_AGENT=openclaw   # or claude-code | codex | aider
+export PYANCHOR_AGENT=openclaw   # or claude-code | codex | aider | gemini
+export PYANCHOR_FRAMEWORK=nextjs # or vite. Anything else: see step 5c.
 
 pyanchor
 ```
@@ -156,8 +188,14 @@ tells you exactly which env var is wrong. Full env reference:
 
 ### 5. Wire the bootstrap into your app
 
+The bootstrap is one `<script>` tag. Place it in whatever the
+"render every page" template is for your framework.
+
+<details open>
+<summary><strong>5a. Next.js (App Router)</strong></summary>
+
 ```tsx
-// app/layout.tsx — Next.js example
+// app/layout.tsx
 const devtoolsEnabled = process.env.NEXT_PUBLIC_PYANCHOR_DEVTOOLS_ENABLED === "true";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -181,6 +219,48 @@ async rewrites() {
   return [{ source: "/_pyanchor/:path*", destination: "http://127.0.0.1:3010/_pyanchor/:path*" }];
 }
 ```
+
+</details>
+
+<details>
+<summary><strong>5b. Vite + React</strong></summary>
+
+```html
+<!-- index.html -->
+<script src="/_pyanchor/bootstrap.js" defer data-pyanchor-token="<your-token>"></script>
+```
+
+```ts
+// vite.config.ts — add a dev proxy
+export default defineConfig({
+  server: {
+    proxy: { "/_pyanchor": { target: "http://127.0.0.1:3010", changeOrigin: false } }
+  }
+});
+```
+
+Full example: [`examples/vite-react-minimal/`](./examples/vite-react-minimal/).
+
+</details>
+
+<details>
+<summary><strong>5c. Astro / SvelteKit / Remix / Nuxt / anything else</strong></summary>
+
+Pyanchor only ships built-in framework profiles for `nextjs` and
+`vite`. For everything else, set the install + build commands
+explicitly — the rest of the integration is identical:
+
+```bash
+export PYANCHOR_INSTALL_COMMAND="pnpm install --frozen-lockfile"
+export PYANCHOR_BUILD_COMMAND="astro build"   # or whatever
+```
+
+Then add the `<script>` tag to your global layout and a
+`/_pyanchor/*` proxy to your dev server (Astro and SvelteKit both
+use Vite's proxy under the hood; Remix has its own server config).
+Full Astro walk-through: [`examples/astro-minimal/`](./examples/astro-minimal/).
+
+</details>
 
 For production, reverse-proxy via nginx (snippet below) AND read
 [`docs/SECURITY.md`](./docs/SECURITY.md) for the production gate
@@ -308,47 +388,63 @@ Before deploying to anything reachable from the public internet:
 - [ ] Restart script (`PYANCHOR_RESTART_SCRIPT`) is owned by you and
       runs only the restart command — no shell injection surface.
 
-## 👥 Multi-user / team adoption
+## 👥 Multi-user / team collaboration
 
-Pyanchor is **single-tenant by default** — one bearer token, one
-queue, one workspace, one app. Anyone holding `PYANCHOR_TOKEN` can
-do everything. This matches the "personal / small-team self-hosted"
-use case and keeps the threat model tight.
+Pyanchor is **single-token by default** — anyone holding
+`PYANCHOR_TOKEN` can do everything. That sounds scary for team use,
+but combined with the building blocks below you get a workable
+"non-frontend stakeholders self-serve, frontend reviews" flow today,
+without any per-user account system to maintain.
 
-For team usage we ship two **opt-in** building blocks instead of a
-full multi-user system:
+| Building block | Since | What it gives you |
+| --- | --- | --- |
+| **`PYANCHOR_OUTPUT_MODE=pr`** | v0.19.0 | Every edit becomes a reviewable GitHub PR via `git push` + `gh pr create`. Reuses your existing PR review process — no surprise prod writes. |
+| **`X-Pyanchor-Actor` header passthrough** | v0.19.0 | Host app injects identifier; pyanchor records it in audit + PR body so you know which teammate proposed each edit. |
+| **HMAC-signed actor headers** (opt-in) | v0.27.0 | Set `PYANCHOR_ACTOR_SIGNING_SECRET` and the actor field becomes tamper-proof — a leaked pyanchor token can't fabricate audit lines for arbitrary teammates. |
+| **Append-only audit log** | v0.18.0 | JSONL of every edit outcome (actor, prompt hash, diff hash, mode, duration, PR URL). Ship to Datadog / Splunk / Loki via tail. |
+| **Gate cookie + existing-auth integration** | v0.17.0 | Tie pyanchor's overlay availability to your existing OAuth / NextAuth / SSO + email allowlist. Anonymous traffic can't even fetch the bootstrap. See [`examples/nextjs-nextauth-gate/`](./examples/nextjs-nextauth-gate/). |
+| **Slack / Discord webhooks** | v0.20.0 | Real-time pings on `edit_requested` / `edit_applied` / `pr_opened`. The reviewer sees the request in the same channel where the requester would have asked. |
 
-- **`X-Pyanchor-Actor` header passthrough** (since v0.19.0) — your
-  host app's auth middleware injects an actor identifier; pyanchor
-  records it in the audit log + the PR body. Pyanchor doesn't
-  verify identity (your host owns auth); it records what it's told.
-- **`PYANCHOR_OUTPUT_MODE=pr`** (since v0.19.0) — agent edits land
-  as a reviewable GitHub PR via `git push` + `gh pr create` instead
-  of being rsynced to the live app. Reuses your existing git review
-  process for who-approves-what.
+The recommended team setup:
 
-Combined: **agent edit → PR opened with actor in body → existing
-git/GitHub review → merge → deploy via your normal pipeline**.
+```
+designer / PM / backend dev          reviewer (frontend)
+        │                                    │
+        ▼ click overlay on staging           ▼ Slack webhook fires
+        │ describe change in plain text      │ ↓
+        │                                    │ open PR on GitHub
+        ▼                                    ▼ review + merge
+PR opens, signed actor in body          deploy via normal pipeline
+```
+
+You get who-can-edit (gate cookie + allowlist), who-did-edit (signed
+actor + audit), and who-approves-edit (PR review) without writing a
+single line of pyanchor-specific user management.
 
 Full multi-tenancy (one sidecar serving multiple workspaces, per-
-tenant tokens, etc.) is on the roadmap as v0.22+. See
-[`docs/roadmap.md`](./docs/roadmap.md).
+tenant tokens, etc.) is **designed but not implemented**. See
+[`docs/MULTI-TENANCY-DESIGN.md`](./docs/MULTI-TENANCY-DESIGN.md) +
+[`docs/roadmap.md`](./docs/roadmap.md). For 5–30 teammates on one
+app the building blocks above are usually enough; per-tenant
+isolation kicks in when you have multiple apps.
 
 ## 📚 Documentation
 
 | | |
 | --- | --- |
-| [`docs/integrate-with-nextjs.md`](./docs/integrate-with-nextjs.md) | Wire pyanchor into your existing Next.js app |
+| [`examples/`](./examples/) | **Start here** — index of all 8 runnable examples (Next.js / Vite / Astro / NextAuth gate / multi-agent / PR mode) |
+| [`docs/integrate-with-nextjs.md`](./docs/integrate-with-nextjs.md) | Detailed Next.js integration walk-through (most common stack) |
 | [`docs/openclaw-setup.md`](./docs/openclaw-setup.md) | Install OpenClaw and point pyanchor at it |
 | [`docs/claude-code-setup.md`](./docs/claude-code-setup.md) | Install the Anthropic Agent SDK and route pyanchor through Claude |
-| [`docs/adapters.md`](./docs/adapters.md) | Build your own agent adapter |
+| [`docs/gemini-setup.md`](./docs/gemini-setup.md) | Install the Google Gemini CLI + 3 auth options |
+| [`docs/adapters.md`](./docs/adapters.md) | Build your own agent adapter (~70 LOC interface, ~150 LOC adapter) |
 | [`docs/SECURITY.md`](./docs/SECURITY.md) | Threat model + 3 deployment recipes (loopback / production gate cookie / existing auth) |
 | [`docs/PRODUCTION-HARDENING.md`](./docs/PRODUCTION-HARDENING.md) | Operator playbook: separate Unix user, systemd sandbox, bubblewrap, sudoers, restart-script lockdown, audit log shipping |
+| [`docs/MULTI-TENANCY-DESIGN.md`](./docs/MULTI-TENANCY-DESIGN.md) | One-sidecar-many-workspaces design (not yet implemented) |
 | [`docs/API-STABILITY.md`](./docs/API-STABILITY.md) | Public surface contract — what's `Stable @ 1.0` vs `Pre-1.0` vs `Internal` |
 | [`docs/roadmap.md`](./docs/roadmap.md) | What's coming + open questions |
 | [`CONTRIBUTING.md`](./CONTRIBUTING.md) | Local dev, build, release flow |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Release notes |
-| [`examples/`](./examples/) | Index of all 8 runnable examples (start here) |
 | [`examples/nextjs-minimal/`](./examples/nextjs-minimal) | 5-file Next.js app wired to pyanchor (env-flag gate) |
 | [`examples/vite-react-minimal/`](./examples/vite-react-minimal) | 6-file Vite + React equivalent (`PYANCHOR_FRAMEWORK=vite`) |
 | [`examples/astro-minimal/`](./examples/astro-minimal) | Non-built-in framework via `PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND` overrides |
@@ -366,41 +462,54 @@ tenant tokens, etc.) is on the roadmap as v0.22+. See
 `Stable @ 1.0` will become the contract at the 1.0 cut. Items
 marked `Pre-1.0` are still under iteration.
 
-**Shipped highlights** (cumulative through v0.21.1):
+**Shipped highlights** (cumulative through v0.27.0):
 
 - **Adapters**: `openclaw` (default), `claude-code`, `codex`, `aider`,
-  pluggable third-party via the `AgentRunner` interface
+  `gemini`, pluggable third-party via the `AgentRunner` interface
 - **Frameworks**: `nextjs` (default), `vite`, with two-env override
-  (`PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND`) for any other
+  (`PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND`) for Astro /
+  SvelteKit / Remix / Nuxt / anything else
 - **i18n**: 21 built-in locales (LTR + RTL: ko / ja / zh-cn / es / de
   / fr / pt-br / vi / id / ru / hi / th / tr / nl / pl / sv / it / ar /
   he / fa / ur), code-split so the default English path is fetch-free
+- **Output modes**: `apply` (default rsync+restart), `pr` (git +
+  `gh pr create`), `dryrun`
 - **Production gating**: `PYANCHOR_REQUIRE_GATE_COOKIE` + bootstrap
   fail-safe — anonymous traffic can't even fetch the bootstrap script
 - **Audit log**: append-only JSONL with documented schema
   ([`AuditEvent`](./src/audit.ts))
-- **Output modes**: `apply` (default rsync+restart), `pr` (git +
-  `gh pr create`), `dryrun`
-- **Identity passthrough**: `X-Pyanchor-Actor` header for team auth
-  flows; recorded in audit + PR body, not verified (host owns auth)
+- **Identity passthrough**: `X-Pyanchor-Actor` header — v0.27.0+
+  optional HMAC verification (`PYANCHOR_ACTOR_SIGNING_SECRET`) makes
+  the audit-trail actor field tamper-proof
+- **Liveness + readiness probes**: `/healthz` (always 200 if alive)
+  and `/readyz` (200 only when workspace + agent CLI all resolve);
+  k8s/orchestrator-friendly out of the box
 - **Webhooks**: fire-and-forget Slack / Discord / raw JSON
   notifications on `edit_requested` / `edit_applied` / `pr_opened`
 - **Agent error classifier**: detects transient OAuth race / rate
   limit / timeout / network errors and appends actionable hints
-- **Tests**: 677 unit + 69 e2e + Node 18/20/22 matrix on every commit
+- **Operations templates**: production-hardened systemd unit +
+  EnvironmentFile in [`examples/systemd/`](./examples/systemd/)
+- **Tests**: 743 unit + 69 e2e + Node 18/20/22 matrix on every commit;
+  `examples-smoke` CI lane verifies every example's dependency graph
+  and that the index doesn't drift
 
 **Coming next** (no firm version commitment yet):
 
-- Multi-tenancy — one sidecar serving multiple workspaces (open
-  design questions; see [`docs/roadmap.md`](./docs/roadmap.md))
+- `npx pyanchor init` — interactive scaffolder that detects your
+  framework + agent and writes the env / restart script / layout
+  patch in one step (replaces the current 5-step quickstart with
+  one command + a few prompts)
+- Multi-tenancy implementation — design at
+  [`docs/MULTI-TENANCY-DESIGN.md`](./docs/MULTI-TENANCY-DESIGN.md);
+  shipping when there's demand from a multi-app adopter
 - Visual regression + axe-core a11y in CI
 - More framework profiles (PRs welcome — `src/frameworks/` is ~50
   LOC each)
 
-**1.0**: targeted once the README quickstart, API stability doc,
-and production-hardening docs all stabilize and at least one
-non-author production deployment runs cleanly for a calendar
-month. We're at the docs/adoption stage, not the code stage.
+**1.0**: targeted ~2026-05-20 once the first non-author production
+adopter window (in progress, started 2026-04-20) closes cleanly.
+Docs/code blockers all closed; only the adoption signal remains.
 
 ## License
 

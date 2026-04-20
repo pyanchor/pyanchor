@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.1] - 2026-04-20
+
+README repositioning. No source/runtime changes — docs-only ship.
+The previous README sold pyanchor as a "Next.js dev tool" by
+default; the actual wedge is **the page itself becomes the editor,
+so anyone with a token can edit (not just whoever has the IDE
+open)**. v0.27.1 surfaces that wedge in the hero, the
+"Why not Cursor / v0 / Lovable?" comparison, and a new "Who is
+this for?" personas section. Also drops residual Next.js-only bias
+that crept in over earlier ships.
+
+If you're already shipping with pyanchor, this release is **safe
+to skip**. The version bump exists so external links into the new
+README anchor sections resolve at a stable git tag.
+
+### Changed
+- **Hero rewritten** — "running Next.js app" → "running web app
+  (Next.js, Vite, Astro, or anything with an install + build
+  command)". Output mode (apply / pr) now mentioned in the hero
+  paragraph itself, not buried 200 lines down.
+- **New "Who is this for?" personas section** above the comparison
+  table — three use cases (solo devs, frontend devs tired of the
+  copy-change service desk, designers/PMs/backend devs who want to
+  self-serve small UI tweaks). Names the actual reason pyanchor
+  was built (the author got tired of "hey can you change the copy"
+  Slack pings).
+- **"Why not Cursor / v0 / Lovable?" gets a 4th column**: "Who can
+  edit". Pyanchor row reads "Anyone with a token + (optional) PR
+  review gate" — the differentiation the previous 3-column table
+  failed to surface.
+- **"How it works" diagram framework-agnostic** — "Your Next.js
+  app" → "Your web app (Next.js / Vite / Astro / your stack)";
+  agent box lists all 5 adapters; output mode branches into apply
+  / pr / dryrun. New paragraph below the diagram makes the
+  collaboration vs solo split explicit.
+- **Quick start step 5 split into 3 framework tabs** —
+  Next.js (open by default) / Vite + React / Astro+SvelteKit+Remix+
+  Nuxt+anything-else. Step 4 also no longer calls the app dir
+  "your nextjs-app".
+- **Multi-user section restructured** — was 4 paragraphs of prose
+  with PR mode mentioned as a bullet; now a 6-row building-blocks
+  table (PR mode, X-Pyanchor-Actor, HMAC-signed actor, audit log,
+  gate cookie + existing-auth, Slack/Discord webhooks) followed by
+  an ASCII diagram of the recommended team setup. PR mode is now
+  the headline building block.
+- **Status section refreshed** — was stuck on v0.21.1 highlights
+  and "677 unit tests"; now reflects v0.27.0 reality (5 adapters,
+  /readyz endpoint, HMAC actor, systemd template, examples-smoke
+  CI lane, 743 unit tests). Coming-next list updated with
+  `npx pyanchor init` (the actual next priority) and the
+  multi-tenancy "designed, awaits demand" framing.
+- **Documentation table** — added rows for `gemini-setup.md` and
+  `MULTI-TENANCY-DESIGN.md` (existed but were missing); pulled
+  `examples/` to the top with "Start here" emphasis; removed the
+  duplicate `examples/` row that the docs and examples sections
+  both had.
+
+### Why this matters
+Pyanchor's actual differentiation is "anyone can edit, frontend
+reviews the PR" — a cross-functional collaboration tool, not a dev
+tool. The previous README couldn't be linked from a Show HN /
+launch post without a follow-up "btw it also works for Vite, also
+non-devs can use it, also there's PR mode" comment. The new README
+front-loads all three.
+
 ## [0.27.0] - 2026-04-20
 
 1.0 readiness polish ship. Four small additions targeting operator
