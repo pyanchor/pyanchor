@@ -69,7 +69,7 @@
     "@playwright/test": "^1.59.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.1",
-    "@types/node": "^22.10.1",
+    "@types/node": "^25.6.0",
     "@vitest/coverage-v8": "^2.1.9",
     "esbuild": "^0.28.0",
     "happy-dom": "^20.8.9",
