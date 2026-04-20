@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-04-20 (v0.23.0).
+Last updated: 2026-04-20 (v0.25.1).
 
 > **Tone shift:** through v0.10.x this doc was a sized-task plan
 > for refactoring the inline runner. That work shipped (v0.6/v0.7
@@ -9,23 +9,31 @@ Last updated: 2026-04-20 (v0.23.0).
 > menu. Sized engineering breakdowns now live in CHANGELOG entries
 > per release, not here.
 
-## Where we are (v0.23.0)
+## Where we are (v0.25.1)
 
-- **Code**: 702 unit tests + 69 e2e (Node 18/20/22 matrix on every commit)
-- **Docs**: SECURITY + PRODUCTION-HARDENING + API-STABILITY all
-  shipped; README quickstart is 5 explicit numbered steps
+- **Code**: 720+ unit tests + 69 e2e (Node 18/20/22 matrix on every commit)
+- **Docs**: SECURITY + PRODUCTION-HARDENING + API-STABILITY +
+  MULTI-TENANCY-DESIGN + per-adapter setup guides; README
+  quickstart is 5 explicit numbered steps
 - **i18n**: 21 built-in locales (LTR + RTL), code-split for
   fetch-free English path
 - **Production gating**: 4-layer stack (host middleware → host
   layout → bootstrap fail-safe → sidecar middleware). Documented +
   examples + tested
 - **Output modes**: `apply` (default), `pr` (`gh pr create`),
-  `dryrun`. Audit log + webhook hooks for both
+  `dryrun`. Audit log + webhook hooks for both. PR mode covered
+  by real-git smoke (v0.24.0)
+- **Agent backends**: 5 built-in adapters — openclaw / claude-code
+  / codex / aider / gemini (v0.25.0). Same `AgentRunner` contract
 - **Agent error classifier**: known transient OAuth race / rate
   limit / timeout / network errors get actionable hints in
   state.error
+- **Operator visibility**: `/api/admin/metrics` (v0.23.1) exposes
+  in-process queue depth + active sessions + recent message status
+  counts
 - **First production adopter**: studio.pyan.kr running pyanchor
-  v0.23.0, 30-day adoption window started 2026-04-20
+  v0.24.0 with `PYANCHOR_AUDIT_LOG=true`, 30-day adoption window
+  started 2026-04-20 (Day 1 in progress)
 
 ## 1.0 trajectory
 
@@ -42,21 +50,40 @@ surfaces in the 30-day adoption window. The cut itself is a single
 CHANGELOG line: "All `Stable @ 1.0` items in API-STABILITY.md
 become the contract."
 
-## Active polish track (v0.23.x)
+## Recently shipped polish (v0.23.x → v0.25.x)
 
-Not new features — making what's there last:
+All closed during the active polish track between Codex round 15
+and round 16:
 
-- **`/api/admin/metrics` endpoint** — expose `queueDepth`,
-  `activeSessions`, recent message status counts. operator
-  visibility during the adoption window. v0.23.1.
-- **`overlay.ts` decomposition round 2** — file is back at ~1165
-  LOC after v0.7.x's 1074 → 837 reduction. Pure refactor, behavior
-  unchanged. v0.23.2.
-- **Realistic smoke lane** — current PR-mode tests are
-  `runCommand`-mock based. Add a nightly CI job that boots a real
-  fake-git-server (or a tmpdir + `git init` + a stub `gh`) so the
-  PR mode integration is exercised end-to-end. Non-blocking
-  (nightly, not per-commit). v0.24.x.
+- ✅ **`/api/admin/metrics` endpoint** — v0.23.1
+- ✅ **`overlay.ts` decomposition round 2** — v0.23.2 (CSS
+  extraction; `render()` decomposition deferred — coupling cost
+  doesn't pay off as a single factory)
+- ✅ **Realistic PR-mode smoke** — v0.24.0 (real git + fake gh,
+  catches round-14 branch-parenting on actual `git rev-parse`,
+  ~500ms total — fast enough to stay in default `pnpm test`,
+  no nightly infra needed)
+- ✅ **Gemini CLI adapter** — v0.25.0 (5th built-in agent)
+- ✅ **Round-16 fast-follow** — v0.25.1 (Gemini `-m` openclaw-
+  default leak fix + API-STABILITY metrics row + `.env.example`
+  Gemini section)
+
+## Final 1.0 prep
+
+Pre-cut work that is intentionally NOT new product features:
+
+- **Adoption narrative from audit data** — once studio's
+  `audit.jsonl` accumulates a meaningful sample (target: 14+
+  days), summarize outcome counts / duration percentiles /
+  failure-kind breakdown into the 1.0 announcement. Replaces the
+  "22 done / 2 failed (91.7%)" snapshot which is a message-count,
+  not a job-outcome metric (round-16 P3).
+- **Launch copy review** — `ref/launch-copy.md` (gitignored)
+  has Show HN / r/nextjs / Twitter drafts. Tune tone closer to
+  the cut date.
+- **Demo video** — operator-recorded; Playwright session at
+  `srcsht/aig/pyanchor-demo-{01-04}.png` is the storyboard, not
+  the deliverable.
 
 ## Post-1.0 candidates
 

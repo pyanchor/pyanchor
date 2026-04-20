@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-04-20
+
+Round-16 Codex patches. One P1 (Gemini happy path broken) + two P2
+(docs drift) + one P3 (roadmap stale). Nothing affects existing
+deployments using openclaw / claude-code / codex / aider — fix
+window for Gemini opt-in adopters before anyone hits the broken
+default model.
+
+### Fixed
+- **Gemini adapter forwarded the openclaw default model
+  (round-16 P1)** — `PYANCHOR_AGENT=gemini` with no
+  `PYANCHOR_AGENT_MODEL` set was running `gemini -m
+  openai-codex/gpt-5.4` and failing immediately on the first
+  invocation. The bug: `if (ctx.model)` was truthy on the
+  config-level default (an openclaw-shaped value). Now reads
+  `process.env.PYANCHOR_AGENT_MODEL?.trim()` directly and only
+  appends `-m` when explicitly set; otherwise lets the Gemini
+  CLI pick its own default. Extracted `buildGeminiArgs(prompt,
+  explicitModel)` helper so the contract is unit-testable
+  without mocking `node:child_process`.
+- **`docs/API-STABILITY.md` missed `/api/admin/metrics`
+  (round-16 P2a)** — v0.23.1 shipped the route + tests + claimed
+  in CHANGELOG that it was documented Pre-1.0, but the actual
+  HTTP API table didn't list it. v0.22.0's whole point was
+  surface pin honesty; this row closes that drift.
+- **`.env.example` missed Gemini envs (round-16 P2b)** — same
+  silent-fail pattern round-15 caught for v0.18-v0.20 envs. Now
+  documents the agent in the built-in list, adds a dedicated
+  `PYANCHOR_GEMINI_BIN` block with auth guidance + setup-doc
+  pointer, and clarifies the model id format trap (`PYANCHOR_AGENT_MODEL`
+  is backend-specific; the openclaw default leaks if not set per
+  backend).
+- **`docs/roadmap.md` stuck at v0.23.0 (round-16 P3)** — recompressed
+  to current state through v0.25.1. "Active polish track" became
+  "Recently shipped polish" with checkmarks. New "Final 1.0 prep"
+  section pivots to non-feature work: adoption narrative from
+  audit data, launch copy review, demo video.
+
+### Tests
+- **`tests/agents/gemini-runner.test.ts`** (new) — 5 cases for
+  `buildGeminiArgs`: canonical 4 flags + prompt with no model,
+  appends `-m <model>` when explicit, omits `-m` when null
+  (round-16 P1 regression guard), omits on empty string,
+  preserves prompt content verbatim including quotes/newlines/
+  Korean.
+- 715 → **720 unit** (+5), 69 e2e unchanged.
+
+### Codex round-16 confirmed (no change needed)
+- v0.21.1 round-15 patches all closed.
+- API stability + multi-tenancy design internally consistent.
+- `/api/admin/metrics` security chain correct.
+- overlay CSS extraction complete (no stale `styles` reference).
+- PR mode real-git smoke catches round-14 high on real plumbing.
+- Gemini adapter auth separation + `--yolo` trade-off + NDJSON
+  schema tolerance all sound.
+- 1.0 trajectory verdict: "Conditional Go" — fix the 3 above
+  before cut, then proceed.
+
+### Round-16 P3 deferred (not in this release)
+- **`metrics.version` is `null` on non-`npm run` boots** — needs
+  package metadata import or build-time define. Build-config
+  surface; tracked for v0.26.x.
+- **Adoption narrative from `recentMessages.byStatus` is
+  message-count, not job-outcome** — fix is to add an
+  `?include=audit` variant that aggregates from `audit.jsonl`.
+  Tracked as a post-1.0 candidate in roadmap.
+
+### Migration
+- No env changes required. No behavior change for existing
+  deployments using non-Gemini adapters (studio / etc.).
+- Gemini adopters: if you were forcing `PYANCHOR_AGENT_MODEL` to
+  a Gemini-shaped value, no change. If you were relying on the
+  unset default, v0.25.1 now uses the CLI's own default model
+  (was previously sending the openclaw shape and failing).
+
 ## [0.25.0] - 2026-04-20
 
 Fifth built-in agent adapter: **Google Gemini CLI**. Mirror of the

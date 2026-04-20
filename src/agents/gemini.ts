@@ -106,6 +106,26 @@ interface GeminiStreamEvent {
   error?: string;
 }
 
+/**
+ * Build the argv for `gemini` invocation.
+ *
+ * Exported so the spawn-argv contract can be unit-tested without
+ * mocking `node:child_process`. The flags are:
+ *   `-p` — non-interactive prompt mode
+ *   `--output-format stream-json` — NDJSON event stream on stdout
+ *   `--yolo` — auto-approve tool use (codex `--full-auto` equiv)
+ *   `-m <model>` — only when the operator EXPLICITLY set
+ *     `PYANCHOR_AGENT_MODEL`. The config-level default is openclaw-
+ *     shaped; passing it to gemini fails the spawn immediately.
+ */
+export function buildGeminiArgs(prompt: string, explicitModel: string | null): string[] {
+  const args: string[] = ["-p", prompt, "--output-format", "stream-json", "--yolo"];
+  if (explicitModel) {
+    args.push("-m", explicitModel);
+  }
+  return args;
+}
+
 async function* readLines(stream: NodeJS.ReadableStream): AsyncGenerator<string> {
   let buffer = "";
   for await (const chunk of stream as AsyncIterable<Buffer | string>) {
@@ -127,14 +147,13 @@ export class GeminiAgentRunner implements AgentRunner {
     const bin = pyanchorConfig.geminiBin;
     const prompt = buildBrief(input);
 
-    // gemini -p "<prompt>" --output-format stream-json --yolo [-m <model>]
-    // - `-p`: non-interactive prompt mode
-    // - `--output-format stream-json`: NDJSON event stream on stdout
-    // - `--yolo`: auto-approve tool use (analogous to codex `--full-auto`)
-    const args: string[] = ["-p", prompt, "--output-format", "stream-json", "--yolo"];
-    if (ctx.model) {
-      args.push("-m", ctx.model);
-    }
+    // Round-16 P1: only forward -m when PYANCHOR_AGENT_MODEL was set
+    // EXPLICITLY by the operator. The config-level default
+    // ("openai-codex/gpt-5.4") is openclaw-shaped and would make
+    // `gemini -m openai-codex/gpt-5.4` fail immediately. When
+    // unset, let the Gemini CLI pick its own default model.
+    const explicitModel = process.env.PYANCHOR_AGENT_MODEL?.trim() || null;
+    const args = buildGeminiArgs(prompt, explicitModel);
 
     const child = spawn(bin, args, {
       cwd: ctx.workspaceDir,

@@ -67,6 +67,7 @@ Routes mounted under `runtimeBasePath` (default `/_pyanchor`) and
 | `/_pyanchor/api/cancel` | POST | gate + origin + bearer/cookie | **Stable @ 1.0** | Body: `AiEditCancelInput`. |
 | `/api/admin/health` | GET | gate + bearer/cookie | Pre-1.0 | `AdminHealth` JSON. Shape may change; admin surface is in flux. |
 | `/api/admin/state` | GET | gate + bearer/cookie | Pre-1.0 | Same as `/api/status` for now. May be removed if duplicate. |
+| `/api/admin/metrics` | GET | gate + bearer/cookie | Pre-1.0 | Cheap in-process operator metrics (v0.23.1+): `queue.depth` + `queue.oldestEnqueuedAt` + `currentJob` + `sessions.activeCount` + `recentMessages.byStatus` (last 50 messages). Shape may change before 1.0; historical aggregations from `audit.jsonl` are a post-1.0 candidate. |
 | `/` | GET | gate + bearer/cookie | Pre-1.0 | Renders the (minimal) admin HTML. |
 
 ### 4. Environment variables
