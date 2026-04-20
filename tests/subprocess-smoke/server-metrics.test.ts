@@ -109,6 +109,11 @@ describe("/api/admin/metrics (v0.23.1)", () => {
     };
     expect(recent.sampleSize).toBe(0);
     expect(recent.byStatus).toEqual({});
+
+    // v0.29.0 — actorRejections counter (round 18 recommendation 4).
+    // Fresh boot: empty object (no rejections yet, signing also off
+    // by default). Documented in API-STABILITY.
+    expect(body.actorRejections).toEqual({});
   });
 
   it("returns the same value when polled twice in quick succession (idempotent)", async () => {

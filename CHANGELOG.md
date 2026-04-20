@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-04-20
+
+Round-18 follow-on polish + the four "추가로 할만한 것" items
+Codex flagged in the same review. Closes the operator-UX gaps that
+remained after v0.28.1's contract fixes. Studio adoption window
+unaffected (HMAC opt-in, doctor opt-in, init NEXT_PUBLIC additive).
+
+If you're already shipping with pyanchor and you're using PR mode
+or have rolled out HMAC actor signing, the actor-rejection counter
+and `pyanchor doctor` are both worth pulling — they make the
+otherwise-silent failures observable.
+
+### Added
+- **`pyanchor doctor`** — local config diagnostics CLI. Sister to
+  `pyanchor init`. Runs every check the sidecar would do at startup
+  (required env, filesystem existence + writability, restart script
+  executability, agent CLI on PATH, output-mode-specific
+  prerequisites — gh/git for PR mode, etc.) and prints a per-check
+  pass/fail/warn report with suggested fixes. Exit 0 = sidecar safe
+  to boot; exit 1 = at least one ✗. Replaces the "stare at /readyz
+  returning 503 and guess what's wrong" loop with one command.
+  Token value is masked in output (length only). 10 e2e tests cover
+  happy path, missing env, missing workspace, non-executable
+  restart script, unresolvable agent CLI, PR-mode extra checks,
+  dryrun-mode short-circuit, optional-knob warnings (don't fail),
+  dispatcher round-trip, and token masking.
+- **HMAC actor rejection counter + rate-limited stderr**
+  (v0.27.0 follow-up) — when `PYANCHOR_ACTOR_SIGNING_SECRET` is set
+  and a signed `X-Pyanchor-Actor` header fails verification,
+  pre-v0.29 silently dropped the actor. Now: per-process counter
+  by reason (`bad_signature` / `malformed`) surfaced via
+  `/api/admin/metrics.actorRejections`, plus a rate-limited (≤1/min)
+  `console.warn` so rejections show up in normal log shipping
+  without flooding under a misconfigured client storm. The edit
+  itself still proceeds (fail-soft) — the host's other auth gates
+  already let the request through.
+- **`init` auto-emits `NEXT_PUBLIC_PYANCHOR_TOKEN` for Next.js** —
+  v0.28.0's `init` printed an instruction to manually add this to
+  `.env.local`; v0.29.0 just writes it. Same value as
+  `PYANCHOR_TOKEN` so the bootstrap script tag's
+  `data-pyanchor-token={process.env.NEXT_PUBLIC_PYANCHOR_TOKEN}`
+  resolves at build time with zero extra steps. Locked by 3 unit
+  tests including a "they can never desync" round-trip.
+- **`init --force` token rotation warning** — `--force` re-rolls
+  `PYANCHOR_TOKEN` (every invocation calls `randomBytes(32)`). If
+  you've already pasted the previous token into `layout.tsx`, the
+  overlay 401s on every API call. v0.29.0 prints a loud ⚠️ warning
+  before applying the plan so you know to update the bootstrap
+  snippet too.
+- **`systemd-analyze verify` step in `examples-smoke` CI** —
+  catches directive typos + deprecated keys in
+  `examples/systemd/pyanchor.service` syntactically. Doesn't catch
+  semantic issues like the round-18 P1 case (ReadWritePaths missing
+  PYANCHOR_APP_DIR), but blocks the "I renamed a directive and broke
+  the unit" regression class for free.
+
+### Changed
+- `docs/API-STABILITY.md` — `pyanchor doctor` row added to "10. CLI
+  surface" (Stable @ 1.0); `init` row note about NEXT_PUBLIC token
+  in `.env.local`; `/api/admin/metrics` row mentions
+  `actorRejections` field.
+- `README.md` — Status section updated: doctor row, init NEXT_PUBLIC
+  note, examples-smoke now does systemd-verify too, test count
+  786 → 809, "cumulative through v0.28.0" → "v0.29.0".
+
+### Tests
+- 786 → 809 (+23: 10 doctor e2e + 3 templates NEXT_PUBLIC + 1 metrics
+  shape `actorRejections` + auto-discovered cli e2e re-run + bundle
+  ceiling unchanged).
+
+### Bundle size
+- `dist/cli.cjs` 23KB → 54KB (+31KB for doctor module). Still well
+  under the 64KB ceiling. No change to other bundles.
+
 ## [0.28.1] - 2026-04-20
 
 Round-18 Codex patches. Two P1 (operator contract correctness) +

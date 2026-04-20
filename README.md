@@ -489,7 +489,7 @@ isolation kicks in when you have multiple apps.
 `Stable @ 1.0` will become the contract at the 1.0 cut. Items
 marked `Pre-1.0` are still under iteration.
 
-**Shipped highlights** (cumulative through v0.28.0):
+**Shipped highlights** (cumulative through v0.29.0):
 
 - **Adapters**: `openclaw` (default), `claude-code`, `codex`, `aider`,
   `gemini`, pluggable third-party via the `AgentRunner` interface
@@ -521,9 +521,18 @@ marked `Pre-1.0` are still under iteration.
   detects your framework + agent CLI, generates token + env file +
   restart script, prints the bootstrap snippet to copy. Replaces
   the 5-step manual quickstart with ~30 seconds + a few prompts.
-- **Tests**: 786 unit + 69 e2e + Node 18/20/22 matrix on every commit;
-  `examples-smoke` CI lane verifies every example's dependency graph
-  and that the index doesn't drift
+  v0.29.0+ auto-emits `NEXT_PUBLIC_PYANCHOR_TOKEN` for Next.js so
+  the bootstrap script tag's token attribute resolves at build time
+  with no extra paste step.
+- **Local diagnostics**: `pyanchor doctor` (v0.29.0+) runs every
+  startup check (env / fs / agent CLI / output-mode prerequisites)
+  and prints what passed, what failed, and what to do about each
+  failure. Exit 0 = `pyanchor` will boot. Replaces the "stare at
+  /readyz returning 503 and guess" loop.
+- **Tests**: 809 unit + 69 e2e + Node 18/20/22 matrix on every commit;
+  `examples-smoke` CI lane verifies every example's dependency graph,
+  the index doesn't drift, AND `examples/systemd/pyanchor.service`
+  passes `systemd-analyze verify`
 
 **Coming next** (no firm version commitment yet):
 

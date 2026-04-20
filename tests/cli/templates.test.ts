@@ -73,6 +73,27 @@ describe("renderEnv", () => {
     const env = renderEnv({ ...baseInput, framework: "unknown" });
     expect(env).toContain("PYANCHOR_FRAMEWORK=nextjs");
   });
+
+  // v0.29.0 — round 18 recommendation 6: NEXT_PUBLIC_PYANCHOR_TOKEN
+  // auto-emit so the bootstrap script tag's
+  // data-pyanchor-token={process.env.NEXT_PUBLIC_PYANCHOR_TOKEN}
+  // resolves automatically.
+  it("emits NEXT_PUBLIC_PYANCHOR_TOKEN when nextPublicToken=true", () => {
+    const env = renderEnv({ ...baseInput, nextPublicToken: true });
+    expect(env).toContain(`NEXT_PUBLIC_PYANCHOR_TOKEN=${baseInput.token}`);
+  });
+
+  it("does NOT emit NEXT_PUBLIC_PYANCHOR_TOKEN by default", () => {
+    const env = renderEnv(baseInput);
+    expect(env).not.toContain("NEXT_PUBLIC_PYANCHOR_TOKEN");
+  });
+
+  it("NEXT_PUBLIC_PYANCHOR_TOKEN value matches the main token (so they can never desync)", () => {
+    const env = renderEnv({ ...baseInput, nextPublicToken: true });
+    const main = env.match(/^PYANCHOR_TOKEN=(.+)$/m)?.[1];
+    const pub = env.match(/^NEXT_PUBLIC_PYANCHOR_TOKEN=(.+)$/m)?.[1];
+    expect(main).toBe(pub);
+  });
 });
 
 describe("renderRestartScript", () => {

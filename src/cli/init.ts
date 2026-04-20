@@ -227,7 +227,12 @@ function buildPlan(d: Detection, args: ParsedArgs, ans: Answers, token: string):
     port: ans.port,
     requireGate: ans.requireGate,
     allowedOrigins: [],
-    outputMode: ans.outputMode
+    outputMode: ans.outputMode,
+    // v0.29.0 — for Next.js, also emit NEXT_PUBLIC_PYANCHOR_TOKEN
+    // so the bootstrap script tag's `data-pyanchor-token={process.env
+    // .NEXT_PUBLIC_PYANCHOR_TOKEN}` resolves automatically without
+    // an extra paste step.
+    nextPublicToken: d.framework === "nextjs"
   });
   actions.push({
     label: `write ${envFileName} (${existsSync(envPath) && !args.force ? "SKIP — already exists, use --force" : "new file"})`,
@@ -295,6 +300,24 @@ export async function runInit(argv: string[]): Promise<number> {
 
   const token = randomBytes(32).toString("hex");
   const plan = buildPlan(d, args, answers, token);
+
+  // v0.29.0 — round 18 recommendation 6: --force re-rolls the token
+  // (every init invocation calls randomBytes(32)), which silently
+  // desyncs from any data-pyanchor-token already pasted into
+  // layout.tsx. Surface this loud-and-early so the user knows to
+  // update the bootstrap snippet too.
+  const envFileNameForWarn = d.framework === "nextjs" ? ".env.local" : ".env";
+  if (args.force && existsSync(path.join(d.cwd, envFileNameForWarn))) {
+    console.warn(
+      `\n⚠️  --force is in effect. PYANCHOR_TOKEN will be regenerated.`
+    );
+    console.warn(
+      `    Update data-pyanchor-token in your bootstrap script tag to the new value below,`
+    );
+    console.warn(
+      `    or your overlay will get 401 on every API call.`
+    );
+  }
 
   console.log("\nPlan:");
   plan.actions.forEach((a) => console.log(`  - ${a.label}`));

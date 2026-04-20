@@ -66,6 +66,28 @@ jobs:
             exit 1
           fi
 
+  systemd-verify:
+    # v0.29.0 — round 18 recommendation 3: catch directive typos +
+    # deprecated keys in examples/systemd/pyanchor.service before
+    # users copy it into production. systemd-analyze verify is
+    # purely syntactic; it doesn't catch the round-18 P1 case
+    # (ReadWritePaths missing /srv/myapp) which is semantic, but
+    # it cheaply blocks future "I renamed a directive and broke
+    # the unit" regressions.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: systemd-analyze verify pyanchor.service
+        run: |
+          set -euo pipefail
+          if ! command -v systemd-analyze >/dev/null 2>&1; then
+            echo "::warning::systemd-analyze not available on this runner; skipping"
+            exit 0
+          fi
+          # `verify` exits non-zero on syntax / unknown-directive
+          # errors. Warnings (e.g. "Unit file is masked") are fine.
+          systemd-analyze verify examples/systemd/pyanchor.service
+
   index-sync:
     runs-on: ubuntu-latest
     steps:

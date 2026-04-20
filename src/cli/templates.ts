@@ -39,6 +39,14 @@ export interface EnvTemplateInput {
   requireGate: boolean;
   allowedOrigins: string[];
   outputMode: "apply" | "pr" | "dryrun";
+  /**
+   * v0.29.0 (round 18 recommendation 6): when true, also emit
+   * `NEXT_PUBLIC_PYANCHOR_TOKEN=<token>` so the host app's bootstrap
+   * `<script data-pyanchor-token={process.env.NEXT_PUBLIC_PYANCHOR_TOKEN}>`
+   * resolves without an extra manual paste step. Only meaningful for
+   * frameworks that read NEXT_PUBLIC_* on the client (Next.js).
+   */
+  nextPublicToken?: boolean;
 }
 
 export function renderEnv(input: EnvTemplateInput): string {
@@ -62,6 +70,15 @@ export function renderEnv(input: EnvTemplateInput): string {
     input.requireGate ? `PYANCHOR_REQUIRE_GATE_COOKIE=true` : `# PYANCHOR_REQUIRE_GATE_COOKIE=true  # production gate`,
     `# Enable for an append-only audit trail of every edit.`,
     `# PYANCHOR_AUDIT_LOG=true`,
+    input.nextPublicToken
+      ? [
+          ``,
+          `# v0.29.0 — exposed to the Next.js client so the bootstrap`,
+          `# script tag's data-pyanchor-token attribute resolves at`,
+          `# build time. Same value as PYANCHOR_TOKEN above.`,
+          `NEXT_PUBLIC_PYANCHOR_TOKEN=${input.token}`
+        ].join("\n")
+      : null,
     ``
   ];
   return lines.filter((l) => l !== null).join("\n");
@@ -141,8 +158,7 @@ export function renderBootstrapSnippet(framework: Framework, routerKind: RouterK
       ``,
       `  ${tag}`,
       ``,
-      `Then expose the token to the client by adding to your .env.local:`,
-      `  NEXT_PUBLIC_PYANCHOR_TOKEN=<same value as PYANCHOR_TOKEN above>`
+      `(NEXT_PUBLIC_PYANCHOR_TOKEN is already in your .env.local — Next.js inlines it at build time.)`
     ].join("\n");
   }
 
@@ -152,8 +168,7 @@ export function renderBootstrapSnippet(framework: Framework, routerKind: RouterK
       ``,
       `  ${tag}`,
       ``,
-      `Then expose the token to the client by adding to your .env.local:`,
-      `  NEXT_PUBLIC_PYANCHOR_TOKEN=<same value as PYANCHOR_TOKEN above>`
+      `(NEXT_PUBLIC_PYANCHOR_TOKEN is already in your .env.local — Next.js inlines it at build time.)`
     ].join("\n");
   }
 

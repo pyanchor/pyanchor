@@ -115,6 +115,34 @@ const serverWebhookSink: WebhookSink = pyanchorConfig.webhookEditRequestedUrl
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
+// v0.29.0 — operator visibility for HMAC actor rejections (round 18
+// recommendation 4). Without this, bad signed actor headers were
+// silently dropped — fail-soft is right for the request flow, but
+// operators lost the signal that "someone is trying to spoof actor
+// identities". Now: a per-process counter (surfaced via
+// /api/admin/metrics) plus a rate-limited stderr warning so the
+// rejection shows up in normal log shipping without flooding under
+// a misconfigured client storm.
+const actorRejectionCounter: Record<string, number> = Object.create(null);
+let lastActorWarnTs = 0;
+const ACTOR_WARN_INTERVAL_MS = 60_000; // ≤1 stderr line per minute per process
+
+const recordActorRejection = (reason: string, ip: string | undefined) => {
+  actorRejectionCounter[reason] = (actorRejectionCounter[reason] ?? 0) + 1;
+  const now = Date.now();
+  if (now - lastActorWarnTs >= ACTOR_WARN_INTERVAL_MS) {
+    lastActorWarnTs = now;
+    console.warn(
+      `[pyanchor] X-Pyanchor-Actor signature rejected — reason=${reason} from=${ip ?? "unknown"} ` +
+        `total_rejected_since_boot=${JSON.stringify(actorRejectionCounter)}`
+    );
+  }
+};
+
+export const __getActorRejectionCounts = (): Record<string, number> => ({
+  ...actorRejectionCounter
+});
+
 // ─── public: liveness + readiness + static runtime bundles ────────────
 //
 // /healthz — liveness. Always 200 if the process is running and able
@@ -250,6 +278,16 @@ for (const basePath of runtimeBases) {
         typeof rawActor === "string" ? rawActor : null,
         pyanchorConfig.actorSigningSecret || null
       );
+      // v0.29.0: surface rejected signed-actor headers via counter +
+      // rate-limited stderr (the edit still proceeds — fail-soft).
+      // Empty headers are not rejections; only "rejected" with a
+      // non-trivial reason counts as suspicious.
+      if (
+        actorVerification.kind === "rejected" &&
+        actorVerification.reason !== "empty"
+      ) {
+        recordActorRejection(actorVerification.reason, request.ip);
+      }
       const actor =
         actorVerification.kind === "ok" || actorVerification.kind === "unsigned"
           ? actorVerification.actor
@@ -353,7 +391,10 @@ app.get(
       recentMessages: {
         sampleSize: recent.length,
         byStatus: outcomeCounts
-      }
+      },
+      // v0.29.0 — HMAC actor signing rejections since process boot.
+      // Empty object when signing is off or no rejections seen.
+      actorRejections: { ...actorRejectionCounter }
     });
   })
 );

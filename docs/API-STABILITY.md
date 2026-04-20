@@ -68,7 +68,7 @@ Routes mounted under `runtimeBasePath` (default `/_pyanchor`) and
 | `/_pyanchor/api/cancel` | POST | gate + origin + bearer/cookie | **Stable @ 1.0** | Body: `AiEditCancelInput`. |
 | `/api/admin/health` | GET | gate + bearer/cookie | Pre-1.0 | `AdminHealth` JSON. Shape may change; admin surface is in flux. |
 | `/api/admin/state` | GET | gate + bearer/cookie | Pre-1.0 | Same as `/api/status` for now. May be removed if duplicate. |
-| `/api/admin/metrics` | GET | gate + bearer/cookie | Pre-1.0 | Cheap in-process operator metrics (v0.23.1+): `queue.depth` + `queue.oldestEnqueuedAt` + `currentJob` + `sessions.activeCount` + `recentMessages.byStatus` (last 50 messages). Shape may change before 1.0; historical aggregations from `audit.jsonl` are a post-1.0 candidate. |
+| `/api/admin/metrics` | GET | gate + bearer/cookie | Pre-1.0 | Cheap in-process operator metrics (v0.23.1+): `queue.depth` + `queue.oldestEnqueuedAt` + `currentJob` + `sessions.activeCount` + `recentMessages.byStatus` (last 50 messages) + `actorRejections` (HMAC actor verify failures since boot, by reason; v0.29.0+). Shape may change before 1.0; historical aggregations from `audit.jsonl` are a post-1.0 candidate. |
 | `/` | GET | gate + bearer/cookie | Pre-1.0 | Renders the (minimal) admin HTML. |
 
 ### 4. Environment variables
@@ -170,7 +170,8 @@ sidecar exactly as pre-v0.28 (where the bin pointed straight at
 | `pyanchor init --dry-run` | **Stable @ 1.0** | Print the plan without writing. |
 | `pyanchor init --force` | **Stable @ 1.0** | Overwrite existing files (default is skip-if-present). |
 | `pyanchor init --cwd <path>` | **Stable @ 1.0** | Init a project at a path other than the current dir. |
-| Files written by `init` | **Stable @ 1.0** | Locations: `.env.local` (Next.js) or `.env` (others); `scripts/pyanchor-restart.sh` (chmod +x). Renaming or moving these is a major bump. |
+| `pyanchor doctor` | **Stable @ 1.0** | v0.29.0+. Run all config checks; print pass/fail per check + suggested fix. Exit 0 = sidecar safe to start; exit 1 = at least one ✗. Output format ("Required environment variables", "Filesystem", "Agent", "Output mode: <mode>", "Optional knobs" sections + summary line) is Stable @ 1.0; the exact wording of fix suggestions is Pre-1.0. |
+| Files written by `init` | **Stable @ 1.0** | Locations: `.env.local` (Next.js) or `.env` (others); `scripts/pyanchor-restart.sh` (chmod +x). Renaming or moving these is a major bump. For Next.js, `.env.local` also contains `NEXT_PUBLIC_PYANCHOR_TOKEN` set to the same value as `PYANCHOR_TOKEN` (v0.29.0+). |
 | Auto-detected frameworks | Pre-1.0 | nextjs / vite / astro / remix / sveltekit / nuxt. Adding new ones is non-breaking; the detection heuristic itself may evolve. |
 | Bootstrap snippet output (the JSX/HTML printed for the user to copy) | Pre-1.0 | The exact text may evolve as we add framework profiles. The substance (script tag pointing at `/_pyanchor/bootstrap.js` with token data attr) is stable. |
 | `dist/server.cjs` direct invocation (`node dist/server.cjs`) | **Stable @ 1.0** | Legacy entry — still works, used by the systemd template. |

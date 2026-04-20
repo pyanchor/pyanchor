@@ -57,6 +57,7 @@ async function main(): Promise<number> {
         `Usage:\n` +
         `  pyanchor                Start the sidecar (reads PYANCHOR_* env vars).\n` +
         `  pyanchor init [--yes]   Interactive scaffolder (run from your app root).\n` +
+        `  pyanchor doctor         Diagnose the local config (env / fs / agent / output mode).\n` +
         `  pyanchor --version      Print version.\n` +
         `  pyanchor --help         This message.\n` +
         `\n` +
@@ -69,6 +70,12 @@ async function main(): Promise<number> {
   if (sub === "init") {
     const { runInit } = await import("./init.js");
     return runInit(process.argv.slice(3));
+  }
+
+  if (sub === "doctor") {
+    const { runDoctor } = await import("./doctor.js");
+    const report = runDoctor(process.argv.slice(3));
+    return report.exitCode;
   }
 
   // Default: launch the sidecar. Spawn dist/server.cjs as a child so
