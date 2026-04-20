@@ -75,8 +75,13 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-# Build a jq filter that respects --since/--until.
-FILTER='.'
+# Build a jq filter that respects --since/--until. Read as raw lines
+# (`-R`) and decode with `fromjson?` so a partial/corrupt JSONL line
+# is silently skipped instead of aborting the whole stats run.
+# Matches the malformed-line tolerance in `pyanchor logs` — operators
+# shouldn't lose visibility because the sidecar crashed mid-write
+# on one event.
+FILTER='fromjson?'
 if [[ -n "$SINCE" ]]; then
   FILTER="${FILTER} | select(.ts >= \"$SINCE\")"
 fi
@@ -87,7 +92,7 @@ fi
 # 1. Filter once to a tmp file so subsequent passes don't re-parse.
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
-jq -c "$FILTER" "$AUDIT_FILE" > "$TMP"
+jq -Rrc "$FILTER" "$AUDIT_FILE" > "$TMP"
 
 TOTAL=$(wc -l < "$TMP" | tr -d ' ')
 if [[ "$TOTAL" -eq 0 ]]; then
@@ -118,9 +123,25 @@ echo "─── duration (success only, ms) ────────────
 DURATIONS=$(jq -r 'select(.outcome == "success") | .duration_ms' "$TMP" | sort -n)
 SUCCESS_COUNT=$(echo "$DURATIONS" | grep -c '^[0-9]' || true)
 if [[ "$SUCCESS_COUNT" -gt 0 ]]; then
-  P50=$(echo "$DURATIONS" | awk -v n="$SUCCESS_COUNT" 'NR == int(n*0.5)+1 {print; exit}')
-  P90=$(echo "$DURATIONS" | awk -v n="$SUCCESS_COUNT" 'NR == int(n*0.9)+1 {print; exit}')
-  P99=$(echo "$DURATIONS" | awk -v n="$SUCCESS_COUNT" 'NR == int(n*0.99)+1 {print; exit}')
+  # Nearest-rank percentile (NIST C=1 / Excel's PERCENTILE.EXC variant
+  # — index = ceil(N * p)). Pre-v0.31.1 the formula was
+  # `int(N*p)+1` which rounded UP one rank too far on every query
+  # (e.g. N=10 → p50=6th instead of 5th, N=100 → p99=100th instead
+  # of 99th). The clamp handles N=1 + boundary cases.
+  pct() {
+    awk -v n="$SUCCESS_COUNT" -v p="$1" '
+      BEGIN {
+        idx = int(n * p)
+        if (idx < n * p) idx++
+        if (idx < 1) idx = 1
+        if (idx > n) idx = n
+      }
+      NR == idx { print; exit }
+    '
+  }
+  P50=$(echo "$DURATIONS" | pct 0.5)
+  P90=$(echo "$DURATIONS" | pct 0.9)
+  P99=$(echo "$DURATIONS" | pct 0.99)
   MAX=$(echo "$DURATIONS" | tail -1)
   printf "  p50:     %s ms\n" "${P50:-?}"
   printf "  p90:     %s ms\n" "${P90:-?}"

@@ -246,22 +246,40 @@ export function runLogs(argv: string[] = []): number {
   // every fs that supports stat). watchFile returns prev/curr stat
   // on change; we read only the appended bytes, parse, filter,
   // render. The 250ms interval is the tail -f default vibe.
-  let lastSize = statSync(args.file).size;
+  //
+  // v0.31.1 — round 19 P2: detect log rotation in two ways and
+  // resync the read offset so we don't drop / duplicate lines:
+  //   1. inode change (dev/ino differ) — `mv` + new file or
+  //      `rm` + recreate (logrotate's create mode)
+  //   2. file shrunk (curr.size < lastSize) — copy-truncate mode
+  // Both reset the read offset to 0 so the next poll reads from
+  // the start of the new content. Pre-v0.31.1 jumped lastSize
+  // to curr.size on shrink, which dropped any content already in
+  // the new file at the time of detection.
+  let lastStat = statSync(args.file);
+  let lastSize = lastStat.size;
   console.log(colorize("dim", `(following ${args.file} — Ctrl-C to exit)`));
-  watchFile(args.file, { interval: 250 }, (curr, prev) => {
-    if (curr.size <= prev.size) {
-      // File was rotated / truncated. Reset to read from new start.
+  watchFile(args.file, { interval: 250 }, (curr, _prev) => {
+    const rotated = curr.dev !== lastStat.dev || curr.ino !== lastStat.ino;
+    const truncated = curr.size < lastSize;
+    const startFrom = rotated || truncated ? 0 : lastSize;
+
+    if (curr.size === startFrom) {
+      // No new bytes (or rotation to an identically-sized empty file).
+      lastStat = curr;
       lastSize = curr.size;
       return;
     }
+
     try {
-      const buf = Buffer.alloc(curr.size - lastSize);
+      const buf = Buffer.alloc(curr.size - startFrom);
       const fd = require("node:fs").openSync(args.file, "r");
       try {
-        require("node:fs").readSync(fd, buf, 0, buf.length, lastSize);
+        require("node:fs").readSync(fd, buf, 0, buf.length, startFrom);
       } finally {
         require("node:fs").closeSync(fd);
       }
+      lastStat = curr;
       lastSize = curr.size;
       const newEvents = applyFilters(parseJsonl(buf.toString("utf8")), args);
       for (const e of newEvents) {

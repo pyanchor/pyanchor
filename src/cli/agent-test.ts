@@ -30,6 +30,17 @@ import { selectAgent, type AgentEvent } from "../agents";
 import { pyanchorConfig } from "../config";
 import type { AiEditMode } from "../shared/types";
 
+// v0.31.1 — exact-match success criterion.
+// Round 19 P2: pre-v0.31.1 `agent test` accepted ANY result event as
+// success, but the help text promised an "exact-match" check. An
+// adapter that responded "I cannot comply" was scored as ✓. Now:
+//   - Default prompt → success only if result.summary contains the
+//     expected token below (i.e. the adapter actually obeyed)
+//   - Custom prompt → any result event still counts (operator
+//     specified the prompt, they own the success definition)
+const DEFAULT_AGENT_TEST_PROMPT = "Reply with the exact text: pyanchor-agent-test-ok";
+const DEFAULT_AGENT_TEST_EXPECTED = "pyanchor-agent-test-ok";
+
 interface AgentTestArgs {
   prompt: string;
   agent?: string; // override PYANCHOR_AGENT for this run only
@@ -41,7 +52,7 @@ interface AgentTestArgs {
 
 function parseArgs(argv: string[]): AgentTestArgs {
   const out: AgentTestArgs = {
-    prompt: "Reply with the exact text: pyanchor-agent-test-ok",
+    prompt: DEFAULT_AGENT_TEST_PROMPT,
     mode: "chat",
     timeoutMs: 30_000,
     printHelp: false
@@ -87,15 +98,23 @@ function helpText(): string {
   return `Usage: pyanchor agent test [agent] [prompt] [options]
 
 Fire a one-shot prompt at the configured (or named) agent and print
-every event the adapter yields. Exit 0 on completion, 1 on failure.
+every event the adapter yields. Invokes the real agent CLI — this
+**will consume API credits / tokens**. Exit 0 on success, 1 on
+failure or timeout.
+
+Success criterion:
+  - Default prompt: agent's result event must include the literal
+    string "pyanchor-agent-test-ok". A "result" event with any
+    other content (e.g. "I cannot comply") is treated as failure.
+  - Custom prompt (--prompt or positional): any result event counts
+    as success — you own the prompt, you own the success definition.
 
 Arguments:
   agent      Override PYANCHOR_AGENT for this run only
              (openclaw | claude-code | codex | aider | gemini).
              Default: whatever PYANCHOR_AGENT is set to.
   prompt     Prompt to send. Default: "Reply with the exact text:
-             pyanchor-agent-test-ok" (good smoke prompt — exact-
-             match success criterion).
+             pyanchor-agent-test-ok".
 
 Options:
   --prompt, -p <s>   Same as positional prompt.
@@ -183,7 +202,7 @@ export async function runAgentTest(argv: string[] = []): Promise<number> {
   const timer = setTimeout(() => controller.abort(), args.timeoutMs);
 
   let eventCount = 0;
-  let resultSeen = false;
+  let resultSummary: string | null = null;
   const startedAt = Date.now();
 
   try {
@@ -215,7 +234,7 @@ export async function runAgentTest(argv: string[] = []): Promise<number> {
     )) {
       eventCount++;
       console.log(renderEvent(event));
-      if (event.type === "result") resultSeen = true;
+      if (event.type === "result") resultSummary = event.summary;
     }
   } catch (err) {
     clearTimeout(timer);
@@ -233,7 +252,21 @@ export async function runAgentTest(argv: string[] = []): Promise<number> {
 
   const elapsedMs = Date.now() - startedAt;
   console.log("");
-  if (resultSeen) {
+  if (resultSummary !== null) {
+    // v0.31.1: exact-match check ONLY when we used the default prompt.
+    // Custom prompts: any result event counts (operator picked the
+    // prompt, they own the success criterion).
+    if (
+      args.prompt === DEFAULT_AGENT_TEST_PROMPT &&
+      !resultSummary.includes(DEFAULT_AGENT_TEST_EXPECTED)
+    ) {
+      console.log(
+        red(
+          `✗ agent result did not include "${DEFAULT_AGENT_TEST_EXPECTED}" — got: ${resultSummary.slice(0, 200)}`
+        )
+      );
+      return 1;
+    }
     console.log(green(`✓ agent responded in ${elapsedMs}ms (${eventCount} event${eventCount === 1 ? "" : "s"})`));
     return 0;
   }

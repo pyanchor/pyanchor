@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-04-20 (v0.25.1).
+Last updated: 2026-04-20 (v0.31.1).
 
 > **Tone shift:** through v0.10.x this doc was a sized-task plan
 > for refactoring the inline runner. That work shipped (v0.6/v0.7
@@ -9,31 +9,51 @@ Last updated: 2026-04-20 (v0.25.1).
 > menu. Sized engineering breakdowns now live in CHANGELOG entries
 > per release, not here.
 
-## Where we are (v0.25.1)
+## Where we are (v0.31.1)
 
-- **Code**: 720+ unit tests + 69 e2e (Node 18/20/22 matrix on every commit)
-- **Docs**: SECURITY + PRODUCTION-HARDENING + API-STABILITY +
-  MULTI-TENANCY-DESIGN + per-adapter setup guides; README
-  quickstart is 5 explicit numbered steps
+- **Code**: 836+ unit tests + 69 e2e (Node 18/20/22 matrix on every commit)
+- **Runtime stack**: Express 5.2.1 + cookie-parser only (npm
+  `latest` Express, no axios, no Next.js — pyanchor itself is
+  framework-agnostic; total runtime deps = 2)
+- **Docs**: ACCESS-CONTROL + SECURITY + PRODUCTION-HARDENING +
+  API-STABILITY + MULTI-TENANCY-DESIGN + per-adapter setup guides;
+  README quickstart leads with `npx pyanchor init` (~30s)
 - **i18n**: 21 built-in locales (LTR + RTL), code-split for
   fetch-free English path
 - **Production gating**: 4-layer stack (host middleware → host
-  layout → bootstrap fail-safe → sidecar middleware). Documented +
-  examples + tested
+  layout → bootstrap fail-safe → sidecar middleware). 9-layer
+  composition matrix in `ACCESS-CONTROL.md`
 - **Output modes**: `apply` (default), `pr` (`gh pr create`),
   `dryrun`. Audit log + webhook hooks for both. PR mode covered
   by real-git smoke (v0.24.0)
 - **Agent backends**: 5 built-in adapters — openclaw / claude-code
-  / codex / aider / gemini (v0.25.0). Same `AgentRunner` contract
-- **Agent error classifier**: known transient OAuth race / rate
-  limit / timeout / network errors get actionable hints in
-  state.error
-- **Operator visibility**: `/api/admin/metrics` (v0.23.1) exposes
-  in-process queue depth + active sessions + recent message status
-  counts
+  / codex / aider / gemini. Same `AgentRunner` contract
+- **Operator CLI suite (v0.28.0–v0.30.0)**: `pyanchor` (sidecar) /
+  `init` (interactive scaffolder) / `doctor` (`--json` machine-
+  readable) / `logs` (audit tail with `--follow`) / `agent test`
+  (one-shot adapter ping)
+- **Operator visibility**: `/api/admin/metrics` exposes queue
+  depth + active sessions + recent message status counts +
+  HMAC actor rejection counter (v0.29.0+)
+- **HMAC actor signing** (v0.27.0+, opt-in): tamper-proof actor
+  field in audit + PR body via `PYANCHOR_ACTOR_SIGNING_SECRET`
+- **Liveness + readiness probes**: `/healthz` (always 200) +
+  `/readyz` (200 only when fully configured) for k8s/orchestrator
+- **Operations templates**: `examples/systemd/` production-
+  hardened unit + EnvironmentFile + install README; in-sync with
+  `docs/PRODUCTION-HARDENING.md`
+- **9 examples**: nextjs-minimal, nextjs-portfolio-gate,
+  nextjs-nextauth-gate, nextjs-multi-agent, nextjs-pr-mode,
+  vite-react-minimal, vite-react-portfolio-gate, astro-minimal,
+  sveltekit-minimal — covers the 5 framework × 3 deployment
+  pattern matrix
+- **CI automation**: ci (Node 18/20/22 + e2e) + release (npm
+  publish on tag) + examples-smoke (per-example dependency
+  dry-run + index-sync) + dependabot weekly with auto-merge for
+  patch/minor (major bumps stay manual)
 - **First production adopter**: studio.pyan.kr running pyanchor
   v0.24.0 with `PYANCHOR_AUDIT_LOG=true`, 30-day adoption window
-  started 2026-04-20 (Day 1 in progress)
+  started 2026-04-20 (~Day 7+ in progress)
 
 ## 1.0 trajectory
 

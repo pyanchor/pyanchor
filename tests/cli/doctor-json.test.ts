@@ -43,6 +43,7 @@ const setupGoodEnv = () => {
 interface DoctorJsonRun {
   exitCode: number;
   body: {
+    schemaVersion: 1;
     ts: string;
     summary: { passed: number; failed: number; warned: number; total: number; exitCode: 0 | 1 };
     groups: Array<{ title: string; checks: Array<{ name: string; status: string; detail?: string; fix?: string }> }>;
@@ -77,10 +78,14 @@ describe("pyanchor doctor --json (v0.30.0+)", () => {
     expect(() => JSON.parse(r.raw)).not.toThrow();
   });
 
-  it("top-level shape: ts + summary + groups (Stable @ 1.0)", () => {
+  it("top-level shape: schemaVersion + ts + summary + groups (Stable @ 1.0)", () => {
     const { env } = setupGoodEnv();
     const r = runDoctorJson(env);
-    expect(Object.keys(r.body).sort()).toEqual(["groups", "summary", "ts"]);
+    // v0.31.1 — added schemaVersion. Renaming/removing keys is a
+    // major bump; adding (like this one) is non-breaking — old
+    // consumers ignore unknown fields.
+    expect(Object.keys(r.body).sort()).toEqual(["groups", "schemaVersion", "summary", "ts"]);
+    expect(r.body.schemaVersion).toBe(1);
     expect(r.body.ts).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 

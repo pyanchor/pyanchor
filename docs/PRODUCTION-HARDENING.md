@@ -1,8 +1,13 @@
 # Production hardening guide
 
-`docs/SECURITY.md` is the threat model. This is the operator
-playbook — concrete commands + config for the deployment recipes
-listed there.
+> **First read for "who can access pyanchor and how do I configure it"**:
+> [`ACCESS-CONTROL.md`](./ACCESS-CONTROL.md). `docs/SECURITY.md` is
+> the threat model. This file is the **operator playbook** — concrete
+> commands + config for running the sidecar under a contained Unix /
+> systemd environment. The shipped systemd unit + env file template
+> live in [`../examples/systemd/`](../examples/systemd/) and are
+> kept in sync with the snippet below; the example dir is what you
+> actually `cp` into production.
 
 > **The agent has a shell.** Every hardening below assumes the
 > agent will eventually try to do something you didn't expect.
@@ -72,15 +77,37 @@ RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
 
-# Allow writes only to the workspace + state dirs the worker needs
-ReadWritePaths=/var/lib/pyanchor/workspace /var/lib/pyanchor/state
+# Optional further hardening — DISABLED BY DEFAULT because it can
+# break Node/V8 JIT and some agent CLIs that allocate executable
+# pages at runtime. Enable only after verifying pyanchor + your
+# selected agent + your output mode all work under systemd.
+#   MemoryDenyWriteExecute=true
+# (See round 18 P2 in CHANGELOG for the rationale on demoting this
+# from default-on to opt-in.)
 
-# Network: bind only loopback by default. If you reverse-proxy,
-# leave this and let the proxy handle the public face.
-IPAddressDeny=any
-IPAddressAllow=127.0.0.0/8 ::1/128
+# Allow writes only to the dirs the worker needs.
+#   /var/lib/pyanchor/workspace — scratch the agent mutates
+#   /var/lib/pyanchor/state     — state.json + audit.jsonl
+#   /srv/myapp                  — PYANCHOR_APP_DIR (apply mode only;
+#                                 remove for pr mode, which writes
+#                                 via git push instead of rsync)
+# If your PYANCHOR_APP_DIR differs from /srv/myapp, update the third
+# entry or apply-mode rsync gets EROFS.
+ReadWritePaths=/var/lib/pyanchor/workspace /var/lib/pyanchor/state /srv/myapp
+
+# Network: pyanchor binds 127.0.0.1 by default (controlled by
+# PYANCHOR_HOST) and your reverse proxy handles the public face.
+# Do NOT blanket-block outbound here — agent CLIs call LLM providers,
+# PR mode calls the GitHub API, webhooks call Slack/Discord. If you
+# need site-specific egress restrictions, add an IPAddressDeny /
+# IPAddressAllow policy tailored to your provider's egress ranges
+# rather than a loopback-only deny.
+#   IPAddressDeny=
+#   IPAddressAllow=
 
 [Install]
 WantedBy=multi-user.target

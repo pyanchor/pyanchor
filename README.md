@@ -309,7 +309,7 @@ trigger button at bottom-right. Click → describe a change → wait
 ~30s for the agent to apply + build + restart.
 
 Full integration walk-through: [`docs/integrate-with-nextjs.md`](./docs/integrate-with-nextjs.md).
-Browse all 8 runnable examples: [`examples/`](./examples/) (Next.js, Vite, Astro,
+Browse all 9 runnable examples: [`examples/`](./examples/) (Next.js, Vite, Astro,
 NextAuth gate, multi-agent swap, PR mode, …).
 
 ## Supported agents
@@ -465,7 +465,7 @@ isolation kicks in when you have multiple apps.
 
 | | |
 | --- | --- |
-| [`examples/`](./examples/) | **Start here** — index of all 8 runnable examples (Next.js / Vite / Astro / NextAuth gate / multi-agent / PR mode) |
+| [`examples/`](./examples/) | **Start here** — index of all 9 runnable examples (Next.js / Vite / Astro / NextAuth gate / multi-agent / PR mode) |
 | [`docs/integrate-with-nextjs.md`](./docs/integrate-with-nextjs.md) | Detailed Next.js integration walk-through (most common stack) |
 | [`docs/openclaw-setup.md`](./docs/openclaw-setup.md) | Install OpenClaw and point pyanchor at it |
 | [`docs/claude-code-setup.md`](./docs/claude-code-setup.md) | Install the Anthropic Agent SDK and route pyanchor through Claude |

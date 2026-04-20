@@ -7,6 +7,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.1] - 2026-04-20
+
+Round-19 Codex patches. Two P1 (docs/package surface drift after
+v0.27→v0.31 ships) + four P2 (correctness in operator tooling) +
+three P3 (stale strings + JSON schema versioning + SvelteKit
+README clarification). The round-19 verdict was "runtime green,
+docs/package surface conditional no-go" — this release closes the
+no-go items so 1.0 cut narrative isn't blocked.
+
+If you're already shipping with pyanchor, the only behavioural
+change you might notice is `pyanchor agent test` now actually
+enforces its documented "exact-match success" criterion (default
+prompt). Everything else is docs / scripts / CI hygiene.
+
+### Fixed
+- **`docs/PRODUCTION-HARDENING.md` systemd block was stale
+  (round-19 P1)** — round 18 had fixed the actual
+  `examples/systemd/pyanchor.service` template (removed
+  `MemoryDenyWriteExecute`, `IPAddressDeny=any`, added
+  `/srv/myapp` to `ReadWritePaths`), but the snippet inside
+  `PRODUCTION-HARDENING.md` still showed the dangerous old
+  values. New operators following the doc would have copied the
+  pre-round-18 broken setup. Now in sync with the example
+  template + opening paragraph points at `ACCESS-CONTROL.md` as
+  the first read.
+- **`signActor()` import path was a lie (round-19 P1)** — both
+  `docs/ACCESS-CONTROL.md` and `.env.example` told users to
+  `import { signActor } from "pyanchor/actor"`, but no such
+  export exists in the npm tarball (`package.json` `files`
+  whitelist excludes `src/`, build doesn't emit
+  `dist/actor.cjs`, no `exports["./actor"]` declared). That
+  import would fail in production. Resolved by demoting it to
+  docs-only: the docs now show a self-contained 3-line
+  `node:crypto` snippet (`createHmac("sha256", secret)...`),
+  matching pyanchor's "host owns identity, sidecar verifies"
+  boundary. `src/actor.ts` stays as the server-side reference
+  but is explicitly **not a public API**.
+- **`scripts/audit-stats.sh` percentile was one rank too high
+  (round-19 P2)** — the formula was `int(N*p)+1` which rounded
+  *up one extra step* on every query. With N=10, p50 returned
+  the 6th value instead of the correct 5th; with N=100, p99
+  returned the 100th (the max) instead of the 99th. Now uses
+  proper nearest-rank `ceil(N*p)` with clamping. Also the jq
+  filter now uses `fromjson?` so a partial/corrupt JSONL line
+  is silently skipped instead of aborting the entire stats run
+  — matching the malformed-line tolerance `pyanchor logs`
+  already had.
+- **`pyanchor agent test` lied about its success criterion
+  (round-19 P2)** — `--help` claimed "exact-match success
+  criterion", but the code accepted any `result` event as ✓.
+  An adapter responding "I cannot comply" passed. Now: when
+  the default prompt is used, the result summary must contain
+  the literal `pyanchor-agent-test-ok` token; otherwise the
+  command exits 1 with a clear error showing what was
+  received. Custom prompts (`--prompt` or positional) still
+  accept any result event — operator owns the success
+  definition there. Help text also now warns explicitly about
+  API credit consumption.
+- **`pyanchor logs --follow` could drop / duplicate lines on log
+  rotation (round-19 P2)** — the watcher only checked for
+  `curr.size <= prev.size` to detect rotation/truncation, then
+  set `lastSize = curr.size` and returned. Two failure modes:
+  (a) inode-replacing rotation (`logrotate` create mode) where
+  the new file's size already exceeded `lastSize` was treated
+  as a normal append, reading from the wrong offset and
+  skipping the start of the new file; (b) copy-truncate left
+  any in-flight bytes between the truncate and the next poll
+  unread. Now tracks `(dev, ino)` and treats either an inode
+  change or a size shrink as "reset to offset 0". Pre-existing
+  follow tests still pass; manual smoke against
+  `mv old new && touch old; printf '...' >> old` confirms.
+- **`.github/dependabot.yml` React ignore rules were stale
+  (round-19 P2)** — the v0.30.0 batch closed 14 React 18→19 PRs
+  citing a `next@14` peer-dep deadlock. The Next examples have
+  since moved to `next@16` (whose peer range includes React 19),
+  so the ignore rules now block bumps for a reason that no
+  longer holds. Removed the React-family ignore from all 7
+  example entries. The SvelteKit-only `vite` major ignore stays
+  — `@sveltejs/vite-plugin-svelte` peer range still stops at
+  vite 5. `examples-smoke` will catch any actual peer conflict
+  if React 19 isn't ready yet for some sub-dep.
+- **`pyanchor doctor --json` schema version (round-19 P3)** —
+  added `schemaVersion: 1` as the first key. Machine consumers
+  (Datadog / k8s sidecar / CI gates) can now pin a parser; a
+  future shape change will bump `schemaVersion`. Adding new
+  keys to the existing shape is non-breaking and does not
+  require a bump.
+- **`examples/sveltekit-minimal/README.md` "silence the
+  warning" was wrong (round-19 P3)** — the example told users
+  `export PYANCHOR_FRAMEWORK=sveltekit` would silence the
+  `Unknown PYANCHOR_FRAMEWORK` warning, but it actually
+  *causes* it (`sveltekit` isn't a built-in profile, only
+  `nextjs` and `vite` are). Reframed as "make the fallback
+  explicit" with a note that the warning is expected.
+- **Stale "8 examples" / `v0.25.1` references (round-19 P3)** —
+  `README.md`, `.github/workflows/examples.yml`, and
+  `docs/roadmap.md` all referenced an outdated example count or
+  pre-CLI-suite state. Roadmap "Where we are" rewritten for
+  v0.31.1 reality (CLI suite, 5 adapters, 9 examples,
+  Express 5, dependabot automation).
+
+### Tests
+- 836 unit + 69 e2e — same count as v0.31.0. The doctor `--json`
+  shape test was updated to assert `schemaVersion: 1`. Other
+  changes were docs / scripts / CI infra (no new test surface).
+
 ## [0.31.0] - 2026-04-20
 
 Dependency stack refresh. **Express 4 → 5** transition (the npm

@@ -65,7 +65,11 @@ export PYANCHOR_WORKSPACE_DIR=/tmp/pyanchor-sveltekit-workspace
 export PYANCHOR_INSTALL_COMMAND="pnpm install --frozen-lockfile"
 export PYANCHOR_BUILD_COMMAND="pnpm build"
 
-# Optional: silence the framework warning
+# Optional: make the fallback explicit. Setting this does NOT
+# silence the warning ("Unknown PYANCHOR_FRAMEWORK") because
+# pyanchor only ships nextjs / vite profiles — but it's a useful
+# operator hint that future-you intentionally took the override
+# path. Omit entirely if you'd rather have one fewer env var.
 export PYANCHOR_FRAMEWORK=sveltekit
 
 export PYANCHOR_RESTART_SCRIPT=$(pwd)/scripts/restart.sh

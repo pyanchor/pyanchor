@@ -6,7 +6,7 @@ name: examples-smoke
 # registry) and that the example index in examples/README.md doesn't
 # drift from the actual file tree.
 #
-# Does NOT actually `pnpm install` (too slow for 8 examples in CI).
+# Does NOT actually `pnpm install` (too slow for all examples in CI).
 # Does NOT execute the example apps (would require sidecars + agents).
 # Catches the round-17 class of bugs cheaply: typo'd dep names,
 # stale Files counts, missing example links.

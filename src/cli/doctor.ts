@@ -486,7 +486,13 @@ export function runDoctor(argv: string[] = []): DoctorReport {
   if (args.json) {
     // Stable JSON shape (Stable @ 1.0). Renaming or removing keys
     // is a major bump. Adding new keys is non-breaking.
+    //
+    // v0.31.1 — round 19 P3: added `schemaVersion: 1` so machine
+    // consumers (Datadog / k8s sidecar / CI gates) can pin a parser
+    // and react cleanly when this shape ever bumps. Bumping
+    // `schemaVersion` is the contract for "the JSON shape changed".
     const report = {
+      schemaVersion: 1 as const,
       ts: new Date().toISOString(),
       summary: { passed, failed, warned, total: passed + failed + warned, exitCode },
       groups: groups.map((g) => ({

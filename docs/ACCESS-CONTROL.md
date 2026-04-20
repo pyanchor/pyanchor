@@ -40,7 +40,7 @@ warrants.
 | 6 | **Bootstrap fail-safe** | Browser-side defense-in-depth — overlay refuses to mount if the named cookie isn't present | `<script data-pyanchor-require-gate-cookie="pyanchor_dev">` | off |
 | 7 | **Reverse proxy gate (nginx / Caddy)** | IP allowlist, basic auth, SSO subrequest auth, mTLS — anything your proxy supports | nginx: `allow 10.0.0.0/8; deny all;` or `auth_request /sso-check;` in front of `location /_pyanchor/` | up to operator |
 | 8 | **systemd `IPAddressAllow/Deny`** | Linux kernel-level network filter (cgroup v2) — only relevant under systemd | Edit the unit's `IPAddressDeny=`/`IPAddressAllow=` directives. ⚠ Don't blanket-block outbound or you'll cut off agent CLIs / GitHub / webhooks. | not set in the shipped template |
-| 9 | **HMAC actor signing** | "Who requested this edit" can't be spoofed in the audit trail | Sidecar: `PYANCHOR_ACTOR_SIGNING_SECRET=$(openssl rand -hex 32)`. Host app: call `signActor(actor, secret)` from `src/actor.ts` and pass result as `X-Pyanchor-Actor` header. | off |
+| 9 | **HMAC actor signing** | "Who requested this edit" can't be spoofed in the audit trail | Sidecar: `PYANCHOR_ACTOR_SIGNING_SECRET=$(openssl rand -hex 32)`. Host app signs `<actor>` with `hex(HMAC-SHA256(secret, actor))` and passes `<actor>.<sig>` as the `X-Pyanchor-Actor` header — pure `node:crypto` snippet below, no pyanchor import required. | off |
 
 Plus two automatic guarantees:
 
@@ -131,12 +131,30 @@ export PYANCHOR_ACTOR_SIGNING_SECRET=$(openssl rand -hex 32)
 export PYANCHOR_WEBHOOK_EDIT_REQUESTED_URL=https://hooks.slack.com/...
 ```
 
-Host app: sign the actor field instead of passing it raw:
+Host app: sign the actor field instead of passing it raw. Pyanchor
+**doesn't expose a JS helper** for this — the format is one line of
+`node:crypto`, and keeping it host-side preserves the boundary
+where pyanchor never sees the secret value:
 
 ```ts
-import { signActor } from "pyanchor/actor";  // src/actor.ts export
+import { createHmac } from "node:crypto";
 
-const signed = signActor(session.user.email, process.env.PYANCHOR_ACTOR_SIGNING_SECRET);
+/**
+ * Mint a value for the X-Pyanchor-Actor header. The pyanchor sidecar
+ * verifies it with the same secret + format. See `src/actor.ts` in
+ * the pyanchor repo for the server-side reference (not exported
+ * from the npm package — the snippet below is intentionally
+ * self-contained).
+ */
+function signPyanchorActor(actor: string, secret: string): string {
+  const sig = createHmac("sha256", secret).update(actor, "utf8").digest("hex");
+  return `${actor}.${sig}`;
+}
+
+const signed = signPyanchorActor(
+  session.user.email,
+  process.env.PYANCHOR_ACTOR_SIGNING_SECRET!
+);
 fetch("/_pyanchor/api/edit", {
   headers: {
     "X-Pyanchor-Actor": signed,
@@ -292,4 +310,4 @@ templates.
 - [`MULTI-TENANCY-DESIGN.md`](./MULTI-TENANCY-DESIGN.md) — single-sidecar-many-tenants design (not yet implemented)
 - [`API-STABILITY.md`](./API-STABILITY.md) — public surface contract
 - [`../examples/nextjs-nextauth-gate/`](../examples/nextjs-nextauth-gate/) — gate cookie + existing auth working code
-- [`../src/actor.ts`](../src/actor.ts) — `signActor()` source for HMAC-signed headers
+- [`../src/actor.ts`](../src/actor.ts) — server-side HMAC verification reference (not importable from the npm package; copy the inline snippet above into your host app)
