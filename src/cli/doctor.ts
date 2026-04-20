@@ -411,10 +411,57 @@ export interface DoctorReport {
   exitCode: 0 | 1;
 }
 
+/**
+ * Parse `pyanchor doctor` arguments. Supported:
+ *   --json    Emit machine-readable JSON instead of the human report.
+ *             Exit code is the same; stderr stays empty for clean piping.
+ */
+interface DoctorArgs {
+  json: boolean;
+  printHelp: boolean;
+}
+
+function parseDoctorArgs(argv: string[]): DoctorArgs {
+  const out: DoctorArgs = { json: false, printHelp: false };
+  for (const a of argv) {
+    if (a === "--help" || a === "-h") out.printHelp = true;
+    else if (a === "--json") out.json = true;
+    else throw new Error(`Unknown argument: ${a}. Try --help.`);
+  }
+  return out;
+}
+
+function doctorHelp(): string {
+  return `Usage: pyanchor doctor [options]
+
+Local config diagnostics. Runs every check the sidecar would do at
+startup and prints what passed, what failed, and what to do about
+each failure.
+
+Options:
+  --json     Emit JSON (one object) instead of the human report.
+             Useful for monitoring (Datadog/Splunk, k8s sidecar
+             readiness scripts) and CI gates.
+  --help     This message.
+
+Exit code: 0 if all required checks passed, 1 otherwise.
+`;
+}
+
 /** Run all checks and print a report. Returns the report for tests. */
-export function runDoctor(_argv: string[] = []): DoctorReport {
-  console.log("pyanchor doctor — local config diagnostics");
-  console.log(colorize("dim", "  (does not start the sidecar; only inspects what it would observe)"));
+export function runDoctor(argv: string[] = []): DoctorReport {
+  let args: DoctorArgs;
+  try {
+    args = parseDoctorArgs(argv);
+  } catch (err) {
+    console.error(`pyanchor doctor: ${err instanceof Error ? err.message : String(err)}`);
+    return { groups: [], passed: 0, failed: 0, warned: 0, exitCode: 1 };
+  }
+
+  if (args.printHelp) {
+    process.stdout.write(doctorHelp());
+    return { groups: [], passed: 0, failed: 0, warned: 0, exitCode: 0 };
+  }
 
   const groups: CheckGroup[] = [
     checkRequiredEnv(),
@@ -428,12 +475,42 @@ export function runDoctor(_argv: string[] = []): DoctorReport {
   let failed = 0;
   let warned = 0;
   for (const g of groups) {
-    renderGroup(g);
     for (const c of g.checks) {
       if (c.status === "ok") passed++;
       else if (c.status === "fail") failed++;
       else warned++;
     }
+  }
+  const exitCode: 0 | 1 = failed > 0 ? 1 : 0;
+
+  if (args.json) {
+    // Stable JSON shape (Stable @ 1.0). Renaming or removing keys
+    // is a major bump. Adding new keys is non-breaking.
+    const report = {
+      ts: new Date().toISOString(),
+      summary: { passed, failed, warned, total: passed + failed + warned, exitCode },
+      groups: groups.map((g) => ({
+        title: g.title,
+        checks: g.checks.map((c) => ({
+          name: c.name,
+          status: c.status,
+          ...(c.detail !== undefined ? { detail: c.detail } : {}),
+          ...(c.fix !== undefined ? { fix: c.fix } : {})
+        }))
+      }))
+    };
+    // process.stdout.write so the JSON is the entire output (no
+    // trailing extras from console.log). Newline at end so tools
+    // that expect line-delimited input cope.
+    process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+    return { groups, passed, failed, warned, exitCode };
+  }
+
+  // Human-readable rendering (the v0.29.0 path, unchanged).
+  console.log("pyanchor doctor — local config diagnostics");
+  console.log(colorize("dim", "  (does not start the sidecar; only inspects what it would observe)"));
+  for (const g of groups) {
+    renderGroup(g);
   }
 
   const total = passed + failed + warned;
@@ -467,6 +544,5 @@ export function runDoctor(_argv: string[] = []): DoctorReport {
     );
   }
 
-  const exitCode: 0 | 1 = failed > 0 ? 1 : 0;
   return { groups, passed, failed, warned, exitCode };
 }

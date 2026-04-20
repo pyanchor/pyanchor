@@ -481,7 +481,8 @@ isolation kicks in when you have multiple apps.
 | [`CHANGELOG.md`](./CHANGELOG.md) | Release notes |
 | [`examples/nextjs-minimal/`](./examples/nextjs-minimal) | 5-file Next.js app wired to pyanchor (env-flag gate) |
 | [`examples/vite-react-minimal/`](./examples/vite-react-minimal) | 6-file Vite + React equivalent (`PYANCHOR_FRAMEWORK=vite`) |
-| [`examples/astro-minimal/`](./examples/astro-minimal) | Non-built-in framework via `PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND` overrides |
+| [`examples/astro-minimal/`](./examples/astro-minimal) | Non-built-in framework (Astro) via `PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND` overrides |
+| [`examples/sveltekit-minimal/`](./examples/sveltekit-minimal) | Same override path applied to SvelteKit |
 | [`examples/nextjs-portfolio-gate/`](./examples/nextjs-portfolio-gate) | Production gate cookie pattern for live-editing deployed sites |
 | [`examples/vite-react-portfolio-gate/`](./examples/vite-react-portfolio-gate) | Vite + standalone Node gate server (5174 → 5173) |
 | [`examples/nextjs-nextauth-gate/`](./examples/nextjs-nextauth-gate) | Recipe C — NextAuth + email allowlist as the gate |
@@ -496,7 +497,7 @@ isolation kicks in when you have multiple apps.
 `Stable @ 1.0` will become the contract at the 1.0 cut. Items
 marked `Pre-1.0` are still under iteration.
 
-**Shipped highlights** (cumulative through v0.29.0):
+**Shipped highlights** (cumulative through v0.30.0):
 
 - **Adapters**: `openclaw` (default), `claude-code`, `codex`, `aider`,
   `gemini`, pluggable third-party via the `AgentRunner` interface
@@ -531,15 +532,24 @@ marked `Pre-1.0` are still under iteration.
   v0.29.0+ auto-emits `NEXT_PUBLIC_PYANCHOR_TOKEN` for Next.js so
   the bootstrap script tag's token attribute resolves at build time
   with no extra paste step.
-- **Local diagnostics**: `pyanchor doctor` (v0.29.0+) runs every
-  startup check (env / fs / agent CLI / output-mode prerequisites)
-  and prints what passed, what failed, and what to do about each
-  failure. Exit 0 = `pyanchor` will boot. Replaces the "stare at
-  /readyz returning 503 and guess" loop.
-- **Tests**: 809 unit + 69 e2e + Node 18/20/22 matrix on every commit;
-  `examples-smoke` CI lane verifies every example's dependency graph,
-  the index doesn't drift, AND `examples/systemd/pyanchor.service`
-  passes `systemd-analyze verify`
+- **Operator CLI suite** (v0.29.0–v0.30.0): four sister commands —
+  - `pyanchor doctor` — run every startup check, print per-check
+    pass/fail + suggested fix. Exit 0 = `pyanchor` will boot.
+    `--json` flag (v0.30.0+) for machine-readable output (Datadog /
+    k8s sidecar / CI gates).
+  - `pyanchor logs` — tail `audit.jsonl` with filters (`--since`,
+    `--outcome`, `--actor`, `--mode`) and `--follow` for streaming.
+    Read-only; safe while sidecar is appending.
+  - `pyanchor agent test [agent] [prompt]` — fire a one-shot
+    prompt at the configured (or named) agent without booting the
+    full sidecar. Pinpoints "is the agent CLI installed,
+    authenticated, responding?" in one command.
+  - `scripts/audit-stats.sh` — adoption-window metrics from
+    `audit.jsonl` (success rate, p50/p99 duration, top actors).
+- **Tests**: 836 unit + 69 e2e + Node 18/20/22 matrix on every commit;
+  `examples-smoke` CI lane verifies every example's dependency graph
+  and the index doesn't drift; Dependabot weekly with auto-merge for
+  patch/minor (`.github/workflows/dependabot-auto-merge.yml`)
 
 **Coming next** (no firm version commitment yet):
 

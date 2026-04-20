@@ -55,11 +55,13 @@ async function main(): Promise<number> {
       `pyanchor — agent-agnostic AI live-edit sidecar for your web app\n` +
         `\n` +
         `Usage:\n` +
-        `  pyanchor                Start the sidecar (reads PYANCHOR_* env vars).\n` +
-        `  pyanchor init [--yes]   Interactive scaffolder (run from your app root).\n` +
-        `  pyanchor doctor         Diagnose the local config (env / fs / agent / output mode).\n` +
-        `  pyanchor --version      Print version.\n` +
-        `  pyanchor --help         This message.\n` +
+        `  pyanchor                  Start the sidecar (reads PYANCHOR_* env vars).\n` +
+        `  pyanchor init [--yes]     Interactive scaffolder (run from your app root).\n` +
+        `  pyanchor doctor [--json]  Diagnose the local config (env / fs / agent / output mode).\n` +
+        `  pyanchor logs [-f]        Tail the audit log (last N events; --follow streams).\n` +
+        `  pyanchor agent test       Fire a one-shot prompt at the configured agent.\n` +
+        `  pyanchor --version        Print version.\n` +
+        `  pyanchor --help           This message.\n` +
         `\n` +
         `Docs: https://github.com/pyanchor/pyanchor#readme\n` +
         `Examples: https://github.com/pyanchor/pyanchor/tree/main/examples\n`
@@ -76,6 +78,30 @@ async function main(): Promise<number> {
     const { runDoctor } = await import("./doctor.js");
     const report = runDoctor(process.argv.slice(3));
     return report.exitCode;
+  }
+
+  if (sub === "logs") {
+    const { runLogs } = await import("./logs.js");
+    return runLogs(process.argv.slice(3));
+  }
+
+  // `pyanchor agent test ...` — namespaced command. Currently only
+  // `agent test` is implemented; `agent` alone prints usage.
+  if (sub === "agent") {
+    const subSub = process.argv[3];
+    if (subSub === "test") {
+      const { runAgentTest } = await import("./agent-test.js");
+      return runAgentTest(process.argv.slice(4));
+    }
+    process.stdout.write(
+      `pyanchor agent — agent diagnostics\n` +
+        `\n` +
+        `Usage:\n` +
+        `  pyanchor agent test [agent] [prompt]   One-shot adapter ping.\n` +
+        `\n` +
+        `Run \`pyanchor agent test --help\` for full options.\n`
+    );
+    return subSub ? 1 : 0;
   }
 
   // Default: launch the sidecar. Spawn dist/server.cjs as a child so
