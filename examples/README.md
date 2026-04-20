@@ -26,7 +26,7 @@ starting point for your integration.
 | Edits as reviewable GitHub PRs (no live apply) | [`nextjs-pr-mode/`](./nextjs-pr-mode/)                                   |
 | Framework with no built-in profile             | [`astro-minimal/`](./astro-minimal/)                                     |
 
-## All 8 examples at a glance
+## All 9 examples at a glance
 
 | Example                       | Files | Headline                                                    |
 | ----------------------------- | ----- | ----------------------------------------------------------- |
@@ -36,7 +36,8 @@ starting point for your integration.
 | `vite-react-minimal`          | 8     | The Vite equivalent of `nextjs-minimal`                     |
 | `vite-react-portfolio-gate`   | 9     | Vite + standalone Node gate server (5174 → 5173)            |
 | `nextjs-multi-agent`          | 6     | Same host, 5 interchangeable agents (openclaw/claude/codex/aider/gemini) |
-| `astro-minimal`               | 7     | Non-built-in framework via `PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND` overrides |
+| `astro-minimal`               | 7     | Non-built-in framework (Astro) via `PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND` overrides |
+| `sveltekit-minimal`           | 9     | Same override path applied to SvelteKit (proves "any framework") |
 | `nextjs-pr-mode`              | 6     | `PYANCHOR_OUTPUT_MODE=pr` — edits land as GitHub PRs        |
 
 ## Operations templates

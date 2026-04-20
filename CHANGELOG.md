@@ -7,16 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-04-20
+
+Operator CLI suite ship. Closes the four "추가로 할만한 것" items
+Codex round 18 flagged. The CLI now has four sister commands
+(`init` / `doctor` / `logs` / `agent test`) plus a SvelteKit example
+proving the framework-agnostic claim, plus an audit-log stats
+script for the studio adoption-window narrative, plus the
+Dependabot auto-merge config that makes future security PRs
+self-service. **For 1.0 launch.**
+
+If you're already shipping with pyanchor, the headline new
+capabilities are:
+- `pyanchor doctor --json` for monitoring integrations
+- `pyanchor logs` for sidecar-side audit visibility
+- `pyanchor agent test` for adapter health checks
+
 ### Added
+- **`pyanchor doctor --json`** (round 18 #B) — same checks, JSON
+  output. Top-level shape `{ ts, summary: {passed, failed, warned,
+  total, exitCode}, groups: [{title, checks: [{name, status,
+  detail?, fix?}]}] }`. Stable @ 1.0. Token still masked. 9 e2e
+  tests lock the shape.
+- **`pyanchor logs`** (round 18 #C) — read-only audit.jsonl tail
+  with filters: `-n/--tail N` (default 20), `-f/--follow` (poll +
+  watchFile), `--since/--until <ISO>`, `--outcome <success|failed
+  |canceled>`, `--actor <substr>`, `--mode <apply|pr|dryrun>`,
+  `--json` (raw JSONL passthrough), `--file <path>` (override
+  PYANCHOR_AUDIT_LOG_FILE). Malformed JSON lines silently skipped
+  so the rare half-written line at end-of-file doesn't crash a
+  monitor. 11 e2e tests cover all filter paths.
+- **`pyanchor agent test [agent] [prompt]`** (round 18 #F) —
+  one-shot adapter ping. Spawns the configured (or named) agent
+  with a chat-mode prompt ("Reply with: pyanchor-agent-test-ok"
+  default), prints every event the adapter yields, exits 0 on a
+  result event or 1 on timeout/failure. `--prompt`, `--mode`,
+  `--timeout`, `--workspace` flags. Doesn't run automatically —
+  costs API credits, so you invoke it deliberately during ops
+  triage. 6 e2e tests cover the dispatcher + arg parsing (the
+  actual agent invocation path is exercised by adapter unit tests).
+- **`scripts/audit-stats.sh`** (round 18 #K) — bash + jq script
+  that reads `audit.jsonl` and prints adoption-window metrics:
+  outcome split, p50/p90/p99 duration, mode × output_mode
+  breakdown, top 10 actors, top 5 error reasons. `--since/--until`
+  for windowing, `--help` for usage. Used to populate the 1.0
+  launch narrative ("X edits / Y days / Z% success rate").
+- **`examples/sveltekit-minimal/`** (round 18 #A) — proves the
+  `PYANCHOR_INSTALL_COMMAND` + `PYANCHOR_BUILD_COMMAND` override
+  pattern works for a third non-built-in framework (SvelteKit
+  joins Astro). Vite proxy under the hood, so /_pyanchor/* dev
+  routing is the same. 9 files. Brings examples to 9 total.
 - **`.github/dependabot.yml` + `.github/workflows/dependabot-auto-merge.yml`**
-  — explicit Dependabot config (was previously running on GitHub's
-  default) plus auto-merge for patch/minor bumps (after CI passes).
-  Major bumps stay as standalone PRs requiring human review (the
-  workflow comments on them so the rationale is visible). Catches
-  the round 18 "1.0 readiness" bucket of "operational hygiene" —
-  weekly weekly batches reduce PR noise without delaying security
-  advisories. Pre-this-ship, every Dependabot PR (like the v0.29.2-
-  era happy-dom security update) needed a manual click.
+  — explicit Dependabot config plus auto-merge for patch/minor
+  bumps (after CI passes). Major bumps stay as standalone PRs
+  requiring human review; the workflow comments on them so the
+  rationale is visible. Pre-this-ship every Dependabot PR (like
+  the v0.29.2-era happy-dom security update) needed a manual click.
+
+### Changed
+- Main `--help` lists all four subcommands (init / doctor / logs /
+  agent test).
+- `docs/API-STABILITY.md` "10. CLI surface" section: new rows for
+  `--json`, `logs`, `agent test`. Future subcommands additive note
+  no longer mentions doctor/agent-test as future (they shipped).
+- `README.md` Status section: operator CLI suite bullet replaces
+  the standalone doctor bullet. Examples table includes
+  sveltekit-minimal.
+- `examples/README.md` updated for the 9th example (SvelteKit).
+- Bundle ceiling for `dist/cli.cjs`: 64KB → 256KB. The `agent test`
+  command pulls in the agents module + every adapter (esbuild
+  inlines dynamic imports under format:cjs); current size 114KB,
+  ~2.2x headroom. Server.cjs (1.2MB) is still spawned as a child,
+  not inlined.
+
+### Tests
+- 809 → 836 (+27: 9 doctor-json e2e + 11 logs e2e + 6 agent-test
+  dispatcher + 1 bundle-size ceiling adjustment).
+
+### Deferred
+- Mode-aware readiness (round 18 #2 / #E) remains post-1.0. The
+  `/readyz` Stable @ 1.0 promise can't change shape without a
+  major bump; mode-aware refinement waits for a v1.x window.
 
 ## [0.29.2] - 2026-04-20
 

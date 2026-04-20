@@ -171,13 +171,15 @@ sidecar exactly as pre-v0.28 (where the bin pointed straight at
 | `pyanchor init --force` | **Stable @ 1.0** | Overwrite existing files (default is skip-if-present). |
 | `pyanchor init --cwd <path>` | **Stable @ 1.0** | Init a project at a path other than the current dir. |
 | `pyanchor doctor` | **Stable @ 1.0** | v0.29.0+. Run all config checks; print pass/fail per check + suggested fix. Exit 0 = sidecar safe to start; exit 1 = at least one ✗. Output format ("Required environment variables", "Filesystem", "Agent", "Output mode: <mode>", "Optional knobs" sections + summary line) is Stable @ 1.0; the exact wording of fix suggestions is Pre-1.0. |
+| `pyanchor doctor --json` | **Stable @ 1.0** | v0.30.0+. Same checks, JSON output. Top-level shape `{ ts, summary: {passed,failed,warned,total,exitCode}, groups: [{title, checks: [{name,status,detail?,fix?}]}] }`. Token value still masked. Adding new keys is non-breaking; removing/renaming is a major bump. |
+| `pyanchor logs` | **Stable @ 1.0** | v0.30.0+. Tail `audit.jsonl` (default last 20 events). Options `-n/--tail N`, `-f/--follow`, `--since/--until <ISO>`, `--outcome <success\|failed\|canceled>`, `--actor <substr>`, `--mode <apply\|pr\|dryrun>`, `--json` (raw JSONL passthrough), `--file <path>`. Read-only. Safe to run while sidecar is appending. |
+| `pyanchor agent test [agent] [prompt]` | **Stable @ 1.0** | v0.30.0+. Fire one-shot prompt at the configured agent (or named override) and print every event. Default mode `chat` (no edit). `--prompt`, `--mode`, `--timeout`, `--workspace` flags. Exit 0 if agent emitted a `result` event, 1 otherwise. |
 | Files written by `init` | **Stable @ 1.0** | Locations: `.env.local` (Next.js) or `.env` (others); `scripts/pyanchor-restart.sh` (chmod +x). Renaming or moving these is a major bump. For Next.js, `.env.local` also contains `NEXT_PUBLIC_PYANCHOR_TOKEN` set to the same value as `PYANCHOR_TOKEN` (v0.29.0+). |
 | Auto-detected frameworks | Pre-1.0 | nextjs / vite / astro / remix / sveltekit / nuxt. Adding new ones is non-breaking; the detection heuristic itself may evolve. |
 | Bootstrap snippet output (the JSX/HTML printed for the user to copy) | Pre-1.0 | The exact text may evolve as we add framework profiles. The substance (script tag pointing at `/_pyanchor/bootstrap.js` with token data attr) is stable. |
 | `dist/server.cjs` direct invocation (`node dist/server.cjs`) | **Stable @ 1.0** | Legacy entry — still works, used by the systemd template. |
 
-Future subcommands (e.g. `pyanchor doctor`, `pyanchor agent test`)
-will be additive; never break existing invocations.
+Future subcommands will be additive; never break existing invocations.
 
 ## Pre-1.0 surfaces (will iterate)
 
