@@ -59,7 +59,11 @@ export PYANCHOR_WORKSPACE_DIR=/tmp/pyanchor-astro-workspace
 
 # These two are the key bits — Astro doesn't have a built-in profile
 export PYANCHOR_INSTALL_COMMAND="pnpm install --frozen-lockfile"
-export PYANCHOR_BUILD_COMMAND="astro check && astro build"
+export PYANCHOR_BUILD_COMMAND="astro build"
+# If you've added @astrojs/check + typescript to devDependencies,
+# you can promote this to "astro check && astro build" for a
+# type-check-on-edit gate. The minimal example skips it to keep
+# the dependency surface small.
 
 # Optional: silence the framework warning by setting the var (the
 # value is ignored once install/build are pinned, but at least the

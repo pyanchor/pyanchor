@@ -351,7 +351,7 @@ tenant tokens, etc.) is on the roadmap as v0.22+. See
 | [`examples/`](./examples/) | Index of all 8 runnable examples (start here) |
 | [`examples/nextjs-minimal/`](./examples/nextjs-minimal) | 5-file Next.js app wired to pyanchor (env-flag gate) |
 | [`examples/vite-react-minimal/`](./examples/vite-react-minimal) | 6-file Vite + React equivalent (`PYANCHOR_FRAMEWORK=vite`) |
-| [`examples/astro-minimal/`](./examples/astro-minimal) | Non-built-in framework via `PYANCHOR_INSTALL/BUILD_COMMAND` overrides |
+| [`examples/astro-minimal/`](./examples/astro-minimal) | Non-built-in framework via `PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND` overrides |
 | [`examples/nextjs-portfolio-gate/`](./examples/nextjs-portfolio-gate) | Production gate cookie pattern for live-editing deployed sites |
 | [`examples/vite-react-portfolio-gate/`](./examples/vite-react-portfolio-gate) | Vite + standalone Node gate server (5174 → 5173) |
 | [`examples/nextjs-nextauth-gate/`](./examples/nextjs-nextauth-gate) | Recipe C — NextAuth + email allowlist as the gate |

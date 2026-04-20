@@ -27,13 +27,17 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
-    // Only let allowlisted users sign in at all.
+    // Only let allowlisted users sign in at all. fail-closed: if
+    // PYANCHOR_DEV_EMAILS is unset or empty, NObody is allowed
+    // (the previous fail-open behavior would have admitted every
+    // GitHub user, defeating layer 1 of the 5-layer defense).
     async signIn({ user }) {
       const allowlist = (process.env.PYANCHOR_DEV_EMAILS ?? "")
         .split(",")
         .map((e) => e.trim())
         .filter(Boolean);
-      return allowlist.length === 0 || (user.email !== null && allowlist.includes(user.email!));
+      if (allowlist.length === 0) return false;
+      return user.email !== null && allowlist.includes(user.email!);
     }
   }
 };

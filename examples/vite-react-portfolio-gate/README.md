@@ -58,7 +58,13 @@ export PYANCHOR_GATE_SECRET=$(openssl rand -hex 24)
 pnpm dev
 
 # In another terminal: pyanchor sidecar (port 3010)
-export PYANCHOR_TOKEN=$(openssl rand -hex 32)   # match index.html
+export PYANCHOR_TOKEN=$(openssl rand -hex 32)
+echo "$PYANCHOR_TOKEN"
+# ⚠️  Copy that value into index.html — replace
+# data-pyanchor-token="REPLACE_ME_WITH_PYANCHOR_TOKEN_VALUE"
+# with the exact $PYANCHOR_TOKEN string. They MUST match or every
+# overlay request 401s. (For production, use vite's `define` plugin
+# to inject from a build-time env var instead of committing the value.)
 export PYANCHOR_APP_DIR=$(pwd)
 export PYANCHOR_WORKSPACE_DIR=/tmp/pyanchor-vite-workspace
 export PYANCHOR_RESTART_SCRIPT=$(pwd)/scripts/restart.sh

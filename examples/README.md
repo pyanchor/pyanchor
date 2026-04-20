@@ -26,17 +26,17 @@ starting point for your integration.
 | Edits as reviewable GitHub PRs (no live apply) | [`nextjs-pr-mode/`](./nextjs-pr-mode/)                                   |
 | Framework with no built-in profile             | [`astro-minimal/`](./astro-minimal/)                                     |
 
-## All 7 examples at a glance
+## All 8 examples at a glance
 
 | Example                       | Files | Headline                                                    |
 | ----------------------------- | ----- | ----------------------------------------------------------- |
-| `nextjs-minimal`              | 5     | The 5-file "hello pyanchor" — start here                    |
-| `nextjs-portfolio-gate`       | 6     | Recipe B (gate cookie) for sites without auth               |
+| `nextjs-minimal`              | 7     | The "hello pyanchor" starter — start here                   |
+| `nextjs-portfolio-gate`       | 7     | Recipe B (gate cookie) for sites without auth               |
 | `nextjs-nextauth-gate`        | 9     | Recipe C (existing auth) — NextAuth + email allowlist       |
-| `vite-react-minimal`          | 5     | The Vite equivalent of `nextjs-minimal`                     |
+| `vite-react-minimal`          | 8     | The Vite equivalent of `nextjs-minimal`                     |
 | `vite-react-portfolio-gate`   | 9     | Vite + standalone Node gate server (5174 → 5173)            |
 | `nextjs-multi-agent`          | 6     | Same host, 5 interchangeable agents (openclaw/claude/codex/aider/gemini) |
-| `astro-minimal`               | 7     | Non-built-in framework via `PYANCHOR_INSTALL/BUILD_COMMAND` overrides |
+| `astro-minimal`               | 7     | Non-built-in framework via `PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND` overrides |
 | `nextjs-pr-mode`              | 6     | `PYANCHOR_OUTPUT_MODE=pr` — edits land as GitHub PRs        |
 
 ## Mix and match

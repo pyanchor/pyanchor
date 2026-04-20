@@ -15,10 +15,23 @@ import { authOptions, isPyanchorAllowed } from "../../../lib/auth";
 const COOKIE_NAME = "pyanchor_dev";
 const COOKIE_MAX_AGE_S = 60 * 60 * 24 * 30; // 30 days
 
+/**
+ * Clamp the `from` query param to a same-origin relative path so an
+ * attacker can't turn this endpoint into an open redirect. Anything
+ * that doesn't start with a single `/` (e.g. `https://attacker.example`,
+ * `//attacker.example`, protocol-relative URLs) collapses to `/`.
+ */
+const safeRedirectPath = (value: string | null): string => {
+  if (!value) return "/";
+  if (!value.startsWith("/")) return "/";
+  if (value.startsWith("//")) return "/";
+  return value;
+};
+
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   const url = new URL(request.url);
-  const redirectTo = url.searchParams.get("from") ?? "/";
+  const redirectTo = safeRedirectPath(url.searchParams.get("from"));
 
   if (!session?.user?.email || !isPyanchorAllowed(session.user.email)) {
     // Not signed in OR not allowlisted — silently redirect (don't

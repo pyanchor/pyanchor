@@ -11,15 +11,19 @@
       so even if you forget to conditionally render this script tag
       OR the gate server is bypassed, anonymous traffic sees nothing.
 
-      The token MUST match PYANCHOR_TOKEN on the sidecar. For real
-      deployments, inject via build-time env (vite's `define` plugin
-      with `import.meta.env.VITE_PYANCHOR_TOKEN`) so the value isn't
-      committed.
+      ⚠️  Replace the placeholder token below with the SAME value
+      you set as PYANCHOR_TOKEN on the sidecar. They must match
+      exactly or every overlay request will 401. The README's
+      "Run it" section walks through generating the token.
+
+      For real deployments, inject via build-time env (vite's
+      `define` plugin with `import.meta.env.VITE_PYANCHOR_TOKEN`)
+      so the value isn't committed.
     -->
     <script
       src="/_pyanchor/bootstrap.js"
       defer
-      data-pyanchor-token="replace-with-32-byte-random"
+      data-pyanchor-token="REPLACE_ME_WITH_PYANCHOR_TOKEN_VALUE"
       data-pyanchor-trusted-hosts="localhost,127.0.0.1,your-portfolio.com"
       data-pyanchor-require-gate-cookie="pyanchor_dev"
     ></script>

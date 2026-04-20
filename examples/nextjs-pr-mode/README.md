@@ -129,7 +129,7 @@ pyanchor
    - `preparing workspace` (fetch + checkout main + reset --hard)
    - `running agent` (your PYANCHOR_AGENT)
    - `committing changes` (git add + commit)
-   - `pushing branch` (git push -u origin pyanchor/<run_id>)
+   - `pushing branch` (git push origin pyanchor/<run_id>)
    - `opening PR` (gh pr create)
 5. The status panel surfaces the PR URL — click it
 6. Review the PR on GitHub, merge or close

@@ -126,7 +126,7 @@ export OPENAI_API_KEY=sk-...
 # Sidecar
 export NEXT_PUBLIC_PYANCHOR_AGENT_LABEL=aider
 export PYANCHOR_AGENT=aider
-export PYANCHOR_AGENT_MODEL=gpt-4o   # required for aider
+export PYANCHOR_AGENT_MODEL=gpt-4o   # usually set — aider needs a provider/model pick
 # ...rest identical
 pyanchor
 ```

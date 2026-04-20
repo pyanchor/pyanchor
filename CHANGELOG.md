@@ -7,18 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-04-20
+
+Round-17 Codex patches. Two P1 (changelog narrative + Vite example
+token mismatch) + three P2 (NextAuth fail-open / open redirect /
+Astro build deps) + three P3 (index typos / push command / aider
+note). No source/runtime changes — examples-only ship like 0.26.0.
+
+If you cloned the v0.26.0 examples already, the security fixes
+(NextAuth fail-closed + open redirect clamp) are worth pulling
+manually — the rest is documentation polish.
+
+### Fixed
+- **CHANGELOG narrative was self-contradictory (round-17 P1)** —
+  v0.26.0 claimed "byte-identical npm package" AND "published
+  examples/ tree grows", but `package.json` `files` whitelist
+  intentionally excludes `examples/`, so neither was true. The
+  v0.26.0 entry is now rewritten to clarify: runtime artifacts on
+  npm are unchanged from 0.25.1, examples live in the **git tag**
+  (not the npm tarball), and external links resolve via
+  `github.com/.../tree/v0.26.0/examples/...`.
+- **`vite-react-portfolio-gate` happy path was broken (round-17
+  P1)** — `index.html` shipped with `data-pyanchor-token=
+  "replace-with-32-byte-random"` but the README said only "match
+  index.html" without telling you to actually paste the value in.
+  Following the README verbatim → bootstrap sends the placeholder,
+  sidecar expects the rand-hex token, every overlay request 401s.
+  Fix: placeholder renamed to `REPLACE_ME_WITH_PYANCHOR_TOKEN_VALUE`,
+  README adds an explicit copy-into-`index.html` step with `echo
+  "$PYANCHOR_TOKEN"` for visibility.
+- **`nextjs-nextauth-gate` signIn callback was fail-open
+  (round-17 P2)** — `lib/auth.ts` returned `allowlist.length === 0
+  || ...`, meaning if `PYANCHOR_DEV_EMAILS` was unset every GitHub
+  user could sign in, defeating layer 1 of the README's 5-layer
+  defense. Now fail-closed: empty allowlist → no sign-ins.
+- **`/api/pyanchor-gate` open redirect (round-17 P2)** — the `from`
+  query param flowed straight into `new URL(redirectTo, url)`, so
+  `?from=https://attacker.example/` would redirect off-site after
+  the auth check. Added `safeRedirectPath()` helper that clamps to
+  same-origin paths starting with a single `/`.
+- **`astro-minimal` build command required tooling not in deps
+  (round-17 P2)** — README recommended
+  `PYANCHOR_BUILD_COMMAND="astro check && astro build"` but the
+  example only depends on `astro` (no `@astrojs/check` /
+  `typescript`). Lowered the recommendation to `astro build` with
+  a comment about promoting it once you've added the check tools.
+- **`examples/README.md` index drift (round-17 P3)** — header said
+  "All 7 examples" (table has 8); existing rows had stale Files
+  counts (5/6/5 → corrected to 7/7/8 per `find`); `astro-minimal`
+  row used the abbreviation `PYANCHOR_INSTALL/BUILD_COMMAND` which
+  doesn't match either real env var name.
+- **`nextjs-pr-mode` README `git push -u` mismatch (round-17 P3)**
+  — walkthrough described `git push -u origin <branch>` but
+  `runPr()` in `src/worker/output.ts` doesn't pass `-u`. Removed
+  the flag from the description.
+- **`nextjs-multi-agent` README aider phrasing (round-17 P3)** —
+  "required for aider" implied pyanchor enforces it; aider's CLI
+  is what wants a provider/model. Softened to "usually set".
+
+### Changed
+- Same `README.md` astro env-name abbreviation also fixed in the
+  main project README's 9-row examples table.
+
 ## [0.26.0] - 2026-04-20
 
 Examples expansion. Five new runnable examples + an index — covers the
 gaps that previous releases papered over with docs-only references:
 Vite gating, existing-auth gating, multi-agent swap, non-built-in
-frameworks, and PR mode walkthroughs. No source changes; the package
-on npm is byte-identical to 0.25.1, only the published `examples/`
-tree grows.
+frameworks, and PR mode walkthroughs. No source changes; the runtime
+artifacts on npm are unchanged from 0.25.1. The examples live in the
+git tag (not the npm tarball — `package.json` `files` whitelist
+intentionally excludes `examples/` so `npm install pyanchor` doesn't
+pull boilerplate into your `node_modules`), so external links into
+`examples/<name>/` resolve at a stable revision via
+`https://github.com/pyanchor/pyanchor/tree/v0.26.0/examples/...`.
 
 If you're already shipping with pyanchor, this release is **safe to
-skip**. The version bump exists so external links into
-`examples/<name>/` resolve at a stable tag.
+skip**. The version bump exists so the example tree has a stable git
+anchor.
 
 ### Added
 - **`examples/vite-react-portfolio-gate/`** (9 files) — Vite + React
