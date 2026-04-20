@@ -8,6 +8,25 @@
 
 import type { AgentBin, Framework, RouterKind } from "./detect";
 
+/**
+ * v0.28.1 — round 18 P2 fix. Quote a value for shell consumption
+ * (POSIX `sh` / `bash` / `zsh`). Plain ASCII identifiers, paths
+ * without special chars, version strings etc. round-trip unchanged
+ * so the common case stays readable. Anything else gets single-quoted
+ * with embedded single quotes escaped via `'\''`.
+ *
+ * The `.env.local` we write is consumed by both the sidecar process
+ * (`process.env`-style readers don't care about quoting) AND by users
+ * who `source .env.local` from a shell, where quoting matters. Pre-
+ * v0.28.1 paths containing spaces (common on macOS) broke the latter
+ * with "Too many arguments". Path values are always quoted now.
+ */
+export function shellQuote(value: string): string {
+  if (value === "") return "''";
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) return value;
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export interface EnvTemplateInput {
   token: string;
   agent: AgentBin;
@@ -31,13 +50,13 @@ export function renderEnv(input: EnvTemplateInput): string {
     `PYANCHOR_TOKEN=${input.token}`,
     `PYANCHOR_AGENT=${input.agent}`,
     `PYANCHOR_FRAMEWORK=${input.framework === "unknown" ? "nextjs" : input.framework}`,
-    `PYANCHOR_APP_DIR=${input.appDir}`,
-    `PYANCHOR_WORKSPACE_DIR=${input.workspaceDir}`,
-    `PYANCHOR_RESTART_SCRIPT=${input.restartScript}`,
-    `PYANCHOR_HEALTHCHECK_URL=${input.healthcheckUrl}`,
+    `PYANCHOR_APP_DIR=${shellQuote(input.appDir)}`,
+    `PYANCHOR_WORKSPACE_DIR=${shellQuote(input.workspaceDir)}`,
+    `PYANCHOR_RESTART_SCRIPT=${shellQuote(input.restartScript)}`,
+    `PYANCHOR_HEALTHCHECK_URL=${shellQuote(input.healthcheckUrl)}`,
     `PYANCHOR_PORT=${input.port}`,
     input.allowedOrigins.length > 0
-      ? `PYANCHOR_ALLOWED_ORIGINS=${input.allowedOrigins.join(",")}`
+      ? `PYANCHOR_ALLOWED_ORIGINS=${shellQuote(input.allowedOrigins.join(","))}`
       : `# PYANCHOR_ALLOWED_ORIGINS=https://app.example.com  # set in production`,
     input.outputMode !== "apply" ? `PYANCHOR_OUTPUT_MODE=${input.outputMode}` : `# PYANCHOR_OUTPUT_MODE=apply  # apply | pr | dryrun`,
     input.requireGate ? `PYANCHOR_REQUIRE_GATE_COOKIE=true` : `# PYANCHOR_REQUIRE_GATE_COOKIE=true  # production gate`,

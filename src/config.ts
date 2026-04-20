@@ -292,6 +292,46 @@ export function pathExists(targetPath: string) {
 }
 
 /**
+ * v0.28.1 — resolve an executable name to a real binary on PATH (or
+ * verify a path-shaped value points at an actually-executable file).
+ *
+ * Round 18 P1 fix: pre-v0.28.1 `isPyanchorConfigured()` checked
+ * `pathExists(agentBin)` against bare names like `codex` / `gemini`
+ * which only succeeds if the cwd happens to contain that file. Bare
+ * binary names need a PATH lookup; absolute paths still go through
+ * pathExists. Returns true if the binary is callable.
+ */
+export function commandExists(command: string) {
+  if (!command) return false;
+  if (command.includes("/") || command.includes("\\")) {
+    // Path-shaped — must both exist AND be executable.
+    return executablePathExists(command);
+  }
+  if (process.platform === "win32") {
+    return spawnSync("where", [command], { stdio: "ignore" }).status === 0;
+  }
+  return spawnSync("command", ["-v", command], { stdio: "ignore", shell: true }).status === 0;
+}
+
+/**
+ * v0.28.1 — verify a path exists AND has the executable bit set.
+ * Used by isPyanchorConfigured() for the restart script and for the
+ * absolute-path branch of commandExists().
+ *
+ * Round 18 P1 fix: pre-v0.28.1 the restart script was checked with
+ * `pathExists()` only, so a `chmod 0644` script silently passed
+ * /readyz but failed at job execution time.
+ */
+export function executablePathExists(targetPath: string) {
+  if (!pathExists(targetPath)) return false;
+  if (process.platform === "win32") return true; // Windows: presence implies callable
+  if (spawnSync("test", ["-x", targetPath], { stdio: "ignore" }).status === 0) return true;
+  // Linux: fall back to a sudo probe in case the file is owned by the
+  // agent user but readable from elsewhere (matches pathExists pattern).
+  return isLinux && spawnSync("sudo", ["test", "-x", targetPath], { stdio: "ignore" }).status === 0;
+}
+
+/**
  * Returns the binary that the configured agent shells out to, or `null`
  * for agents that don't need one on PATH (e.g. claude-code uses an
  * npm package). Used by isPyanchorConfigured to skip the binary
@@ -324,15 +364,26 @@ export function isPyanchorConfigured() {
     return false;
   }
 
-  if (!pathExists(pyanchorConfig.appDir) || !pathExists(pyanchorConfig.restartFrontendScript)) {
+  // v0.28.1 — round 18 P1 fix: contract docs ("workspace + app dir
+  // + restart script + agent CLI all resolvable") now actually checks
+  // all four. Pre-v0.28.1 silently skipped workspace and accepted a
+  // non-executable restart script.
+  if (
+    !pathExists(pyanchorConfig.workspaceDir) ||
+    !pathExists(pyanchorConfig.appDir) ||
+    !executablePathExists(pyanchorConfig.restartFrontendScript)
+  ) {
     return false;
   }
 
   // Agent-specific binary check. claude-code uses an npm package and
   // has no binary to verify; we trust the dynamic import to surface
-  // missing-dep errors at run time.
+  // missing-dep errors at run time. For the shell-out adapters
+  // (openclaw / codex / aider / gemini), use commandExists so that a
+  // bare binary name like "codex" is resolved via PATH (the
+  // historical pathExists check only worked for absolute paths).
   const agentBin = getAgentBin();
-  if (agentBin && !pathExists(agentBin)) {
+  if (agentBin && !commandExists(agentBin)) {
     return false;
   }
 

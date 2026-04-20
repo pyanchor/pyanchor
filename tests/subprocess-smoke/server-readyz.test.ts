@@ -142,3 +142,41 @@ describe("/readyz returns 503 when misconfigured", () => {
     expect(r.status).toBe(200);
   });
 });
+
+// v0.28.1 — round 18 P1 regression coverage. The pre-v0.28.1
+// /readyz silently ignored workspace presence and accepted a non-
+// executable restart script. These tests lock the corrected
+// contract so future refactors of isPyanchorConfigured() don't
+// re-introduce the false-positive cases.
+describe("/readyz contract (v0.28.1+)", () => {
+  it("503 when PYANCHOR_WORKSPACE_DIR doesn't exist", async () => {
+    await startServer({
+      PYANCHOR_WORKSPACE_DIR: "/tmp/pyanchor-readyz-no-such-workspace-xyz"
+    });
+    const r = await fetch(`${BASE}/readyz`);
+    expect(r.status).toBe(503);
+  });
+
+  it("503 when restart script exists but is not executable", async () => {
+    const NON_EXEC = "/tmp/pyanchor-readyz-non-exec-restart.sh";
+    writeFileSync(NON_EXEC, "#!/usr/bin/env bash\nexit 0\n", "utf8");
+    chmodSync(NON_EXEC, 0o644);
+    await startServer({ PYANCHOR_RESTART_SCRIPT: NON_EXEC });
+    const r = await fetch(`${BASE}/readyz`);
+    expect(r.status).toBe(503);
+  });
+
+  it("200 when bare agent binary name resolves via PATH (codex case)", async () => {
+    // Use `sh` as a stand-in for an agent binary — guaranteed to
+    // exist on PATH in any Unix-like CI runner. The pre-v0.28.1
+    // bug was that pathExists("sh") returned false because there's
+    // no file literally named "sh" in the cwd; commandExists("sh")
+    // returns true via `command -v sh`.
+    await startServer({
+      PYANCHOR_AGENT: "codex",
+      PYANCHOR_CODEX_BIN: "sh"
+    });
+    const r = await fetch(`${BASE}/readyz`);
+    expect(r.status).toBe(200);
+  });
+});

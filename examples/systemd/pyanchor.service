@@ -58,21 +58,35 @@ RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 
-# Allow writes ONLY to the workspace + state dirs the worker needs.
-# If your workspace lives elsewhere (e.g. /srv/myapp/workspace), edit
-# this line — pyanchor will get EROFS on any other path.
-ReadWritePaths=/var/lib/pyanchor/workspace /var/lib/pyanchor/state
+# Optional further hardening — DISABLED BY DEFAULT because it breaks
+# Node/V8's JIT on some builds and may break agent CLIs that use
+# native JIT runtimes. Enable only after verifying pyanchor + your
+# selected agent + your output mode all work under systemd:
+#   MemoryDenyWriteExecute=true
+# See systemd.exec(5) and https://github.com/nodejs/node/issues for
+# current V8 W^X status on your Node version.
 
-# Network: bind only loopback by default. The reverse proxy (nginx /
-# caddy) handles the public face. If you bind 0.0.0.0 directly,
-# pyanchor refuses to start unless PYANCHOR_ALLOWED_ORIGINS is set.
-IPAddressDeny=any
-IPAddressAllow=127.0.0.0/8 ::1/128
+# Allow writes ONLY to the dirs the worker needs.
+#   /var/lib/pyanchor/workspace — scratch space the agent mutates
+#   /var/lib/pyanchor/state     — state.json + audit.jsonl
+#   /srv/myapp                  — PYANCHOR_APP_DIR (apply mode only;
+#                                 remove this line for pr mode, which
+#                                 writes via git push instead of rsync)
+# If PYANCHOR_APP_DIR differs from /srv/myapp, update the third path
+# or the sidecar will get EROFS during rsync.
+ReadWritePaths=/var/lib/pyanchor/workspace /var/lib/pyanchor/state /srv/myapp
+
+# Network: pyanchor binds 127.0.0.1 by default (controlled by
+# PYANCHOR_HOST) and your reverse proxy handles the public face.
+# Do NOT block outbound traffic here — agent CLIs call LLM providers,
+# PR mode calls the GitHub API, webhooks call Slack/Discord. If you
+# need site-specific egress restrictions, add an IPAddressDeny /
+# IPAddressAllow policy tailored to your provider's egress ranges
+# rather than a blanket loopback-only deny.
 
 # Resource limits. The worker can spawn agents that allocate large
 # context windows; bump MemoryMax if you see OOM kills under load.

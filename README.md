@@ -489,7 +489,7 @@ isolation kicks in when you have multiple apps.
 `Stable @ 1.0` will become the contract at the 1.0 cut. Items
 marked `Pre-1.0` are still under iteration.
 
-**Shipped highlights** (cumulative through v0.27.0):
+**Shipped highlights** (cumulative through v0.28.0):
 
 - **Adapters**: `openclaw` (default), `claude-code`, `codex`, `aider`,
   `gemini`, pluggable third-party via the `AgentRunner` interface

@@ -88,16 +88,21 @@ a sidecar container next to your app pod.
 
 ## Debugging readyz failures
 
-`/readyz` returns 503 when `isPyanchorConfigured()` fails. The most
-common causes:
+`/readyz` returns 503 when `isPyanchorConfigured()` fails. As of
+v0.28.1 the check actually verifies all four prerequisites
+(workspace + app dir + executable restart script + agent CLI on
+PATH). Common causes:
 
 | Symptom                                      | Fix                                                   |
 | -------------------------------------------- | ----------------------------------------------------- |
-| `PYANCHOR_APP_DIR` doesn't exist             | Create it or point at the actual deployed app path    |
 | `PYANCHOR_WORKSPACE_DIR` doesn't exist       | `mkdir -p` it as the pyanchor user                    |
-| Restart script missing or not executable     | `chmod +x /opt/pyanchor/restart.sh`                   |
-| Agent CLI not on PATH                        | `which openclaw` / `which gemini` etc as pyanchor user |
+| `PYANCHOR_APP_DIR` doesn't exist             | Create it or point at the actual deployed app path    |
+| Restart script missing                       | `cp restart.sh /opt/pyanchor/`                        |
+| Restart script not executable                | `chmod +x /opt/pyanchor/restart.sh`                   |
+| Agent CLI not on PATH for the pyanchor user  | `sudo -u pyanchor command -v <agent>` returns nothing — install or set `PYANCHOR_<AGENT>_BIN=/abs/path/to/agent` |
 | `claude-code` agent always passes (npm pkg)  | Expected — claude-code uses a node module, no binary  |
+| Apply mode rsync fails with EROFS            | `PYANCHOR_APP_DIR` not in `ReadWritePaths=` of the unit; edit and `systemctl daemon-reload` |
+| Outbound LLM / GitHub / webhook calls fail   | `IPAddressDeny=any` block in the unit (we removed it from the default template; re-add as a site-specific egress allowlist if needed) |
 
 `/healthz` will keep returning 200 even when `/readyz` is 503 — the
 process is alive, it just can't run an edit yet. K8s will stop

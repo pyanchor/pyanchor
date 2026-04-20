@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-04-20
+
+Round-18 Codex patches. Two P1 (operator contract correctness) +
+two P2 (systemd hardening + init shell safety) + two P3 (CI drift
++ README header). The runtime tests, HMAC actor signing, CLI
+dispatcher, and packaging were all confirmed OK in round 18 — this
+release closes the contract-correctness gaps that round 18 surfaced.
+
+If you're already shipping with pyanchor, the **`/readyz` fix is
+worth pulling** if you use the endpoint as a k8s probe — pre-v0.28.1
+it returned false positives (200 when workspace missing or restart
+script not executable) and false negatives (503 when an agent CLI
+was on PATH but you set `PYANCHOR_<AGENT>_BIN=<bare-name>` instead
+of an absolute path). Other fixes are documentation / template
+hygiene.
+
+### Fixed
+- **`/readyz` contract was lying (round-18 P1)** — docs claimed it
+  checked "workspace + app dir + restart script + agent CLI all
+  resolvable", but the implementation skipped workspace presence,
+  accepted `chmod 0644` restart scripts, and checked agent
+  binaries via `existsSync(bareName)` (only matches files in the
+  cwd — useless for PATH-resolved CLIs). Now checks all four
+  correctly via two new helpers: `commandExists()` (PATH lookup
+  via `command -v` / `where`) and `executablePathExists()` (`-x`
+  bit verification with sudo fallback). Three regression tests
+  added to `server-readyz.test.ts`.
+- **`examples/systemd/` template wasn't runnable as written
+  (round-18 P1)** — `ProtectSystem=strict` + `ReadWritePaths`
+  excluded `PYANCHOR_APP_DIR` so apply-mode rsync got EROFS.
+  `IPAddressDeny=any` + loopback-only blocked outbound LLM
+  provider calls, GitHub API calls, and webhooks. `PYANCHOR_STATE_DIR`
+  was unset so state writes targeted `~/.pyanchor` which is
+  unreachable under `ProtectHome=true` + `--no-create-home`. Fixed:
+  `ReadWritePaths` now includes `/srv/myapp`, `IPAddressDeny`
+  block removed (with note about adding site-specific egress
+  policies if needed), `PYANCHOR_STATE_DIR=/var/lib/pyanchor/state`
+  added to env example with explicit comment.
+- **`MemoryDenyWriteExecute=true` demoted to commented option
+  (round-18 P2)** — systemd docs warn against this for JIT
+  runtimes, and Node V8 W^X compatibility varies by build.
+  Default template now ships it commented out with a note about
+  testing before enabling.
+- **`pyanchor init` couldn't handle paths containing spaces
+  (round-18 P2)** — `renderEnv()` wrote raw unquoted env values,
+  so `bash -lc 'source .env.local'` failed with "Too many
+  arguments" on macOS-style paths like `/Users/me/My Project`.
+  New `shellQuote()` helper wraps path values in POSIX-safe
+  single quotes (with `'\''` escape for embedded quotes); plain
+  ASCII identifiers stay unquoted for readability. The `cd`
+  command in the printed "next steps" output is also quoted now.
+  Locked by 6 unit tests + 1 e2e that boots a project at
+  `/tmp/pyanchor-init-spaces-XXXX/App With Space/` and round-trips
+  the env via `bash -c 'source ...'`.
+- **`examples-smoke` workflow had a hardcoded matrix (round-18
+  P3)** — adding a future example with a `package.json` would have
+  silently dropped out of dependency dry-run coverage. Replaced
+  with a `for pkg in examples/*/package.json` loop that picks
+  up new examples automatically.
+- **README "Shipped highlights" header was stale (round-18 P3)** —
+  said "cumulative through v0.27.0" but the body listed v0.28.0
+  items (786 tests, `npx pyanchor init`, etc). Now reads
+  "cumulative through v0.28.0".
+
+### Tests
+- 786 → 796 (+10: 3 `/readyz` regression + 6 `shellQuote` unit +
+  1 `init` e2e shell-safe round-trip).
+
+### Why this matters for 1.0
+- `/readyz` is marked `Stable @ 1.0` — the contract has to be
+  honest before the cut. Now it is.
+- `examples/systemd/` is the recommended production install path
+  — it has to actually run before we can call it "production-
+  hardened" in launch copy. Now it does.
+- `pyanchor init --cwd <path>` is `Stable @ 1.0` — supporting
+  paths with spaces is part of that promise. Now it works.
+
 ## [0.28.0] - 2026-04-20
 
 `npx pyanchor init` ship. Replaces the README's 5-step manual

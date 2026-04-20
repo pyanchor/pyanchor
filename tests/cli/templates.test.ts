@@ -12,7 +12,8 @@ import {
   renderBootstrapSnippet,
   renderEnv,
   renderNextConfigSnippet,
-  renderRestartScript
+  renderRestartScript,
+  shellQuote
 } from "../../src/cli/templates";
 
 describe("renderEnv", () => {
@@ -141,6 +142,59 @@ describe("renderBootstrapSnippet", () => {
     const s = renderBootstrapSnippet("unknown", "n/a");
     expect(s).toContain("global HTML template");
     expect(s).toContain("/_pyanchor/bootstrap.js");
+  });
+});
+
+describe("shellQuote (v0.28.1 round 18 P2 fix)", () => {
+  it("leaves plain ASCII identifiers/paths unchanged for readability", () => {
+    expect(shellQuote("/tmp/pyanchor-workspace")).toBe("/tmp/pyanchor-workspace");
+    expect(shellQuote("alice@example.com")).toBe("alice@example.com");
+    expect(shellQuote("v1.2.3")).toBe("v1.2.3");
+    expect(shellQuote("a-b_c+d=e")).toBe("a-b_c+d=e");
+  });
+
+  it("quotes empty string", () => {
+    expect(shellQuote("")).toBe("''");
+  });
+
+  it("single-quotes paths containing spaces (the round 18 P2 case)", () => {
+    expect(shellQuote("/tmp/App With Space")).toBe("'/tmp/App With Space'");
+  });
+
+  it("escapes embedded single quotes via the '\\'' idiom", () => {
+    // Nested-quote dance: ' becomes '\''
+    expect(shellQuote("it's a path")).toBe("'it'\\''s a path'");
+  });
+
+  it("quotes shell metacharacters", () => {
+    expect(shellQuote("/tmp/foo;bar")).toBe("'/tmp/foo;bar'");
+    expect(shellQuote("$HOME/app")).toBe("'$HOME/app'");
+    expect(shellQuote("foo*bar")).toBe("'foo*bar'");
+    expect(shellQuote("a&b")).toBe("'a&b'");
+  });
+
+  it("renderEnv quotes path values that contain spaces", () => {
+    const env = renderEnv({
+      token: "tok",
+      agent: "claude-code",
+      framework: "nextjs",
+      appDir: "/tmp/App With Space",
+      workspaceDir: "/tmp/work space",
+      restartScript: "/tmp/App With Space/scripts/r.sh",
+      healthcheckUrl: "http://127.0.0.1:3000/",
+      port: 3010,
+      requireGate: false,
+      allowedOrigins: [],
+      outputMode: "apply"
+    });
+    // Each path with spaces must be wrapped in single quotes so that
+    // `bash -lc 'source .env.local'` doesn't choke on word-splitting.
+    expect(env).toContain(`PYANCHOR_APP_DIR='/tmp/App With Space'`);
+    expect(env).toContain(`PYANCHOR_WORKSPACE_DIR='/tmp/work space'`);
+    expect(env).toContain(`PYANCHOR_RESTART_SCRIPT='/tmp/App With Space/scripts/r.sh'`);
+    // Plain values stay readable.
+    expect(env).toContain(`PYANCHOR_TOKEN=tok`);
+    expect(env).toContain(`PYANCHOR_AGENT=claude-code`);
   });
 });
 

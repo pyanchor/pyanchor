@@ -7,7 +7,7 @@
  * actual files on disk.
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -117,6 +117,47 @@ describe("pyanchor init (e2e via dist/cli.cjs)", () => {
     expect(out).toContain("app/layout.tsx");
     expect(out).toContain("NEXT_PUBLIC_PYANCHOR_TOKEN");
     expect(out).toContain("next.config.mjs");
+  });
+
+  it("init handles project paths containing spaces (round 18 P2)", () => {
+    const tmpRoot = mkdtempSync(path.join(os.tmpdir(), "pyanchor-init-spaces-"));
+    const appDir = path.join(tmpRoot, "App With Space");
+    mkdirSync(path.join(appDir, "app"), { recursive: true });
+    writeFileSync(
+      path.join(appDir, "package.json"),
+      JSON.stringify({
+        name: "spaces-app",
+        scripts: { dev: "next dev" },
+        dependencies: { next: "^14.2.0" }
+      }),
+      "utf8"
+    );
+    writeFileSync(path.join(appDir, "app", "layout.tsx"), "export default () => null;", "utf8");
+
+    // Use the array form of execSync to avoid shell-escaping quirks
+    // in the test harness itself (we're testing pyanchor's quoting,
+    // not bash's).
+    const out = execSync(
+      `node ${cliPath} init --yes --cwd ${JSON.stringify(appDir)}`,
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+    expect(out).toContain("Done");
+
+    const env = readFileSync(path.join(appDir, ".env.local"), "utf8");
+    // Path values with spaces must be single-quoted in the env file.
+    expect(env).toContain(`PYANCHOR_APP_DIR='${appDir}'`);
+
+    // Final acid test: bash must accept `source .env.local` without
+    // word-splitting the path. Pre-v0.28.1 this failed with
+    // "Too many arguments". Use execFileSync to avoid double-quoting
+    // hell — the test harness shouldn't itself need shell escaping.
+    const envFile = path.join(appDir, ".env.local");
+    const sourced = execFileSync(
+      "bash",
+      ["-c", `set -a; source "$1"; echo "OK:$PYANCHOR_APP_DIR"`, "_", envFile],
+      { encoding: "utf8" }
+    );
+    expect(sourced).toContain(`OK:${appDir}`);
   });
 
   it("init bails with a clear error when run outside a package.json", () => {

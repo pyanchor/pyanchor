@@ -29,18 +29,6 @@ permissions:
 jobs:
   dependency-resolution:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        example:
-          - astro-minimal
-          - nextjs-minimal
-          - nextjs-multi-agent
-          - nextjs-nextauth-gate
-          - nextjs-portfolio-gate
-          - nextjs-pr-mode
-          - vite-react-minimal
-          - vite-react-portfolio-gate
     steps:
       - uses: actions/checkout@v4
 
@@ -48,14 +36,35 @@ jobs:
         with:
           node-version: 22
 
-      - name: dependency dry-run
-        working-directory: examples/${{ matrix.example }}
+      - name: dependency dry-run for every example with a package.json
+        # v0.28.1 (round 18 P3 fix): walk every examples/<dir> that
+        # has a package.json instead of a hardcoded matrix. Adding a
+        # new framework example automatically picks up dep checking
+        # without editing this workflow.
         # --dry-run resolves the full dep graph without writing
         # node_modules. --ignore-scripts skips postinstall hooks
         # that would need network beyond npm registry.
         # Catches: typo'd package names, deleted versions, peer dep
         # conflicts.
-        run: npm install --dry-run --ignore-scripts
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          failures=0
+          for pkg in examples/*/package.json; do
+            dir=$(dirname "$pkg")
+            echo "::group::$dir"
+            if (cd "$dir" && npm install --dry-run --ignore-scripts); then
+              echo "  ✓ $dir resolved"
+            else
+              echo "::error file=$pkg::dependency dry-run failed for $dir"
+              failures=$((failures + 1))
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$failures" -gt 0 ]; then
+            echo "::error::$failures example(s) failed dependency dry-run"
+            exit 1
+          fi
 
   index-sync:
     runs-on: ubuntu-latest

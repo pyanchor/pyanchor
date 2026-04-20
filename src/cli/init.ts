@@ -37,6 +37,7 @@ import {
   renderEnv,
   renderNextConfigSnippet,
   renderRestartScript,
+  shellQuote,
   type RestartTemplateInput
 } from "./templates";
 
@@ -258,7 +259,7 @@ function buildPlan(d: Detection, args: ParsedArgs, ans: Answers, token: string):
 
   postSteps.push("");
   postSteps.push("To start the sidecar:");
-  postSteps.push(`  cd ${d.cwd}`);
+  postSteps.push(`  cd ${shellQuote(d.cwd)}`);
   postSteps.push(`  source ${envFileName}; pyanchor`);
   postSteps.push(`  # (or load the env via your process manager / docker)`);
 
