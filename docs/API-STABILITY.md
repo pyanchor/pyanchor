@@ -153,6 +153,31 @@ vi / id / ru / hi / th / tr / nl / pl / sv / it / ar / he / fa /
 ur) are kept up-to-date with the English `StringTable` at every
 ship. Coverage is asserted in `tests/runtime/overlay/strings.test.ts`.
 
+### 10. CLI surface (`pyanchor` bin)
+
+The `pyanchor` binary added a subcommand dispatcher in v0.28.0.
+Backward compatible — invoking with no subcommand still starts the
+sidecar exactly as pre-v0.28 (where the bin pointed straight at
+`dist/server.cjs`). The full surface:
+
+| Invocation | Status | Notes |
+|---|---|---|
+| `pyanchor` (no args, default) | **Stable @ 1.0** | Start the sidecar. Reads `PYANCHOR_*` env. |
+| `pyanchor --version` / `-v` | **Stable @ 1.0** | Print version + exit 0. |
+| `pyanchor --help` / `-h` | **Stable @ 1.0** | Print short usage + exit 0. |
+| `pyanchor init` | **Stable @ 1.0** | Interactive scaffolder. v0.28.0+. |
+| `pyanchor init --yes` / `-y` | **Stable @ 1.0** | Headless mode (CI-safe; uses defaults for every prompt). |
+| `pyanchor init --dry-run` | **Stable @ 1.0** | Print the plan without writing. |
+| `pyanchor init --force` | **Stable @ 1.0** | Overwrite existing files (default is skip-if-present). |
+| `pyanchor init --cwd <path>` | **Stable @ 1.0** | Init a project at a path other than the current dir. |
+| Files written by `init` | **Stable @ 1.0** | Locations: `.env.local` (Next.js) or `.env` (others); `scripts/pyanchor-restart.sh` (chmod +x). Renaming or moving these is a major bump. |
+| Auto-detected frameworks | Pre-1.0 | nextjs / vite / astro / remix / sveltekit / nuxt. Adding new ones is non-breaking; the detection heuristic itself may evolve. |
+| Bootstrap snippet output (the JSX/HTML printed for the user to copy) | Pre-1.0 | The exact text may evolve as we add framework profiles. The substance (script tag pointing at `/_pyanchor/bootstrap.js` with token data attr) is stable. |
+| `dist/server.cjs` direct invocation (`node dist/server.cjs`) | **Stable @ 1.0** | Legacy entry — still works, used by the systemd template. |
+
+Future subcommands (e.g. `pyanchor doctor`, `pyanchor agent test`)
+will be additive; never break existing invocations.
+
 ## Pre-1.0 surfaces (will iterate)
 
 - **Multi-tenancy** — currently single-tenant. v0.22+ may add

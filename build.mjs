@@ -22,6 +22,22 @@ await build({
   target: "node18"
 });
 
+// v0.28.0 — top-level CLI dispatcher. `pyanchor init` lives here;
+// the default no-arg path just spawns dist/server.cjs as a child.
+// Built separately (not bundled into server.cjs) so the cold-start
+// path of a normal `pyanchor` invocation stays tiny.
+await build({
+  ...shared,
+  entryPoints: ["src/cli/main.ts"],
+  outfile: "dist/cli.cjs",
+  platform: "node",
+  format: "cjs",
+  target: "node18",
+  // server.cjs is a sibling, loaded at runtime via spawn — never
+  // imported. Mark as external so esbuild doesn't try to bundle it.
+  external: ["./server.cjs"]
+});
+
 await build({
   ...shared,
   entryPoints: ["src/worker/runner.ts"],

@@ -28,7 +28,12 @@ const distRoot = path.resolve(process.cwd(), "dist");
 const LIMITS: Array<{ file: string; maxBytes: number; note: string }> = [
   { file: "public/bootstrap.js", maxBytes: 12 * 1024, note: "trusted-host check + token-blanking + locale auto-inject" },
   { file: "public/overlay.js", maxBytes: 80 * 1024, note: "shadow root UI + state machine + i18n queue" },
-  { file: "worker/runner.cjs", maxBytes: 200 * 1024, note: "agent dispatch + workspace + audit + webhooks + classifier" }
+  { file: "worker/runner.cjs", maxBytes: 200 * 1024, note: "agent dispatch + workspace + audit + webhooks + classifier" },
+  // v0.28.0 — `pyanchor init` dispatcher. Tiny by design (no
+  // server bundle inside; spawns dist/server.cjs as a child).
+  // Current: ~23KB. 64KB ceiling lets future subcommands breathe
+  // without enabling a runaway dependency tree.
+  { file: "cli.cjs", maxBytes: 64 * 1024, note: "init scaffolder + dispatcher (server.cjs spawned as child)" }
 ];
 
 // Per-locale bundle ceiling. Largest known is 'th' (Thai script).

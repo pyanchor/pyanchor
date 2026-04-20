@@ -138,23 +138,50 @@ trying pyanchor for the first time.
 
 ## 🚀 Quick start
 
+### Option A: `npx pyanchor init` (recommended, ~30 seconds)
+
+From the root of your Next.js / Vite / Astro app:
+
+```bash
+npx pyanchor init
+```
+
+The interactive scaffolder auto-detects your framework + agent CLI,
+generates a token, writes `.env.local` (or `.env`) and a
+`scripts/pyanchor-restart.sh` stub, then prints the bootstrap snippet
+to copy into your global layout. Use `--yes` for headless / CI mode
+(takes all defaults), `--dry-run` to preview without writing, and
+`--force` to overwrite existing files on a re-run.
+
+Then, in two terminals:
+
+```bash
+pnpm dev               # your normal dev command
+pyanchor               # the sidecar (in a second terminal)
+```
+
+That's it. Open `http://localhost:3000`, click the floating button,
+describe a change.
+
+### Option B: Manual quickstart (if you want to know what `init` does under the hood)
+
 Five steps, ~5 minutes if your agent is already set up.
 
-### 1. Install
+#### 1. Install
 
 ```bash
 pnpm add pyanchor
 # or: npm i pyanchor / yarn add pyanchor / bun add pyanchor
 ```
 
-### 2. Generate a token + create scratch dir
+#### 2. Generate a token + create scratch dir
 
 ```bash
 export PYANCHOR_TOKEN=$(openssl rand -hex 32)
 mkdir -p /abs/path/to/scratch-workspace
 ```
 
-### 3. Write the restart script
+#### 3. Write the restart script
 
 `restart-frontend.sh` — replace with your actual frontend reload
 command (e.g. `pm2 reload my-app`, `systemctl restart my-app`).
@@ -169,7 +196,7 @@ EOF
 chmod +x /abs/path/to/restart-frontend.sh
 ```
 
-### 4. Start the sidecar
+#### 4. Start the sidecar
 
 ```bash
 export PYANCHOR_APP_DIR=/abs/path/to/your/app          # Next.js, Vite, Astro, anything
@@ -186,7 +213,7 @@ The sidecar refuses to start if anything required is missing and
 tells you exactly which env var is wrong. Full env reference:
 [`.env.example`](./.env.example).
 
-### 5. Wire the bootstrap into your app
+#### 5. Wire the bootstrap into your app
 
 The bootstrap is one `<script>` tag. Place it in whatever the
 "render every page" template is for your framework.
@@ -490,16 +517,20 @@ marked `Pre-1.0` are still under iteration.
   limit / timeout / network errors and appends actionable hints
 - **Operations templates**: production-hardened systemd unit +
   EnvironmentFile in [`examples/systemd/`](./examples/systemd/)
-- **Tests**: 743 unit + 69 e2e + Node 18/20/22 matrix on every commit;
+- **Interactive scaffolder**: `npx pyanchor init` (v0.28.0+) auto-
+  detects your framework + agent CLI, generates token + env file +
+  restart script, prints the bootstrap snippet to copy. Replaces
+  the 5-step manual quickstart with ~30 seconds + a few prompts.
+- **Tests**: 786 unit + 69 e2e + Node 18/20/22 matrix on every commit;
   `examples-smoke` CI lane verifies every example's dependency graph
   and that the index doesn't drift
 
 **Coming next** (no firm version commitment yet):
 
-- `npx pyanchor init` — interactive scaffolder that detects your
-  framework + agent and writes the env / restart script / layout
-  patch in one step (replaces the current 5-step quickstart with
-  one command + a few prompts)
+- AST-based JSX/config patching for `pyanchor init` — currently
+  the bootstrap snippet + next.config rewrite are printed for the
+  user to paste; v0.29+ may auto-patch once we have an idempotent
+  pattern that survives across user formatting styles
 - Multi-tenancy implementation — design at
   [`docs/MULTI-TENANCY-DESIGN.md`](./docs/MULTI-TENANCY-DESIGN.md);
   shipping when there's demand from a multi-app adopter

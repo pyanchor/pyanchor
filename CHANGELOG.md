@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-04-20
+
+`npx pyanchor init` ship. Replaces the README's 5-step manual
+quickstart with one interactive command that auto-detects your
+framework + agent CLI, generates a token, writes `.env.local` (or
+`.env`) and a restart script, then prints the bootstrap snippet you
+copy into your global layout. The 5-step path still works (Option B
+in the README) — `init` is purely additive.
+
+The author got tired of explaining "OK now you also need to set
+PYANCHOR_HEALTHCHECK_URL and PYANCHOR_RESTART_SCRIPT" five times in
+a row to people who tried pyanchor for the first time. The shipping
+threshold for "magical onboarding" was meaningfully lower than the
+threshold for "auto-patch JSX safely", so v0.28.0 commits to the
+former and explicitly defers the latter.
+
+### Added
+- **`pyanchor init` interactive scaffolder** — new `src/cli/`
+  module (5 files, ~600 LOC). Auto-detects Next.js (App / Pages
+  router) / Vite / Astro / Remix / SvelteKit / Nuxt from
+  `package.json` + file-system markers; auto-detects agent CLIs
+  on PATH (claude-code via host's `@anthropic-ai/claude-agent-sdk`
+  dep); prompts only for things we can't infer; generates token
+  via `crypto.randomBytes(32)`; writes idempotently (skip-if-
+  present, `--force` to overwrite). Zero new runtime deps —
+  built on `node:readline/promises`.
+  - `pyanchor init` — interactive
+  - `pyanchor init --yes` — headless / CI-safe (every prompt
+    takes its default)
+  - `pyanchor init --dry-run` — preview the plan, write nothing
+  - `pyanchor init --force` — overwrite existing files
+  - `pyanchor init --cwd <path>` — init a project elsewhere
+- **`pyanchor --version` / `--help`** — top-level CLI flags. The
+  bin no longer points straight at `dist/server.cjs`; a new
+  `dist/cli.cjs` dispatches subcommands and falls through to the
+  sidecar when no subcommand is given. The legacy direct path
+  (`node dist/server.cjs`) still works and is documented as
+  Stable @ 1.0 — useful for systemd units that hardcode it.
+- **CLI surface contract in `docs/API-STABILITY.md`** — new "10.
+  CLI surface" section locking what's `Stable @ 1.0` (the
+  invocation forms + file output locations) vs `Pre-1.0` (the
+  framework auto-detection heuristic + the exact text of the
+  printed bootstrap snippet, both of which will evolve as we add
+  framework profiles).
+- **README quickstart restructured** — Option A (`npx pyanchor
+  init`, ~30 seconds) up top; Option B (the manual 5-step path,
+  for users who want to know what `init` does under the hood)
+  preserved as a sub-heading.
+
+### Why we DON'T auto-patch JSX/TSX in v0.28
+JSX/TSX patching (adding `<script>` to `app/layout.tsx`,
+modifying `next.config.mjs`) is left as a printed "copy this
+snippet" instruction instead. The cost of a regex that mangles
+the user's layout file is way higher than the cost of asking
+them to paste 4 lines. v0.29+ may add AST-based patching once we
+have an idempotent pattern that survives across user formatting
+styles.
+
+### Tests
+- 743 → 786 (+43: 17 unit `detect.ts` + 17 unit `templates.ts`
+  + 8 e2e via spawning `dist/cli.cjs` against tmpdir fixtures
+  + 1 bundle-size guard for `cli.cjs` ≤ 64KB).
+
+### Bundle size
+- New: `dist/cli.cjs` ~23KB (well under the 64KB ceiling).
+  No change to `bootstrap.js` / `overlay.js` / `runner.cjs` /
+  locale bundles.
+
 ## [0.27.1] - 2026-04-20
 
 README repositioning. No source/runtime changes — docs-only ship.
