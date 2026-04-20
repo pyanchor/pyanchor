@@ -34,7 +34,11 @@ Group=pyanchor
 
 # Working directory + env. Adjust paths for your install layout.
 WorkingDirectory=/opt/pyanchor
-EnvironmentFile=/etc/pyanchor.env
+# `-` prefix makes the env file optional so the unit can start for
+# debugging even before /etc/pyanchor.env is written. Pyanchor's
+# own validateConfig() will then complain about the missing required
+# vars at boot — clearer surface than "systemd refused to start".
+EnvironmentFile=-/etc/pyanchor.env
 ExecStart=/usr/bin/node /opt/pyanchor/dist/server.cjs
 
 # Restart policy. RestartSec=5s prevents tight-loop crash restarts

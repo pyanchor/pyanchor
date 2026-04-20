@@ -48,6 +48,16 @@ journalctl -u pyanchor -f
 ## Verify
 
 ```bash
+# Confirm the unit parses on YOUR distro's systemd version. Run on
+# the actual deploy host, AFTER the install steps above (User= and
+# referenced paths must exist for `verify` to succeed; this is
+# why pyanchor's CI doesn't run this — runner doesn't have the
+# pyanchor user or the install layout).
+sudo systemd-analyze verify pyanchor.service
+
+# Sandbox score (lower is more secure)
+sudo systemd-analyze security pyanchor
+
 # Liveness — always 200 if the process is up
 curl -i http://127.0.0.1:3010/healthz
 # {"ok":true}
@@ -56,10 +66,9 @@ curl -i http://127.0.0.1:3010/healthz
 curl -i http://127.0.0.1:3010/readyz
 # 200 {"ok":true,"ready":true}        ← good, route traffic here
 # 503 {"ok":false,"ready":false}      ← something's missing — check journalctl
-
-# Sandbox score (lower is more secure)
-sudo systemd-analyze security pyanchor
-# Should print < 2.0
+#
+# Or run the same checks as a CLI with detailed pass/fail output:
+sudo -u pyanchor pyanchor doctor
 ```
 
 ## k8s / docker users

@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-04-20
+
+Quick follow-up to v0.29.0. The `systemd-analyze verify` CI step
+added in v0.29.0 turned out to be a false-failure trap: newer
+systemd (256+, what GitHub's `ubuntu-latest` ships) does runtime
+resolution as part of `verify`, so it failed on the missing
+`User=pyanchor` and missing `EnvironmentFile=/etc/pyanchor.env`
+on the runner — neither of which are real bugs in the unit, just
+"the CI host hasn't run the install steps from the README". The
+v0.29.0 release/CI workflows still passed (npm publish completed),
+but `examples-smoke` showed a red badge.
+
+The runtime package on npm is byte-identical to v0.29.0 plus the
+`-` prefix on `EnvironmentFile=` (which is a real production
+improvement — see below). Doctor / actor counter / init NEXT_PUBLIC
+all unchanged.
+
+### Fixed
+- **Removed the v0.29.0 `systemd-analyze verify` CI step** —
+  Codex round 18 had already noted "syntactic only — limited
+  value"; in practice on ubuntu-latest the catch ratio is even
+  worse because `verify` insists on resolving `User=`,
+  `EnvironmentFile=`, and `ReadWritePaths=` against the runner's
+  actual filesystem. We're keeping the README guidance to run
+  `sudo systemd-analyze verify pyanchor.service` after the real
+  install (where User and paths exist).
+- **`EnvironmentFile=` → `EnvironmentFile=-` in
+  `examples/systemd/pyanchor.service`** — the `-` prefix marks
+  the env file as optional. Real production benefit: the unit
+  can start for debugging even before `/etc/pyanchor.env` is
+  written; pyanchor's own `validateConfig()` then complains
+  about the missing required vars at boot, which is a clearer
+  surface than "systemd refused to start the unit".
+- **`examples/systemd/README.md`** — added explicit
+  `sudo systemd-analyze verify pyanchor.service` step under
+  "Verify" (run on the deploy host, not in CI), and added a
+  pointer to `sudo -u pyanchor pyanchor doctor` as the
+  finer-grained alternative to `/readyz`.
+
 ## [0.29.0] - 2026-04-20
 
 Round-18 follow-on polish + the four "추가로 할만한 것" items
