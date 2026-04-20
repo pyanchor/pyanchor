@@ -9,8 +9,22 @@
 # Pairs with `.github/workflows/dependabot-auto-merge.yml`, which
 # enables auto-merge for patch + minor bumps after CI passes.
 # Major bumps stay as standalone PRs that require manual review.
+#
+# v0.30.0 batch processing notes (2026-04-20):
+#   - React 18 → 19 in all examples failed because next@14 stays
+#     on react@18 peer dep. Re-enable when the example tree crosses
+#     to next@16 with explicit react@19 opt-in. Tracked via the
+#     react-family ignore rules below.
+#   - vite 5 → 6 in sveltekit-minimal is incompatible with the
+#     current @sveltejs/vite-plugin-svelte peer range. Re-enable
+#     when SvelteKit advertises vite 6. Tracked via the
+#     sveltekit-minimal vite ignore rule.
 
 version: 2
+
+# Common ignore lists, repeated per-entry below because
+# Dependabot doesn't support YAML anchors. Search for "REACT IGNORES"
+# / "VITE IGNORES" to find them.
 
 updates:
   # Top-level package — pyanchor's own runtime + dev deps.
@@ -29,34 +43,37 @@ updates:
       npm-patch-and-minor:
         # Bundle every same-day patch/minor into a single PR per
         # ecosystem. Auto-merge picks this up. Majors stay separate.
-        update-types:
-          - patch
-          - minor
-    commit-message:
-      prefix: chore(deps)
-      include: scope
+        update-types: [patch, minor]
+    commit-message: { prefix: "chore(deps)", include: scope }
 
   # Each example app has its own package.json; Dependabot resolves
   # them independently. We collapse the 8 examples into the same
   # weekly cadence + patch/minor grouping so example deps don't
   # generate one PR per directory per dep.
+
   - package-ecosystem: npm
     directory: "/examples/astro-minimal"
-    schedule:
-      interval: weekly
-      day: monday
+    schedule: { interval: weekly, day: monday }
     open-pull-requests-limit: 3
-    groups:
-      examples-patch-and-minor:
-        update-types: [patch, minor]
+    groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
 
+  # REACT IGNORES (next@14 peers). Drop when examples cross to next@16+.
   - package-ecosystem: npm
     directory: "/examples/nextjs-minimal"
     schedule: { interval: weekly, day: monday }
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/nextjs-multi-agent"
@@ -64,6 +81,15 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/nextjs-nextauth-gate"
@@ -71,6 +97,15 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/nextjs-portfolio-gate"
@@ -78,6 +113,15 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/nextjs-pr-mode"
@@ -85,13 +129,33 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
+  # vite-react examples also pin react@18 (bound by @types/react@18 +
+  # @vitejs/plugin-react peer range). Same ignore list.
   - package-ecosystem: npm
     directory: "/examples/vite-react-minimal"
     schedule: { interval: weekly, day: monday }
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/vite-react-portfolio-gate"
@@ -99,6 +163,27 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+
+  # VITE IGNORES (svelte-vite-plugin peer range stops at vite 5.x).
+  # Drop when @sveltejs/vite-plugin-svelte advertises vite 6.
+  - package-ecosystem: npm
+    directory: "/examples/sveltekit-minimal"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
+    commit-message: { prefix: "chore(deps/examples)", include: scope }
+    ignore:
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions — keep CI workflows up to date too.
   - package-ecosystem: github-actions
