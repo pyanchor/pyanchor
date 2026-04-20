@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`.github/dependabot.yml` + `.github/workflows/dependabot-auto-merge.yml`**
+  — explicit Dependabot config (was previously running on GitHub's
+  default) plus auto-merge for patch/minor bumps (after CI passes).
+  Major bumps stay as standalone PRs requiring human review (the
+  workflow comments on them so the rationale is visible). Catches
+  the round 18 "1.0 readiness" bucket of "operational hygiene" —
+  weekly weekly batches reduce PR noise without delaying security
+  advisories. Pre-this-ship, every Dependabot PR (like the v0.29.2-
+  era happy-dom security update) needed a manual click.
+
 ## [0.29.2] - 2026-04-20
 
 Docs ship — closes a real gap that surfaced when the project author

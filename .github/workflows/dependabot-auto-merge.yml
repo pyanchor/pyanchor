@@ -1,0 +1,67 @@
+name: dependabot auto-merge
+
+# Auto-enable squash-merge on Dependabot PRs that are patch/minor
+# bumps. GitHub's native auto-merge waits for branch protection
+# checks (CI green) before actually merging, so this is safe — we
+# only flip the auto-merge flag, the `ci`/`examples-smoke`/etc
+# workflows still get the final word.
+#
+# Major bumps are NEVER auto-merged: those stay as standalone PRs
+# requiring human review (the maintainer reads the upstream
+# changelog and merges manually).
+#
+# Why pull_request_target instead of pull_request:
+#   pull_request_target runs against the BASE ref's workflow
+#   definition, not the PR's. For Dependabot PRs (which come from
+#   the same repo but a bot-owned branch), that means we get the
+#   trusted GITHUB_TOKEN with write permissions, instead of the
+#   read-only token a fork PR would get. The if: github.actor
+#   guard limits the elevated token to actual Dependabot runs.
+#
+# References:
+#   https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions
+#   https://github.com/dependabot/fetch-metadata
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    # Hard guard: only run on actual Dependabot-authored PRs. Without
+    # this, a maliciously-crafted PR could trigger the elevated
+    # workflow.
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - name: fetch update metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: enable auto-merge for patch + minor bumps
+        # `version-update:semver-patch` and `version-update:semver-minor`
+        # are the safe band. Major bumps fall through to manual
+        # review (no `gh pr merge` invocation).
+        if: |
+          steps.metadata.outputs.update-type == 'version-update:semver-patch'
+          || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: |
+          echo "Enabling auto-merge for ${{ steps.metadata.outputs.dependency-names }} (${{ steps.metadata.outputs.update-type }})"
+          gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: comment on major bumps so reviewer sees the rationale
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        run: |
+          gh pr comment "$PR_URL" --body "🛑 Major version bump for **${{ steps.metadata.outputs.dependency-names }}** — auto-merge intentionally skipped. Read the upstream changelog before merging."
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

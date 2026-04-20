@@ -1,0 +1,113 @@
+# Dependabot config for pyanchor.
+#
+# Pre-this-file Dependabot ran on GitHub's default config, which
+# discovered all 9 npm directories and grouped them into one PR
+# (the `npm_and_yarn` group across `/`, `/examples/*`). That
+# behavior is preserved here, just with explicit grouping rules so
+# we control the cadence + the patch/minor vs major split.
+#
+# Pairs with `.github/workflows/dependabot-auto-merge.yml`, which
+# enables auto-merge for patch + minor bumps after CI passes.
+# Major bumps stay as standalone PRs that require manual review.
+
+version: 2
+
+updates:
+  # Top-level package — pyanchor's own runtime + dev deps.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      # GitHub's default is daily. Weekly batches reduce PR noise
+      # without delaying security advisories — Dependabot still
+      # opens out-of-schedule PRs for vulnerabilities.
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Seoul
+    open-pull-requests-limit: 5
+    groups:
+      npm-patch-and-minor:
+        # Bundle every same-day patch/minor into a single PR per
+        # ecosystem. Auto-merge picks this up. Majors stay separate.
+        update-types:
+          - patch
+          - minor
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+
+  # Each example app has its own package.json; Dependabot resolves
+  # them independently. We collapse the 8 examples into the same
+  # weekly cadence + patch/minor grouping so example deps don't
+  # generate one PR per directory per dep.
+  - package-ecosystem: npm
+    directory: "/examples/astro-minimal"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      examples-patch-and-minor:
+        update-types: [patch, minor]
+    commit-message: { prefix: "chore(deps/examples)", include: scope }
+
+  - package-ecosystem: npm
+    directory: "/examples/nextjs-minimal"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
+    commit-message: { prefix: "chore(deps/examples)", include: scope }
+
+  - package-ecosystem: npm
+    directory: "/examples/nextjs-multi-agent"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
+    commit-message: { prefix: "chore(deps/examples)", include: scope }
+
+  - package-ecosystem: npm
+    directory: "/examples/nextjs-nextauth-gate"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
+    commit-message: { prefix: "chore(deps/examples)", include: scope }
+
+  - package-ecosystem: npm
+    directory: "/examples/nextjs-portfolio-gate"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
+    commit-message: { prefix: "chore(deps/examples)", include: scope }
+
+  - package-ecosystem: npm
+    directory: "/examples/nextjs-pr-mode"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
+    commit-message: { prefix: "chore(deps/examples)", include: scope }
+
+  - package-ecosystem: npm
+    directory: "/examples/vite-react-minimal"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
+    commit-message: { prefix: "chore(deps/examples)", include: scope }
+
+  - package-ecosystem: npm
+    directory: "/examples/vite-react-portfolio-gate"
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 3
+    groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
+    commit-message: { prefix: "chore(deps/examples)", include: scope }
+
+  # GitHub Actions — keep CI workflows up to date too.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      gh-actions-patch-and-minor:
+        update-types: [patch, minor]
+    commit-message: { prefix: "chore(deps/ci)", include: scope }
