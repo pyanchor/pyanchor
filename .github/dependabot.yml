@@ -10,22 +10,29 @@
 # enables auto-merge for patch + minor bumps after CI passes.
 # Major bumps stay as standalone PRs that require manual review.
 #
-# v0.30.0 batch processing notes (2026-04-20):
-#   - React 18 → 19 was originally held while the Next examples
-#     pinned next@14. The examples now use next@16, whose peer range
-#     accepts react 19, so the v0.31.1 round-19 fix REMOVED those
-#     ignore rules. Let examples-smoke catch real peer conflicts
-#     instead of pre-emptively blocking the bumps.
-#   - vite 5 → 6 in sveltekit-minimal is incompatible with the
-#     current @sveltejs/vite-plugin-svelte peer range. Re-enable
-#     when SvelteKit advertises vite 6. Tracked via the
-#     sveltekit-minimal vite ignore rule (still active).
+# Triage history (anchor for future "should we drop this ignore?"):
+#
+#   v0.30.0 batch (28 PRs) — examples deps majors:
+#     - 14× react/react-dom/@types/react/@types/react-dom 18→19:
+#       FAILED examples-smoke. Ignored.
+#     - 1× vite 5→6 in sveltekit: FAILED. Ignored.
+#     - typescript 5→6 / @types/node 22→25 / GitHub Actions: merged.
+#     - express 4→5: held → released as v0.31.0.
+#
+#   v0.31.1 hotfix — round 19 P2:
+#     - Removed React-family ignore on the assumption that next@16
+#       accepts react 19. Dependabot re-proposed; examples-smoke
+#       FAILED again. Conclusion: peer chain is more brittle than
+#       the simple "next@16 accepts react 19" check suggests, most
+#       likely because Dependabot updates one dep at a time and
+#       transient peer states violate ranges. Re-added below.
+#     - Removed vite-react vite ignore for the same reason. vite 8
+#       proposed → FAILED (plugin-react 4 peer stops at vite 5).
+#       Re-added below alongside an explicit plugin-react ignore.
+#
+# Re-enable anchors for each ignore are documented inline.
 
 version: 2
-
-# Common ignore lists, repeated per-entry below because
-# Dependabot doesn't support YAML anchors. Search for "REACT IGNORES"
-# / "VITE IGNORES" to find them.
 
 updates:
   # Top-level package — pyanchor's own runtime + dev deps.
@@ -48,10 +55,11 @@ updates:
     commit-message: { prefix: "chore(deps)", include: scope }
 
   # Each example app has its own package.json; Dependabot resolves
-  # them independently. We collapse the 8 examples into the same
-  # weekly cadence + patch/minor grouping so example deps don't
-  # generate one PR per directory per dep.
+  # them independently. Examples that pin React 18 (the Next.js +
+  # Vite ones) all share the same ignore set so single-dep React 19
+  # bumps don't keep deadlocking examples-smoke.
 
+  # ─── Astro example: no React. Standard config. ──────────────────
   - package-ecosystem: npm
     directory: "/examples/astro-minimal"
     schedule: { interval: weekly, day: monday }
@@ -59,18 +67,27 @@ updates:
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
 
+  # ─── Next.js examples (5): React-family majors blocked ──────────
+  # Re-enable anchor: when react / react-dom / @types/react /
+  # @types/react-dom can be bumped to 19 *as a single coordinated
+  # PR* (e.g. via grouping or a hand-prepared commit), drop these
+  # ignores. Single-package Dependabot PRs cannot satisfy peers.
+
   - package-ecosystem: npm
     directory: "/examples/nextjs-minimal"
     schedule: { interval: weekly, day: monday }
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
-    # React majors intentionally NOT ignored as of v0.31.1 — the
-    # examples now use next@16, whose peer range accepts react 19
-    # (see `npm view next@16 peerDependencies`). The original ignore
-    # was added during the v0.30.0 batch when next@14 + react 19
-    # deadlocked; that condition no longer holds. examples-smoke
-    # will catch any real peer conflict.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/nextjs-multi-agent"
@@ -78,12 +95,15 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
-    # React majors intentionally NOT ignored as of v0.31.1 — the
-    # examples now use next@16, whose peer range accepts react 19
-    # (see `npm view next@16 peerDependencies`). The original ignore
-    # was added during the v0.30.0 batch when next@14 + react 19
-    # deadlocked; that condition no longer holds. examples-smoke
-    # will catch any real peer conflict.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/nextjs-nextauth-gate"
@@ -91,12 +111,15 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
-    # React majors intentionally NOT ignored as of v0.31.1 — the
-    # examples now use next@16, whose peer range accepts react 19
-    # (see `npm view next@16 peerDependencies`). The original ignore
-    # was added during the v0.30.0 batch when next@14 + react 19
-    # deadlocked; that condition no longer holds. examples-smoke
-    # will catch any real peer conflict.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/nextjs-portfolio-gate"
@@ -104,12 +127,15 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
-    # React majors intentionally NOT ignored as of v0.31.1 — the
-    # examples now use next@16, whose peer range accepts react 19
-    # (see `npm view next@16 peerDependencies`). The original ignore
-    # was added during the v0.30.0 batch when next@14 + react 19
-    # deadlocked; that condition no longer holds. examples-smoke
-    # will catch any real peer conflict.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/nextjs-pr-mode"
@@ -117,28 +143,40 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
-    # React majors intentionally NOT ignored as of v0.31.1 — the
-    # examples now use next@16, whose peer range accepts react 19
-    # (see `npm view next@16 peerDependencies`). The original ignore
-    # was added during the v0.30.0 batch when next@14 + react 19
-    # deadlocked; that condition no longer holds. examples-smoke
-    # will catch any real peer conflict.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
 
-  # vite-react examples were previously pinned to react@18 via the
-  # ignore list. Removed in v0.31.1 — same rationale as the Next
-  # examples: examples-smoke will catch any real peer conflict.
+  # ─── Vite + React examples (2): React + Vite + plugin-react majors blocked ──
+  # Re-enable anchor for vite/plugin-react: when @vitejs/plugin-react's
+  # peer range advertises vite 7+ AND vite 7+ has been GA for 1+ month
+  # (so the rest of the React tooling chain has caught up).
+
   - package-ecosystem: npm
     directory: "/examples/vite-react-minimal"
     schedule: { interval: weekly, day: monday }
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
-    # React majors intentionally NOT ignored as of v0.31.1 — the
-    # examples now use next@16, whose peer range accepts react 19
-    # (see `npm view next@16 peerDependencies`). The original ignore
-    # was added during the v0.30.0 batch when next@14 + react 19
-    # deadlocked; that condition no longer holds. examples-smoke
-    # will catch any real peer conflict.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/examples/vite-react-portfolio-gate"
@@ -146,15 +184,24 @@ updates:
     open-pull-requests-limit: 3
     groups: { examples-patch-and-minor: { update-types: [patch, minor] } }
     commit-message: { prefix: "chore(deps/examples)", include: scope }
-    # React majors intentionally NOT ignored as of v0.31.1 — the
-    # examples now use next@16, whose peer range accepts react 19
-    # (see `npm view next@16 peerDependencies`). The original ignore
-    # was added during the v0.30.0 batch when next@14 + react 19
-    # deadlocked; that condition no longer holds. examples-smoke
-    # will catch any real peer conflict.
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: ["version-update:semver-major"]
 
-  # VITE IGNORES (svelte-vite-plugin peer range stops at vite 5.x).
-  # Drop when @sveltejs/vite-plugin-svelte advertises vite 6.
+  # ─── SvelteKit example: vite + svelte-vite-plugin majors blocked ──
+  # Re-enable anchor: when @sveltejs/vite-plugin-svelte advertises
+  # vite 6+ peer support — that's the bottleneck. @sveltejs/adapter-auto
+  # majors are fine (already merged 4→7 in v0.31.x batch).
   - package-ecosystem: npm
     directory: "/examples/sveltekit-minimal"
     schedule: { interval: weekly, day: monday }
@@ -164,8 +211,10 @@ updates:
     ignore:
       - dependency-name: "vite"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "@sveltejs/vite-plugin-svelte"
+        update-types: ["version-update:semver-major"]
 
-  # GitHub Actions — keep CI workflows up to date too.
+  # ─── GitHub Actions: keep CI workflows up to date ───────────────
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
