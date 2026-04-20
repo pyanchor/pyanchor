@@ -371,6 +371,12 @@ Full list in [`.env.example`](./.env.example).
 
 ## 🛡️ Security
 
+> **First read**: [`docs/ACCESS-CONTROL.md`](./docs/ACCESS-CONTROL.md)
+> — the 9 access-control layers + recommended setups by scenario
+> (solo / team / production) + "what each layer blocks if your token
+> leaks" walkthrough. If you only read one security doc, read that
+> one.
+
 Pyanchor is a **self-hosted developer tool**, not a SaaS. Anyone with
 the bearer token can mutate your code and restart your frontend. Treat
 the token like an SSH key.
@@ -465,6 +471,7 @@ isolation kicks in when you have multiple apps.
 | [`docs/claude-code-setup.md`](./docs/claude-code-setup.md) | Install the Anthropic Agent SDK and route pyanchor through Claude |
 | [`docs/gemini-setup.md`](./docs/gemini-setup.md) | Install the Google Gemini CLI + 3 auth options |
 | [`docs/adapters.md`](./docs/adapters.md) | Build your own agent adapter (~70 LOC interface, ~150 LOC adapter) |
+| [`docs/ACCESS-CONTROL.md`](./docs/ACCESS-CONTROL.md) | **Start here for security** — 9 access-control layers, recommended setups by scenario, what each layer blocks on token leak |
 | [`docs/SECURITY.md`](./docs/SECURITY.md) | Threat model + 3 deployment recipes (loopback / production gate cookie / existing auth) |
 | [`docs/PRODUCTION-HARDENING.md`](./docs/PRODUCTION-HARDENING.md) | Operator playbook: separate Unix user, systemd sandbox, bubblewrap, sudoers, restart-script lockdown, audit log shipping |
 | [`docs/MULTI-TENANCY-DESIGN.md`](./docs/MULTI-TENANCY-DESIGN.md) | One-sidecar-many-workspaces design (not yet implemented) |

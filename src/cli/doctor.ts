@@ -453,6 +453,20 @@ export function runDoctor(_argv: string[] = []): DoctorReport {
     );
   }
 
+  // v0.29.2 — point operators at the access-control reference
+  // when warnings show optional security knobs are off. Doctor
+  // tells you "the sidecar will boot"; the access-control doc
+  // tells you "the sidecar will reject the right requests".
+  if (warned > 0 || failed > 0) {
+    console.log(
+      colorize(
+        "dim",
+        `For configuring access control (gate cookie, allowed origins, HMAC actor, ` +
+          `production setups), see docs/ACCESS-CONTROL.md.`
+      )
+    );
+  }
+
   const exitCode: 0 | 1 = failed > 0 ? 1 : 0;
   return { groups, passed, failed, warned, exitCode };
 }

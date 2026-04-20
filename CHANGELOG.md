@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.2] - 2026-04-20
+
+Docs ship — closes a real gap that surfaced when the project author
+tried to explain pyanchor's permission model and realized the answer
+was scattered across README + SECURITY.md + PRODUCTION-HARDENING.md
++ examples + .env.example. New consolidated reference makes this
+the first hit for "who can access this and how do I configure it".
+
+Runtime is byte-identical to v0.29.1 except for one new console.log
+line in `pyanchor doctor` (footer hint pointing at the new doc when
+warnings or failures are present).
+
+### Added
+- **`docs/ACCESS-CONTROL.md`** — single-page reference for the 9
+  opt-in access-control layers (token / bind address / origin
+  allowlist / trusted hosts / gate cookie / bootstrap fail-safe /
+  reverse proxy gate / systemd IPAddress / HMAC actor signing) +
+  recommended setups by scenario (solo / team / production) + a
+  "what each layer blocks if your token leaks" walkthrough +
+  Q&A covering rotation, multi-team, per-route permissions,
+  and the relationship between `pyanchor doctor` output and the
+  doc's content. Intended as the **first** security read; the
+  existing SECURITY.md (threat model + recipes) and
+  PRODUCTION-HARDENING.md (operator playbook) link to it.
+- **`pyanchor doctor` footer hint** — when warnings or failures
+  are present, prints
+  `For configuring access control (gate cookie, allowed origins,
+   HMAC actor, production setups), see docs/ACCESS-CONTROL.md.`
+  Doctor's role is "the sidecar will boot"; ACCESS-CONTROL.md's
+  role is "the sidecar will reject the right requests". The hint
+  bridges the two.
+
+### Changed
+- README "🛡️ Security" section now opens with a callout pointing
+  at ACCESS-CONTROL.md as the first read.
+- README docs table — new ACCESS-CONTROL.md row, marked
+  "**Start here for security**".
+- `docs/SECURITY.md` opens with a callout clarifying the split
+  (this doc = threat model + recipes, ACCESS-CONTROL.md =
+  layer config + scenarios).
+
+### Why this matters
+Security docs that exist but aren't findable might as well not
+exist. Pre-v0.29.2, the answer to "what's the right access setup
+for a 5-person staging deploy" required reading 4 files in the
+right order and synthesizing the answer yourself. v0.29.2 makes
+it one link with a working table.
+
 ## [0.29.1] - 2026-04-20
 
 Quick follow-up to v0.29.0. The `systemd-analyze verify` CI step

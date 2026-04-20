@@ -1,5 +1,12 @@
 # Security model
 
+> **Looking for "who can access this and how do I configure it"?**
+> See [`ACCESS-CONTROL.md`](./ACCESS-CONTROL.md) — the 9-layer
+> access control reference, recommended setups by scenario, and
+> token-leak playbook. This document covers the **threat model**
+> (assumptions, attack surface) and **deployment recipes A/B/C**
+> (dev / production gate cookie / existing auth).
+
 ## TL;DR
 
 Pyanchor is a **dev-only sidecar**. The default deployment model is
