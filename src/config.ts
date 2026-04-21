@@ -98,7 +98,16 @@ export const pyanchorConfig = {
 
   // ─── agent: shared knobs ───────────────────────────────────────
   agentId: optionalEnv("PYANCHOR_AGENT_ID", "pyanchor"),
-  model: optionalEnv("PYANCHOR_AGENT_MODEL", "openai-codex/gpt-5.4"),
+  // v0.32.3 — empty default. Pre-v0.32.3 the default was
+  // "openai-codex/gpt-5.4" (an openclaw-shaped routing prefix), which
+  // got forwarded as `-m` to codex / aider / claude-code adapters
+  // and broke every first-time edit on those backends because the
+  // model name isn't valid for the underlying CLI. Gemini already
+  // had a per-adapter workaround (v0.25.1); codex / aider / claude
+  // -code did not. Now: empty string flows through as falsy → those
+  // adapters skip `-m` entirely → CLI uses its own default. OpenClaw
+  // keeps a self-contained fallback so behavior there is unchanged.
+  model: optionalEnv("PYANCHOR_AGENT_MODEL", ""),
   thinking: optionalEnv("PYANCHOR_AGENT_THINKING", "medium"),
 
   // ─── agent: OpenClaw-specific knobs ────────────────────────────

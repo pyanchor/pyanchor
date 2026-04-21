@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.3] - 2026-04-21
+
+P0 reviewer-sim fix #3 (after v0.32.1 shebang + v0.32.2 dotenv).
+Round 5 of the end-to-end onboarding sim — the first **real
+agent edit** after `pyanchor init` — failed 100% of the time on
+codex / aider / claude-code backends, regardless of CLI version.
+
+### Fixed
+- **`PYANCHOR_AGENT_MODEL` default leaked openclaw routing prefix
+  into other adapters** — pre-v0.32.3 the default was
+  `"openai-codex/gpt-5.4"` (a routing prefix only the openclaw
+  CLI understands). `pyanchorConfig.model` flowed through to
+  `ctx.model` and the codex / aider / claude-code adapters all
+  forwarded it as `-m` / `--model` to their underlying CLI:
+
+      codex exec ... -m openai-codex/gpt-5.4 "..."   # codex rejects
+      aider --model openai-codex/gpt-5.4 ...         # aider rejects
+      claude-code (SDK) model: "openai-codex/..."    # Claude rejects
+
+  Real-world failure mode (caught in the reviewer sim against
+  pyanchor-demo with codex backend): every first edit produced
+  `codex exec exited with code 1` with the upstream error
+  `"The 'openai-codex/gpt-5.4' model is not supported when using
+  Codex with a ChatGPT account."`. Gemini already had a per-
+  adapter workaround (v0.25.1); codex / aider / claude-code did
+  not.
+
+  Fix: `pyanchorConfig.model` now defaults to `""`. The empty
+  string flows through as falsy → those three adapters skip
+  `-m` entirely → the underlying CLI uses its own default
+  (codex reads `~/.codex/config.toml`, aider its own default,
+  Claude SDK its own default). OpenClaw keeps a self-contained
+  fallback (`"openai-codex/gpt-5.4"`) so its behavior is
+  unchanged. Users who *want* to pin a specific model still set
+  `PYANCHOR_AGENT_MODEL=<id>` per their backend's naming.
+
+- **`tests/subprocess-smoke/server-metrics.test.ts` leaked host
+  state** — the spawn env didn't override `PYANCHOR_STATE_DIR`,
+  so the spawned sidecar read `~/.pyanchor/state.json` from the
+  developer's home directory. Any dev who'd run pyanchor
+  against a real edit job before saw `recentMessages.sampleSize`
+  come back as the count of historical messages instead of 0,
+  and the "fresh boot" assertion failed. CI passed because
+  `$HOME` was empty there. Fix: per-test `STATE_DIR` pointed at
+  `/tmp/pyanchor-metrics-smoke-state`, wiped + recreated in
+  `beforeEach`, exported on the spawn env. (The other three
+  subprocess-smoke files don't currently fail because their
+  assertions don't touch the state file, but they have the
+  same vector — follow-up task pending.)
+
+### Added
+- `tests/agents/model-default.test.ts` — 4 regression tests:
+  - config emits `""` when `PYANCHOR_AGENT_MODEL` is unset
+  - config keeps an explicit value when set
+  - openclaw adapter still names the openclaw fallback
+  - codex + aider sources still gate `-m` / `--model` behind
+    `if (ctx.model)` so empty strings don't get forwarded
+
+### Reviewer-sim verification (real codex edit, 34 seconds)
+```
+prompt → workspace edit (codex via ChatGPT account)
+       → vite build (1.18s, dist/index.html 1.11kB)
+       → workspace → app dir rsync
+       → restart script (noop, vite HMR handles reload)
+       → diff src/App.tsx: + // PYANCHOR-EDIT-VERIFIED
+       → status=done, error=None
+```
+
+882 unit tests pass (was 877; +4 model-default + +1 server-metrics
+new isolation that was already there and now actually works).
+
+### No-API-break
+0.32.2 → 0.32.3 changes only a default value (model: "openai-
+codex/gpt-5.4" → ""). Any deployment that explicitly sets
+`PYANCHOR_AGENT_MODEL` is byte-identical to before. Deployments
+that relied on the openclaw-shaped default were ALREADY broken
+on non-openclaw adapters; the only new behavior is "the first
+edit no longer fails out of the box".
+
 ## [0.32.2] - 2026-04-21
 
 Continuation of the "is pyanchor really easy to install?" reviewer

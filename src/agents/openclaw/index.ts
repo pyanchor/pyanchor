@@ -59,7 +59,10 @@ export class OpenClawAgentRunner implements AgentRunner {
         "--workspace",
         ctx.workspaceDir,
         "--model",
-        ctx.model || pyanchorConfig.model,
+        // v0.32.3 — pyanchorConfig.model is empty by default so it
+        // doesn't pollute other adapters' `-m` flag; openclaw needs
+        // a real model name, so add a self-contained fallback here.
+        ctx.model || pyanchorConfig.model || "openai-codex/gpt-5.4",
         "--non-interactive",
         "--json"
       ],

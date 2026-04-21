@@ -25,6 +25,13 @@ const PORT = 18903;
 const TOKEN = "metrics-smoke-token-32-chars-1234567890";
 const BASE = `http://127.0.0.1:${PORT}`;
 const WORKSPACE = "/tmp/pyanchor-metrics-smoke";
+// v0.32.3 — point PYANCHOR_STATE_DIR at a per-test scratch dir so
+// the host's `~/.pyanchor/state.json` (left behind by other runs of
+// pyanchor on the dev box) doesn't leak `recentMessages` into the
+// "fresh boot" assertions below. Without this, every developer who
+// has ever run pyanchor against a real edit job sees this test fail
+// locally while CI passes (CI's HOME is empty).
+const STATE_DIR = "/tmp/pyanchor-metrics-smoke-state";
 
 mkdirSync(WORKSPACE, { recursive: true });
 
@@ -45,6 +52,12 @@ const waitForReady = async (timeoutMs = 5000): Promise<void> => {
 };
 
 beforeEach(async () => {
+  // v0.32.3 — wipe state dir BEFORE each spawn so a prior test (or
+  // a prior local run) can't leak messages/queue into a "fresh boot"
+  // assertion. mkdirSync handles the create; rmSync wipes the file.
+  const { rmSync } = await import("node:fs");
+  rmSync(STATE_DIR, { recursive: true, force: true });
+  mkdirSync(STATE_DIR, { recursive: true });
   serverProcess = spawn("node", [serverScript], {
     env: {
       ...process.env,
@@ -54,7 +67,8 @@ beforeEach(async () => {
       PYANCHOR_APP_DIR: WORKSPACE,
       PYANCHOR_AGENT: "openclaw",
       PYANCHOR_RESTART_SCRIPT: "/bin/true",
-      PYANCHOR_HEALTHCHECK_URL: `${BASE}/healthz`
+      PYANCHOR_HEALTHCHECK_URL: `${BASE}/healthz`,
+      PYANCHOR_STATE_DIR: STATE_DIR
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
