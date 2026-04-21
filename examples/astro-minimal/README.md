@@ -1,28 +1,19 @@
 # astro-minimal
 
-A minimal **Astro 4** app wired to pyanchor. Demonstrates the
-non-built-in framework path: pyanchor doesn't ship an Astro profile,
-so you supply `PYANCHOR_INSTALL_COMMAND` and `PYANCHOR_BUILD_COMMAND`
-explicitly. Once that's done, every other feature works the same as on
-Next.js or Vite.
+A minimal **Astro 4** app wired to pyanchor. Uses the built-in
+`astro` framework profile (since v0.32.0): just set
+`PYANCHOR_FRAMEWORK=astro` and the sidecar knows to skip `dist` /
+`.astro` from rsync, run `npx astro build`, and route hint your
+edits into `src/pages/`.
 
 ## Why this matters
 
-Pyanchor only has built-in profiles for **nextjs** and **vite** today.
-For anything else (Astro, SvelteKit, Remix, Nuxt, plain Node + esbuild,
-custom monorepos), you bypass the profile and pin the install/build
-commands directly. This example proves the fallback works.
-
-If you read pyanchor's worker logs you'll see:
-
-```
-[pyanchor] Unknown PYANCHOR_FRAMEWORK="astro". Falling back to "nextjs".
-Built-in: nextjs, vite.
-```
-
-That warning is **expected** — the install/build overrides take
-precedence over the profile, so the nextjs fallback is never actually
-used for command resolution.
+Pyanchor ships first-class profiles for **5 frameworks**: nextjs,
+vite, astro, sveltekit, remix. For anything else (Nuxt, plain
+Node + esbuild, custom monorepos), the
+`PYANCHOR_INSTALL_COMMAND` + `PYANCHOR_BUILD_COMMAND` override
+path still works — pyanchor falls back to the nextjs profile for
+the route-hint heuristics with a one-line warning.
 
 ## Layout
 
@@ -58,12 +49,12 @@ export PYANCHOR_APP_DIR=$(pwd)
 export PYANCHOR_WORKSPACE_DIR=/tmp/pyanchor-astro-workspace
 
 # These two are the key bits — Astro doesn't have a built-in profile
-export PYANCHOR_INSTALL_COMMAND="pnpm install --frozen-lockfile"
-export PYANCHOR_BUILD_COMMAND="astro build"
-# If you've added @astrojs/check + typescript to devDependencies,
-# you can promote this to "astro check && astro build" for a
-# type-check-on-edit gate. The minimal example skips it to keep
-# the dependency surface small.
+export PYANCHOR_FRAMEWORK=astro
+# Built-in astro profile (v0.32.0+) defaults install/build to npm.
+# Override for pnpm/yarn:
+# export PYANCHOR_INSTALL_COMMAND="pnpm install --frozen-lockfile"
+# Or promote build to type-check-then-build (needs @astrojs/check + typescript):
+# export PYANCHOR_BUILD_COMMAND="npx astro check && npx astro build"
 
 # Optional: silence the framework warning by setting the var (the
 # value is ignored once install/build are pinned, but at least the

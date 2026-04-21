@@ -1,11 +1,17 @@
+import { astroProfile } from "./astro";
 import { nextjsProfile } from "./nextjs";
+import { remixProfile } from "./remix";
+import { sveltekitProfile } from "./sveltekit";
 import { viteProfile } from "./vite";
 
 import type { FrameworkProfile } from "./types";
 
 const profiles: Record<string, FrameworkProfile> = {
   nextjs: nextjsProfile,
-  vite: viteProfile
+  vite: viteProfile,
+  astro: astroProfile,
+  sveltekit: sveltekitProfile,
+  remix: remixProfile
 };
 
 export const FRAMEWORK_NAMES = Object.keys(profiles);
@@ -33,4 +39,4 @@ export function selectFramework(name: string): FrameworkProfile {
 }
 
 export type { FrameworkProfile };
-export { nextjsProfile, viteProfile };
+export { nextjsProfile, viteProfile, astroProfile, sveltekitProfile, remixProfile };

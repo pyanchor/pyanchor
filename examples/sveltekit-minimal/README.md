@@ -1,29 +1,23 @@
 # sveltekit-minimal
 
-A minimal **SvelteKit 2** app wired to pyanchor. Demonstrates the
-non-built-in framework path: pyanchor doesn't ship a SvelteKit
-profile, so you supply `PYANCHOR_INSTALL_COMMAND` and
-`PYANCHOR_BUILD_COMMAND` explicitly. Once that's done, every other
-feature works the same as on Next.js or Vite.
+A minimal **SvelteKit 2** app wired to pyanchor. Uses the built-in
+`sveltekit` framework profile (since v0.32.0): just set
+`PYANCHOR_FRAMEWORK=sveltekit` and the sidecar knows to skip
+`.svelte-kit` / `build` from rsync, run `npm run build`, and route
+hint your edits into `src/routes/+page.svelte`.
 
 ## Why this matters
 
-Pyanchor only has built-in profiles for **nextjs** and **vite**
-today. SvelteKit, Astro, Remix, Nuxt, and any custom stack go
-through the override path: pin install/build commands, get a
-one-line warning, everything else just works. This example proves
-the override path on SvelteKit (matching `astro-minimal/` for
-Astro).
+Pyanchor ships first-class profiles for **5 frameworks**: nextjs,
+vite, astro, sveltekit, remix. Each profile bundles framework-
+specific defaults (install/build commands, rsync excludes, route
+hint heuristics) so the sidecar doesn't need any per-stack
+configuration from you beyond the env var.
 
-If you read pyanchor's worker logs you'll see:
-
-```
-[pyanchor] Unknown PYANCHOR_FRAMEWORK="sveltekit". Falling back to "nextjs".
-Built-in: nextjs, vite.
-```
-
-That warning is **expected** — install/build overrides take
-precedence over the profile.
+Anything else (Nuxt, custom stacks) still works via the
+`PYANCHOR_INSTALL_COMMAND` + `PYANCHOR_BUILD_COMMAND` override
+path — see the worker log warning + override docs in
+[`docs/integrate-with-vite.md`](../../docs/integrate-with-vite.md).
 
 ## Layout
 
@@ -61,16 +55,10 @@ export PYANCHOR_TOKEN=<same as above>
 export PYANCHOR_APP_DIR=$(pwd)
 export PYANCHOR_WORKSPACE_DIR=/tmp/pyanchor-sveltekit-workspace
 
-# These two are the key bits — SvelteKit doesn't have a built-in profile
-export PYANCHOR_INSTALL_COMMAND="pnpm install --frozen-lockfile"
-export PYANCHOR_BUILD_COMMAND="pnpm build"
-
-# Optional: make the fallback explicit. Setting this does NOT
-# silence the warning ("Unknown PYANCHOR_FRAMEWORK") because
-# pyanchor only ships nextjs / vite profiles — but it's a useful
-# operator hint that future-you intentionally took the override
-# path. Omit entirely if you'd rather have one fewer env var.
+# Built-in sveltekit profile (v0.32.0+) handles install + build + route hints
 export PYANCHOR_FRAMEWORK=sveltekit
+# Override the default install command if you use pnpm or yarn:
+# export PYANCHOR_INSTALL_COMMAND="pnpm install --frozen-lockfile"
 
 export PYANCHOR_RESTART_SCRIPT=$(pwd)/scripts/restart.sh
 export PYANCHOR_HEALTHCHECK_URL=http://127.0.0.1:5173/

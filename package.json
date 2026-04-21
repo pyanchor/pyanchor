@@ -1,6 +1,6 @@
 {
   "name": "pyanchor",
-  "version": "0.31.3",
+  "version": "0.32.0",
   "description": "Agent-agnostic AI live-edit sidecar for Next.js. Anchor edits straight into your running app.",
   "license": "MIT",
   "author": "PYAN <ikellllllll@users.noreply.github.com>",
@@ -70,22 +70,21 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.1",
     "@types/node": "^25.6.0",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^3.2.4",
     "esbuild": "^0.28.0",
     "happy-dom": "^20.8.9",
     "typescript": "^6.0.3",
-    "vitest": "^2.1.9"
+    "vitest": "^3.2.4"
   },
   "publishConfig": {
     "access": "public"
   },
   "pnpm": {
     "overrides": {
-      "esbuild@<0.25.0": ">=0.25.0"
+      "vite": "^6.4.2"
     },
     "_overrides_notes": {
-      "esbuild": "GHSA-67mh-4wv8-2f99 — dev-server fetch hijack in vitest > vite > esbuild transitive. Patch: 0.25+. Forces transitive bump without touching vitest/vite versions.",
-      "vite": "GHSA-4w7w-66w2-5vf9 — path traversal in vite optimized-deps .map handling. Patched in 6.4.2, but vitest@2.x peers vite@^5 — overriding vite to 6.x breaks the testsuite. Holding until vitest@3.x upgrade lands as a separate ship. Risk in our case: dev-server only, never in shipped runtime; vite reaches us via vitest dev dep, not production."
+      "vite": "GHSA-4w7w-66w2-5vf9 — path traversal in vite optimized-deps .map handling. Patched in 6.4.2. As of v0.32.0 we run vitest@3 (which peers vite@^5||^6||^7), so we can finally pin vite to 6.x without breaking the testsuite. Vite reaches us via vitest dev dep, never in shipped runtime — but the override closes pnpm-audit moderate alerts. The previous esbuild override is no longer needed because vite@6 brings esbuild ^0.25 transitively."
     }
   }
 }

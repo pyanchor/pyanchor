@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-04-21
+
+External-reviewer feedback round. Six items, all addressed in one
+ship: framework footprint, onboarding clarity, operator
+troubleshooting, agent-agnostic positioning, env-var ergonomics,
+and the last open `pnpm audit` advisory.
+
+### Added
+- **Three new built-in framework profiles** — `astro`, `sveltekit`,
+  `remix`. Brings the first-class footprint to **5 frameworks**
+  (was: nextjs + vite). Each profile bundles install/build defaults,
+  rsync workspace excludes, and route-hint heuristics so the sidecar
+  doesn't need any per-stack configuration beyond
+  `PYANCHOR_FRAMEWORK=<name>`.
+  - `src/frameworks/astro.ts` — excludes `dist` + `.astro`,
+    `npx astro build`, route candidates for
+    `src/pages/<route>.astro` + `.md` + `.mdx`.
+  - `src/frameworks/sveltekit.ts` — excludes `.svelte-kit` + `build`
+    + `dist` + `.vite`, route candidates for
+    `src/routes/<segment>/+page.svelte` (+ `.ts` / `.js` /
+    `.server.ts`), hint mentions Svelte 5 runes.
+  - `src/frameworks/remix.ts` — excludes `build` + `.cache`, both
+    flat (`app/routes/blog.posts.tsx`) and folder
+    (`app/routes/blog/posts/route.tsx`) route candidates.
+  - `tests/frameworks.test.ts` — 40 tests total (was: 19), covers
+    selection, defaults, excludes, route candidates, route hints.
+  - `examples/astro-minimal/README.md` and
+    `examples/sveltekit-minimal/README.md` updated to use the
+    new built-in profiles instead of the pre-v0.32.0
+    `PYANCHOR_INSTALL_COMMAND` + `PYANCHOR_BUILD_COMMAND`
+    override path (which still works for anything outside the
+    five built-in profiles).
+- **`docs/TROUBLESHOOTING.md`** — new operator-facing
+  troubleshooting guide. Quick "symptom → first command → deeper
+  section" map at the top, then 8 sections covering sidecar boot,
+  bootstrap mount, agent CLI silence, apply-mode rsync,
+  build-broke-workspace, PR mode prereqs, audit log enablement,
+  and auth + gate cookie. Includes the operator CLI cheat sheet
+  (`pyanchor doctor` / `logs` / `agent test` / `init`).
+- **README — "Why bring your own agent"** — new subsection before
+  the supported-agents table that explains the design choice
+  (no model lock-in, you own the model spend, swap via
+  `PYANCHOR_AGENT=<name>`, no extra adapter to maintain when
+  Claude/Codex/etc. ship breaking changes).
+- **README — Quick start "TL;DR (~30 seconds, 5 required env
+  vars)"** — short list at the top of Quick start that names the
+  five required vars (`PYANCHOR_TOKEN`, `PYANCHOR_APP_DIR`,
+  `PYANCHOR_WORKSPACE_DIR`, `PYANCHOR_AGENT`,
+  `PYANCHOR_RESTART_SCRIPT`) so reviewers stop reading "200+
+  env vars" as the headline. The other 60 vars in `.env.example`
+  are all optional with sensible defaults.
+
+### Changed
+- **`.env.example` restructured into 8 numbered sections** —
+  banner up top says "5 REQUIRED below, ~60 OPTIONAL with
+  sensible defaults". Section 1 is the required block;
+  sections 2–8 are agent + framework picks, ports, runtime,
+  output mode, audit/webhooks, security/access control, and
+  adapter-specific knobs. Same vars, just navigable.
+- **README — frameworks table** — refreshed to show all 5 built-in
+  profiles with their install commands, build commands, and
+  workspace excludes side-by-side.
+
+### Fixed
+- **Last `pnpm audit` advisory closed (GHSA-4w7w-66w2-5vf9)** —
+  vite path traversal in optimized-deps `.map` handling. Patched
+  in 6.4.2. The v0.31.3 deferred note explained why we couldn't
+  override on vitest@2 (vitest@2 peers vite@^5, override broke
+  39/49 test files). v0.32.0 bumps **vitest 2.1.9 → 3.2.4** and
+  **`@vitest/coverage-v8` 2.1.9 → 3.2.4**, which lets us pin
+  `vite` to `^6.4.2` via `pnpm.overrides` without breaking the
+  testsuite (855/855 unit tests still pass). The previous esbuild
+  override is no longer needed because vite@6 brings esbuild
+  ^0.25 in transitively. `pnpm audit` now reports **0
+  vulnerabilities**.
+
+### No-API-break
+- 0.31.3 → 0.32.0 is **API + behavior compatible**. The
+  framework profile registry just gained three new keys; the
+  existing `nextjs` and `vite` profiles are byte-identical.
+  Examples that hard-coded the override-via-env path
+  (`PYANCHOR_INSTALL_COMMAND` + `PYANCHOR_BUILD_COMMAND`)
+  continue to work unchanged.
+
 ## [0.31.3] - 2026-04-21
 
 Closes one of the two transitive `pnpm audit` advisories surfaced

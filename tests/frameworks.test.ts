@@ -2,8 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   FRAMEWORK_NAMES,
+  astroProfile,
   nextjsProfile,
+  remixProfile,
   selectFramework,
+  sveltekitProfile,
   viteProfile
 } from "../src/frameworks";
 
@@ -21,10 +24,24 @@ describe("selectFramework", () => {
     expect(selectFramework("NextJS")).toBe(nextjsProfile);
   });
 
+  it("returns the astro profile when asked", () => {
+    expect(selectFramework("astro")).toBe(astroProfile);
+  });
+
+  it("returns the sveltekit profile when asked", () => {
+    expect(selectFramework("sveltekit")).toBe(sveltekitProfile);
+  });
+
+  it("returns the remix profile when asked", () => {
+    expect(selectFramework("remix")).toBe(remixProfile);
+  });
+
   it("falls back to nextjs for unknown values, with a console warning", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
-      const profile = selectFramework("astro");
+      // Use a name we'll never ship as a built-in profile so the test
+      // stays meaningful even as the FRAMEWORK_NAMES list grows.
+      const profile = selectFramework("definitely-not-a-real-framework");
       expect(profile).toBe(nextjsProfile);
       expect(warn).toHaveBeenCalledOnce();
       expect(warn.mock.calls[0]?.[0]).toContain("Unknown PYANCHOR_FRAMEWORK");
@@ -44,7 +61,103 @@ describe("selectFramework", () => {
   });
 
   it("exposes the registered framework names", () => {
-    expect(FRAMEWORK_NAMES).toEqual(expect.arrayContaining(["nextjs", "vite"]));
+    expect(FRAMEWORK_NAMES).toEqual(
+      expect.arrayContaining(["nextjs", "vite", "astro", "sveltekit", "remix"])
+    );
+  });
+});
+
+describe("astroProfile", () => {
+  it("uses npm install as the default install command", () => {
+    expect(astroProfile.installCommand).toBe("npm install");
+  });
+
+  it("uses npx astro build as the default build command", () => {
+    expect(astroProfile.buildCommand).toBe("npx astro build");
+  });
+
+  it("excludes dist and .astro caches from rsync", () => {
+    expect(astroProfile.workspaceExcludes).toEqual(
+      expect.arrayContaining(["dist", ".astro"])
+    );
+  });
+
+  it("returns src/pages root candidates for /", () => {
+    const root = astroProfile.routeFileCandidates("/");
+    expect(root).toContain("src/pages/index.astro");
+  });
+
+  it("emits .astro + .md + .mdx candidates for a named route", () => {
+    const candidates = astroProfile.routeFileCandidates("/about");
+    expect(candidates).toContain("src/pages/about.astro");
+    expect(candidates).toContain("src/pages/about/index.astro");
+    expect(candidates).toContain("src/pages/about.md");
+  });
+
+  it("warns about astro frontmatter convention in route hints", () => {
+    const hints = astroProfile.routeHints("/about").join("\n");
+    expect(hints.toLowerCase()).toMatch(/frontmatter|template/);
+  });
+});
+
+describe("sveltekitProfile", () => {
+  it("uses npm install + npm run build by default", () => {
+    expect(sveltekitProfile.installCommand).toBe("npm install");
+    expect(sveltekitProfile.buildCommand).toBe("npm run build");
+  });
+
+  it("excludes .svelte-kit + build + dist + .vite from rsync", () => {
+    expect(sveltekitProfile.workspaceExcludes).toEqual(
+      expect.arrayContaining([".svelte-kit", "build", "dist", ".vite"])
+    );
+  });
+
+  it("returns +page.svelte root candidates for /", () => {
+    const root = sveltekitProfile.routeFileCandidates("/");
+    expect(root).toContain("src/routes/+page.svelte");
+  });
+
+  it("emits +page.svelte + +page.server.ts candidates for a named route", () => {
+    const candidates = sveltekitProfile.routeFileCandidates("/dashboard");
+    expect(candidates).toContain("src/routes/dashboard/+page.svelte");
+    expect(candidates).toContain("src/routes/dashboard/+page.server.ts");
+  });
+
+  it("mentions Svelte 5 runes in route hints", () => {
+    const hints = sveltekitProfile.routeHints("/dashboard").join("\n");
+    expect(hints).toMatch(/runes|\$state/);
+  });
+});
+
+describe("remixProfile", () => {
+  it("uses npm install + npm run build by default", () => {
+    expect(remixProfile.installCommand).toBe("npm install");
+    expect(remixProfile.buildCommand).toBe("npm run build");
+  });
+
+  it("excludes build + .cache from rsync", () => {
+    expect(remixProfile.workspaceExcludes).toEqual(
+      expect.arrayContaining(["build", ".cache"])
+    );
+  });
+
+  it("returns _index.tsx + root.tsx as root candidates", () => {
+    const root = remixProfile.routeFileCandidates("/");
+    expect(root).toContain("app/routes/_index.tsx");
+    expect(root).toContain("app/root.tsx");
+  });
+
+  it("emits flat (dot-segmented) + folder route candidates", () => {
+    const candidates = remixProfile.routeFileCandidates("/blog/posts");
+    // flat (dots): app/routes/blog.posts.tsx
+    expect(candidates).toContain("app/routes/blog.posts.tsx");
+    // folder: app/routes/blog/posts/route.tsx
+    expect(candidates).toContain("app/routes/blog/posts/route.tsx");
+  });
+
+  it("mentions loader/action server-first model in route hints", () => {
+    const hints = remixProfile.routeHints("/dashboard").join("\n");
+    expect(hints.toLowerCase()).toMatch(/loader|action|server-first/);
   });
 });
 

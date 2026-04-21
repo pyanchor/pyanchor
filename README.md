@@ -138,20 +138,39 @@ trying pyanchor for the first time.
 
 ## 🚀 Quick start
 
-### Option A: `npx pyanchor init` (recommended, ~30 seconds)
+### TL;DR (~30 seconds, 5 required env vars, the rest defaulted)
 
-From the root of your Next.js / Vite / Astro app:
+```bash
+cd ~/projects/your-app          # Next.js / Vite / Astro / SvelteKit / Remix
+npx pyanchor init               # detects framework + agent, generates env file
+# → answer 5 questions (token, agent, paths) — defaults for everything else
+pnpm dev &                      # your normal dev command
+pyanchor                        # the sidecar (in a second terminal)
+# open http://localhost:3000, click the floating button, describe a change
+```
+
+That's the whole thing. Pyanchor has 60 env vars total, but you
+only ever set the 5 required ones — `init` writes them for you and
+the other 55 are sane defaults. See [`.env.example`](./.env.example)
+if you want to tweak something specific.
+
+### Option A: `npx pyanchor init` (recommended)
+
+From the root of your Next.js / Vite / Astro / SvelteKit / Remix app:
 
 ```bash
 npx pyanchor init
 ```
 
-The interactive scaffolder auto-detects your framework + agent CLI,
-generates a token, writes `.env.local` (or `.env`) and a
-`scripts/pyanchor-restart.sh` stub, then prints the bootstrap snippet
-to copy into your global layout. Use `--yes` for headless / CI mode
-(takes all defaults), `--dry-run` to preview without writing, and
-`--force` to overwrite existing files on a re-run.
+The interactive scaffolder:
+- **Auto-detects** your framework (5 built-in profiles) + agent CLI on PATH
+- **Generates** a token via `crypto.randomBytes(32)`
+- **Writes** `.env.local` (or `.env`) and a `scripts/pyanchor-restart.sh` stub
+- **Prints** the bootstrap snippet for you to copy into the global layout
+
+Flags: `--yes` (headless / CI), `--dry-run` (preview), `--force`
+(overwrite existing files on a re-run), `--cwd <path>` (init a project
+elsewhere).
 
 Then, in two terminals:
 
@@ -162,6 +181,11 @@ pyanchor               # the sidecar (in a second terminal)
 
 That's it. Open `http://localhost:3000`, click the floating button,
 describe a change.
+
+If something breaks, run `pyanchor doctor` — it lists every
+startup check + suggested fix. See
+[`docs/TROUBLESHOOTING.md`](./docs/TROUBLESHOOTING.md) for common
+patterns.
 
 ### Option B: Manual quickstart (if you want to know what `init` does under the hood)
 
@@ -314,7 +338,38 @@ NextAuth gate, multi-agent swap, PR mode, …).
 
 ## Supported agents
 
-Pick a backend with `PYANCHOR_AGENT`:
+### Why "bring your own agent" instead of one bundled LLM
+
+Pyanchor is **agent-agnostic by design**. The sidecar handles the
+plumbing (workspace, install/build, rsync/restart, audit, gating);
+your **chosen agent CLI** handles the actual code edit. We don't
+embed an LLM, ship a vendor SDK, or proxy your prompts through any
+service we control.
+
+This shape is the wedge:
+
+- **No lock-in.** Switch from `claude-code` to `gemini` to `codex`
+  with one env var. Run an A/B on the same workspace by spinning
+  up two sidecars. Compare quality + cost without rewriting the
+  integration.
+- **You own the API key.** Pyanchor never sees your provider
+  credentials — they go straight from your env to the agent CLI.
+  Cost, rate limits, and audit live in your provider account.
+- **Future-proof.** When the next better agent CLI ships in 6
+  months, pyanchor doesn't need a release. You install the new
+  CLI, set `PYANCHOR_AGENT=<name>`, restart the sidecar.
+  ([`AgentRunner`](./src/agents/types.ts) is a ~70-line
+  interface; a working adapter is typically 100-200 LOC — see the
+  5 we ship for reference.)
+- **Self-hosted ↔ self-hostable agent.** OpenClaw / Aider can run
+  fully on-prem. Pyanchor + on-prem agent = your code never
+  leaves your infrastructure.
+
+The cost is one extra install step (the agent CLI) + initial auth.
+[`pyanchor doctor`](./docs/TROUBLESHOOTING.md) checks the agent CLI
+is reachable so you know before the first edit.
+
+### Pick a backend with `PYANCHOR_AGENT`:
 
 | `PYANCHOR_AGENT` | Status | Notes |
 | --- | --- | --- |
@@ -324,8 +379,6 @@ Pick a backend with `PYANCHOR_AGENT`:
 | `aider` | ✅ shipped | aider-chat CLI on `PATH`. Install: `pip install aider-chat`. Workspace should be a git repo. Override binary with `PYANCHOR_AIDER_BIN`. |
 | `gemini` | ✅ shipped | Google Gemini CLI on `PATH`. Install: `npm i -g @google/gemini-cli`. Auth: `GEMINI_API_KEY` env, `gemini auth login` (OAuth), or Vertex AI. Setup: [`docs/gemini-setup.md`](./docs/gemini-setup.md) |
 | Goose, Cline, custom | 🟡 | implement the [`AgentRunner`](./src/agents/types.ts) interface — see [`docs/adapters.md`](./docs/adapters.md) |
-
-The interface is ~70 lines; a working adapter is typically ~100-200.
 
 ## Supported frameworks
 
@@ -337,7 +390,10 @@ agent route hints.
 | --- | --- | --- | --- | --- |
 | `nextjs` | ✅ default | `corepack yarn install --frozen-lockfile` | `next build` (telemetry off) | `.next` |
 | `vite` | ✅ shipped | `npm install` | `npm run build` | `dist`, `.vite` |
-| Astro / Remix / SvelteKit / CRA / your own | 🟡 | set explicitly | set explicitly | falls through to `nextjs` profile route hints |
+| `astro` | ✅ shipped (v0.32.0+) | `npm install` | `npx astro build` | `dist`, `.astro` |
+| `sveltekit` | ✅ shipped (v0.32.0+) | `npm install` | `npm run build` | `.svelte-kit`, `build`, `dist`, `.vite` |
+| `remix` | ✅ shipped (v0.32.0+) | `npm install` | `npm run build` | `build`, `.cache` |
+| Nuxt / CRA / your own | 🟡 | set explicitly | set explicitly | falls through to `nextjs` profile route hints |
 
 For frameworks we don't ship a profile for, you usually only need:
 
