@@ -413,6 +413,37 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
   handleError(response, error, 500);
 });
 
+// v0.32.4 — keep the event loop reffed via an explicit no-op
+// interval. Pre-v0.32.4, when this file was spawned directly by
+// systemd (ExecStart=/usr/bin/node .../server.cjs) — i.e. NOT as
+// a cli.cjs child — the process exited code=0/SUCCESS within ~1s
+// of "listening", with no errors and no SIGTERM. systemd reported
+// "Deactivated successfully" and Restart=on-failure was a no-op
+// (the exit code was 0). Direct `npx pyanchor` (cli.cjs spawning
+// server.cjs with stdio "inherit") never showed the bug because
+// the inherited stdio kept enough refs alive that the GC didn't
+// race the boot path.
+//
+// Empirically: capturing `app.listen()` into a module-level const
+// (or even an `export const`) was NOT enough to keep the listening
+// socket reffed under Node v20 + Express 5 + the v0.32.0 module
+// import set. The setInterval below is the only thing that reliably
+// holds the loop open — costs ~negligible, runs nothing, never
+// fires user code.
+//
+// If we ever figure out *why* `app.listen` doesn't keep its own
+// socket reffed in this configuration we can drop this.
 app.listen(pyanchorConfig.port, pyanchorConfig.host, () => {
   console.log(`pyanchor sidecar listening on http://${pyanchorConfig.host}:${pyanchorConfig.port}`);
 });
+const __pyanchorEventLoopAnchor = setInterval(() => {
+  /* deliberately empty — the timer existing is the point */
+}, 60_000);
+// Allow graceful shutdown to clear the interval too. SIGTERM is
+// what systemd sends on `systemctl stop`; without this, even a
+// clean stop would leave the process holding the loop open.
+const __clearAnchor = () => {
+  clearInterval(__pyanchorEventLoopAnchor);
+};
+process.once("SIGTERM", __clearAnchor);
+process.once("SIGINT", __clearAnchor);

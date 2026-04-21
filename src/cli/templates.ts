@@ -196,7 +196,9 @@ export function renderBootstrapSnippet(
       ``,
       `Then in vite.config.ts add a dev proxy:`,
       ``,
-      `  server: { proxy: { "/_pyanchor": { target: "${proxyTarget}", changeOrigin: false } } }`
+      `  server: { proxy: { "/_pyanchor": { target: "${proxyTarget}", changeOrigin: false } } }`,
+      ``,
+      PROD_HOSTS_HINT
     ].join("\n");
   }
 
@@ -209,7 +211,9 @@ export function renderBootstrapSnippet(
       ``,
       `Astro uses Vite under the hood — add to astro.config.mjs:`,
       ``,
-      `  vite: { server: { proxy: { "/_pyanchor": { target: "${proxyTarget}", changeOrigin: false } } } }`
+      `  vite: { server: { proxy: { "/_pyanchor": { target: "${proxyTarget}", changeOrigin: false } } } }`,
+      ``,
+      PROD_HOSTS_HINT
     ].join("\n");
   }
 
@@ -220,9 +224,30 @@ export function renderBootstrapSnippet(
     `  ${tokenNote}`,
     ``,
     `Then add a /_pyanchor/* dev proxy to whatever serves your app on dev so the`,
-    `bootstrap script can reach the sidecar at ${proxyTarget}.`
+    `bootstrap script can reach the sidecar at ${proxyTarget}.`,
+    ``,
+    PROD_HOSTS_HINT
   ].join("\n");
 }
+
+// v0.32.4 — surface the prod-deployment caveat that bit a reviewer
+// during the pyanchor-demo onboarding sim: bootstrap.ts trusts
+// localhost / 127.0.0.1 by default, so a `data-pyanchor-token` snippet
+// pasted into a real-domain deployment silently no-ops with a
+// "[pyanchor] overlay disabled on untrusted host" console.warn. Easy
+// to miss because the sidecar still serves bootstrap.js + the gate
+// cookie still works — but the overlay never mounts. Inline the
+// fix here so users see it the moment init prints the snippet,
+// not after the first browser visit fails.
+const PROD_HOSTS_HINT =
+  `Production hostname tip: the bootstrap script trusts localhost / 127.0.0.1 by\n` +
+  `default. To run on a real domain, add data-pyanchor-trusted-hosts (CSV)\n` +
+  `and (optionally) data-pyanchor-require-gate-cookie to the same <script> tag:\n` +
+  `\n` +
+  `  data-pyanchor-trusted-hosts="your-domain.com,localhost,127.0.0.1"\n` +
+  `  data-pyanchor-require-gate-cookie="pyanchor_dev"\n` +
+  `\n` +
+  `See docs/ACCESS-CONTROL.md for the full 9-layer model + gate-cookie setup.`;
 
 /**
  * For Next.js, also prompt the user to add a rewrite to next.config.mjs.

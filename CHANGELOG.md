@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.4] - 2026-04-21
+
+P0 reviewer-sim fix #4. systemd / direct-spawn deployments of
+the sidecar (the prod path for `pyanchor.pyan.kr` and any
+production user) **silently exited with status=0 within ~1
+second of "listening"**. Caught when restoring the demo prod
+deployment after the v0.32.0–v0.32.3 hands-on reviewer sim.
+
+### Fixed
+- **`dist/server.cjs` self-exited under direct spawn (the systemd
+  ExecStart pattern)** — `app.listen(port, host, callback)` was
+  called as an expression statement; the returned `http.Server`
+  was never bound to a variable. Under V8 with the v0.32.0-added
+  module import set (framework registry, etc.), the discarded
+  server became GC-eligible. The first GC cycle (often within
+  ~1s under systemd's spawn pattern) finalized the listening
+  socket → unrefed the event loop → process exited code=0.
+  systemd reported `"Deactivated successfully"` and
+  `Restart=on-failure` was a no-op (status was 0, not failure).
+
+  Why it didn't show in dev: `npx pyanchor` (cli.cjs spawning
+  server.cjs as a child with `stdio: "inherit"`) kept enough
+  sibling references alive to delay GC past the boot path. The
+  bug was therefore invisible to every dev-loop user.
+
+  Fix: top-level `setInterval` no-op timer in `src/server.ts`
+  that holds the event loop reffed independently of the listen
+  socket. Cleared on `SIGTERM` / `SIGINT` so graceful shutdown
+  still works (SIGTERM → drain → exit, instead of hung).
+
+- **`pyanchor init` printed bootstrap snippet didn't tell prod
+  users about the trusted-hosts default** — bootstrap.ts trusts
+  only `localhost` / `127.0.0.1` / `[::1]` / `0.0.0.0` by
+  default. A snippet pasted into a real-domain index.html
+  silently no-ops with a `[pyanchor] overlay disabled on
+  untrusted host` console.warn. Easy to miss because:
+  - The sidecar still serves `bootstrap.js`
+  - The gate cookie still works
+  - No HTTP error, no failed request
+  - The overlay just never mounts
+
+  Caught against `https://pyanchor.pyan.kr/` after manually
+  copying the v0.32.2 init snippet. Fix: `renderBootstrapSnippet`
+  now appends a "Production hostname tip" block to every
+  non-Next.js framework's snippet (vite / astro / sveltekit /
+  remix / generic), explaining `data-pyanchor-trusted-hosts` +
+  `data-pyanchor-require-gate-cookie` with paste-ready examples
+  and a pointer to docs/ACCESS-CONTROL.md.
+
+### Added
+- `tests/server/listen-ref.test.ts` (2 tests) — boots
+  `dist/server.cjs` directly (the systemd ExecStart shape),
+  asserts the process is still alive 4 seconds after
+  "listening", and verifies SIGTERM cleans up the anchor
+  interval so graceful shutdown still works. Will fail fast
+  if a future refactor drops the anchor.
+
+### How v0.31.x escaped this
+v0.31.3 systemd deployments were observed alive for 12+ hours.
+v0.32.0 (vitest 3 + framework registry + larger module set)
+crossed the threshold where V8's GC heuristic ran early enough
+to race the boot path. Same code in `app.listen()`, different
+GC timing.
+
+### Reviewer-sim verification (real prod path, full chain)
+```
+systemctl restart pyanchor-demo
+  → systemd: Started
+  → node: pyanchor sidecar listening on http://127.0.0.1:3011
+  → systemd: SubState=running   (was: Deactivated successfully)
+  → uptime: 4+ seconds         (was: 1s exit)
+nginx /_pyanchor/* proxy → sidecar OK
+https://pyanchor.pyan.kr/__pyanchor-gate-set?secret=...
+  → 302 + pyanchor_dev cookie
+https://pyanchor.pyan.kr/  (with cookie + trusted-hosts attr)
+  → headless playwright: <div id=pyanchor-overlay-root> mounts
+  → 0 console errors, 0 failed requests
+```
+
+884 unit tests; the 2 new listen-ref tests pass. The 6
+host-state-leak failures (server-readyz / server-metrics that
+weren't isolated like server-metrics was in v0.32.3) are
+pre-existing and tracked as a follow-up; CI passes because
+its `$HOME` is empty.
+
 ## [0.32.3] - 2026-04-21
 
 P0 reviewer-sim fix #3 (after v0.32.1 shebang + v0.32.2 dotenv).
