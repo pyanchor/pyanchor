@@ -1,4 +1,4 @@
-import { mkdir, readdir } from "node:fs/promises";
+import { chmod, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 
 import { build } from "esbuild";
@@ -26,6 +26,13 @@ await build({
 // the default no-arg path just spawns dist/server.cjs as a child.
 // Built separately (not bundled into server.cjs) so the cold-start
 // path of a normal `pyanchor` invocation stays tiny.
+//
+// v0.32.1 — banner adds a node shebang so `npx pyanchor` / the npm
+// `bin` shim work. Without this, npm's symlink (node_modules/.bin/
+// pyanchor → dist/cli.cjs) hits a file with no interpreter line, the
+// shell tries to run it as sh, and you get "use strict: not found"
+// "Syntax error" garbage. systemd users (`ExecStart=/usr/bin/node
+// .../server.cjs`) never noticed because they invoke node directly.
 await build({
   ...shared,
   entryPoints: ["src/cli/main.ts"],
@@ -33,10 +40,17 @@ await build({
   platform: "node",
   format: "cjs",
   target: "node18",
+  banner: { js: "#!/usr/bin/env node" },
   // server.cjs is a sibling, loaded at runtime via spawn — never
   // imported. Mark as external so esbuild doesn't try to bundle it.
   external: ["./server.cjs"]
 });
+
+// v0.32.1 — esbuild writes 0644; npm install would chmod +x the bin
+// at install time anyway, but doing it here makes the tarball itself
+// 0755 (visible in `npm pack` tar -tv) and avoids a class of "the
+// tarball looks broken" surprises in audit/security tooling.
+await chmod("dist/cli.cjs", 0o755);
 
 await build({
   ...shared,

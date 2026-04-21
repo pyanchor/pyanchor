@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.1] - 2026-04-21
+
+P0 hotfix. The npm-install code path of pyanchor has been broken
+**since v0.28.0** (when the top-level CLI dispatcher was added)
+and nobody noticed for 4 ships because every internal test, every
+demo deployment, and every reviewer in the loop went through
+`node dist/server.cjs` directly via systemd or `pnpm exec`.
+
+Caught the moment we re-tested the npm onboarding flow on a clean
+demo box (the exact "is pyanchor really easy to install" reviewer
+sim).
+
+### Fixed
+- **`npx pyanchor` / `node_modules/.bin/pyanchor` crashed on first
+  invocation** with shell errors like
+  `use strict: not found`, `Syntax error: "(" unexpected`. Root
+  cause: `dist/cli.cjs` was emitted by esbuild without a
+  `#!/usr/bin/env node` shebang and at mode `0644`. npm symlinks
+  the bin entry as-is, so the shell tried to interpret the JS as
+  a sh script. systemd users were never affected because their
+  unit calls `/usr/bin/node ... /dist/server.cjs` explicitly,
+  bypassing the bin shim entirely. Fix:
+  - `build.mjs` adds `banner: { js: "#!/usr/bin/env node" }` to
+    the cli.cjs esbuild call.
+  - `build.mjs` then `chmod 0o755 dist/cli.cjs` so the tarball
+    itself is executable (visible in `npm pack | tar -tv`),
+    not just the in-place file npm chmods at install time.
+  - New `tests/cli/dist-shebang.test.ts` (4 tests) asserts
+    shebang line + executable bit + direct invocation works
+    + node-prefixed invocation still works. Fails fast if a
+    future build refactor regresses either piece.
+
+### How to verify on an existing install
+```bash
+# Old (≤0.32.0):
+$ npx pyanchor --help
+…/node_modules/.bin/pyanchor: 1: use strict: not found
+…/node_modules/.bin/pyanchor: 8: Syntax error: "(" unexpected
+
+# 0.32.1+:
+$ npx pyanchor --help
+pyanchor — agent-agnostic AI live-edit sidecar for your web app
+Usage: …
+```
+
 ## [0.32.0] - 2026-04-21
 
 External-reviewer feedback round. Six items, all addressed in one
