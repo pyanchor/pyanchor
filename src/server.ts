@@ -433,17 +433,29 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
 //
 // If we ever figure out *why* `app.listen` doesn't keep its own
 // socket reffed in this configuration we can drop this.
-app.listen(pyanchorConfig.port, pyanchorConfig.host, () => {
+const __pyanchorHttpServer = app.listen(pyanchorConfig.port, pyanchorConfig.host, () => {
   console.log(`pyanchor sidecar listening on http://${pyanchorConfig.host}:${pyanchorConfig.port}`);
 });
 const __pyanchorEventLoopAnchor = setInterval(() => {
   /* deliberately empty — the timer existing is the point */
 }, 60_000);
-// Allow graceful shutdown to clear the interval too. SIGTERM is
-// what systemd sends on `systemctl stop`; without this, even a
-// clean stop would leave the process holding the loop open.
-const __clearAnchor = () => {
+// v0.32.4 graceful shutdown — handle SIGTERM (systemctl stop) and
+// SIGINT (Ctrl+C) by closing the listening socket and clearing the
+// loop anchor, then exiting. Critically: registering ANY listener for
+// SIGTERM disables Node's default action (exit), so this listener
+// MUST call process.exit itself — otherwise the sidecar hangs after
+// `systemctl stop` (caught when test isolation between sequential
+// spawns failed because the prior sidecar wasn't actually dying).
+const __shutdown = (signal: NodeJS.Signals) => {
   clearInterval(__pyanchorEventLoopAnchor);
+  // close() is async — but we don't wait. The OS will reclaim the
+  // socket when process.exit fires. close() just stops accepting
+  // new connections in the meantime.
+  __pyanchorHttpServer.close();
+  // 128 + signal number is the conventional exit code for signal-
+  // initiated termination, but systemd is happy with 0 here too
+  // since the listener fired (treated as graceful, not "failed").
+  process.exit(signal === "SIGTERM" ? 0 : 130);
 };
-process.once("SIGTERM", __clearAnchor);
-process.once("SIGINT", __clearAnchor);
+process.once("SIGTERM", __shutdown);
+process.once("SIGINT", __shutdown);
