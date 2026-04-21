@@ -148,9 +148,24 @@ export function renderRestartScript(input: RestartTemplateInput): string {
  * cost of getting it wrong (broken layout) is much higher than the
  * cost of asking the user to copy 4 lines.
  */
-export function renderBootstrapSnippet(framework: Framework, routerKind: RouterKind): string {
+export function renderBootstrapSnippet(
+  framework: Framework,
+  routerKind: RouterKind,
+  // v0.32.2 — caller passes the actual sidecar port + plain-text
+  // token so the snippet is paste-ready. Pre-v0.32.2 we hardcoded
+  // port 3010 even when init asked the user for a different port,
+  // and the token placeholder said "REPLACE_WITH_PYANCHOR_TOKEN"
+  // with no hint of where to find the real value.
+  port: number = 3010,
+  tokenForPaste?: string
+): string {
+  const tokenAttr = tokenForPaste ?? "REPLACE_WITH_PYANCHOR_TOKEN";
+  const tokenNote = tokenForPaste
+    ? `(token shown above is the freshly generated one written to your .env)`
+    : `(replace REPLACE_WITH_PYANCHOR_TOKEN with the PYANCHOR_TOKEN value from your .env)`;
   const tag = `<script src="/_pyanchor/bootstrap.js" defer data-pyanchor-token={process.env.NEXT_PUBLIC_PYANCHOR_TOKEN}></script>`;
-  const tagPlain = `<script src="/_pyanchor/bootstrap.js" defer data-pyanchor-token="REPLACE_WITH_PYANCHOR_TOKEN"></script>`;
+  const tagPlain = `<script src="/_pyanchor/bootstrap.js" defer data-pyanchor-token="${tokenAttr}"></script>`;
+  const proxyTarget = `http://127.0.0.1:${port}`;
 
   if (framework === "nextjs" && routerKind === "app") {
     return [
@@ -177,10 +192,11 @@ export function renderBootstrapSnippet(framework: Framework, routerKind: RouterK
       `Add to index.html inside <head>:`,
       ``,
       `  ${tagPlain}`,
+      `  ${tokenNote}`,
       ``,
       `Then in vite.config.ts add a dev proxy:`,
       ``,
-      `  server: { proxy: { "/_pyanchor": { target: "http://127.0.0.1:3010", changeOrigin: false } } }`
+      `  server: { proxy: { "/_pyanchor": { target: "${proxyTarget}", changeOrigin: false } } }`
     ].join("\n");
   }
 
@@ -189,10 +205,11 @@ export function renderBootstrapSnippet(framework: Framework, routerKind: RouterK
       `Add to src/layouts/Base.astro (or whatever wraps every page) inside <head>:`,
       ``,
       `  ${tagPlain}`,
+      `  ${tokenNote}`,
       ``,
       `Astro uses Vite under the hood — add to astro.config.mjs:`,
       ``,
-      `  vite: { server: { proxy: { "/_pyanchor": { target: "http://127.0.0.1:3010", changeOrigin: false } } } }`
+      `  vite: { server: { proxy: { "/_pyanchor": { target: "${proxyTarget}", changeOrigin: false } } } }`
     ].join("\n");
   }
 
@@ -200,23 +217,28 @@ export function renderBootstrapSnippet(framework: Framework, routerKind: RouterK
     `Add to your global HTML template (whatever renders <head> for every page):`,
     ``,
     `  ${tagPlain}`,
+    `  ${tokenNote}`,
     ``,
     `Then add a /_pyanchor/* dev proxy to whatever serves your app on dev so the`,
-    `bootstrap script can reach the sidecar at 127.0.0.1:3010.`
+    `bootstrap script can reach the sidecar at ${proxyTarget}.`
   ].join("\n");
 }
 
 /**
  * For Next.js, also prompt the user to add a rewrite to next.config.mjs.
+ *
+ * v0.32.2 — port is now passed in so the snippet matches the user's
+ * actual sidecar port. Pre-v0.32.2 we hardcoded 3010.
  */
-export function renderNextConfigSnippet(): string {
+export function renderNextConfigSnippet(port: number = 3010): string {
+  const dest = `http://127.0.0.1:${port}/_pyanchor/:path*`;
   return [
     `Add a /_pyanchor/* rewrite to next.config.mjs (or next.config.js):`,
     ``,
     `  /** @type {import('next').NextConfig} */`,
     `  const nextConfig = {`,
     `    async rewrites() {`,
-    `      return [{ source: "/_pyanchor/:path*", destination: "http://127.0.0.1:3010/_pyanchor/:path*" }];`,
+    `      return [{ source: "/_pyanchor/:path*", destination: "${dest}" }];`,
     `    }`,
     `  };`,
     `  export default nextConfig;`

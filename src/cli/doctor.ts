@@ -515,6 +515,22 @@ export function runDoctor(argv: string[] = []): DoctorReport {
   // Human-readable rendering (the v0.29.0 path, unchanged).
   console.log("pyanchor doctor — local config diagnostics");
   console.log(colorize("dim", "  (does not start the sidecar; only inspects what it would observe)"));
+
+  // v0.32.2 — surface dotenv autoload status. main.ts already loaded
+  // cwd `.env*` before runDoctor() was called; we recompute the file
+  // list here just for the message (no second-pass merge).
+  const dotenvFiles = [".env.local", ".env"]
+    .map((f) => require("node:path").join(process.cwd(), f))
+    .filter((p: string) => require("node:fs").existsSync(p));
+  if (dotenvFiles.length > 0) {
+    console.log(
+      colorize(
+        "dim",
+        `  loaded: ${dotenvFiles.map((p: string) => require("node:path").basename(p)).join(", ")} (cwd dotenv autoload)`
+      )
+    );
+  }
+
   for (const g of groups) {
     renderGroup(g);
   }

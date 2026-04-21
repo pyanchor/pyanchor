@@ -255,18 +255,23 @@ function buildPlan(d: Detection, args: ParsedArgs, ans: Answers, token: string):
   // Post steps the user must do themselves.
   const postSteps: string[] = [];
 
-  postSteps.push(renderBootstrapSnippet(d.framework, d.routerKind));
+  postSteps.push(renderBootstrapSnippet(d.framework, d.routerKind, ans.port, token));
 
   if (d.framework === "nextjs") {
     postSteps.push("");
-    postSteps.push(renderNextConfigSnippet());
+    postSteps.push(renderNextConfigSnippet(ans.port));
   }
 
   postSteps.push("");
-  postSteps.push("To start the sidecar:");
+  postSteps.push("Quick check (auto-loads the .env we just wrote):");
   postSteps.push(`  cd ${shellQuote(d.cwd)}`);
-  postSteps.push(`  source ${envFileName}; pyanchor`);
-  postSteps.push(`  # (or load the env via your process manager / docker)`);
+  postSteps.push(`  npx pyanchor doctor`);
+  postSteps.push("");
+  postSteps.push("Then start the sidecar:");
+  postSteps.push(`  npx pyanchor`);
+  postSteps.push(
+    `  # (Production: feed the same vars via systemd EnvironmentFile=, docker --env-file, pm2 ecosystem env, etc.)`
+  );
 
   return { actions, postSteps };
 }

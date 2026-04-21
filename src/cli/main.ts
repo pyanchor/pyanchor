@@ -25,6 +25,8 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 
+import { loadCwdDotenv } from "./load-env.js";
+
 // CJS bundle output — esbuild keeps __dirname / __filename as
 // native CJS globals. We declare them here so TypeScript is happy
 // while the runtime actually sees Node's CJS injection.
@@ -33,9 +35,24 @@ declare const __filename: string;
 
 const here = __dirname;
 
-async function main(): Promise<number> {
-  const sub = process.argv[2];
+// v0.32.2 — auto-load cwd `.env.local` / `.env` before any subcommand
+// runs. Vite / Next.js / Astro all do this; not doing it broke the
+// onboarding flow because reviewers ran `pyanchor init` (which writes
+// .env) and then `pyanchor doctor` and got "every required var unset"
+// — they assumed init was broken. Existing process.env always wins,
+// so systemd EnvironmentFile= and shell exports still take precedence.
+//
+// Skipped for `init` (init *creates* .env — it doesn't read one) and
+// for `--version` / `--help` (no env touched). For all other paths we
+// load early so doctor / sidecar / agent test / logs all see the file.
+const sub = process.argv[2];
+if (sub !== "init" && sub !== "--version" && sub !== "-v" && sub !== "--help" && sub !== "-h") {
+  loadCwdDotenv();
+}
 
+async function main(): Promise<number> {
+  // (sub already captured at module top so loadCwdDotenv could
+  // gate on it; re-using the same value here.)
   if (sub === "--version" || sub === "-v") {
     // Read version from sibling package.json. esbuild bundles cli.cjs
     // into dist/, so package.json is two dirs up.

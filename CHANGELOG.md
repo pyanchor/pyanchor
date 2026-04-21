@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.2] - 2026-04-21
+
+Continuation of the "is pyanchor really easy to install?" reviewer
+sim that landed v0.32.1 (npx shebang fix). Walking the post-init
+flow on a clean demo box surfaced three more onboarding cliffs.
+All three are dev-flow only — production systemd / docker /
+pm2 deployments were unaffected.
+
+### Fixed
+- **`pyanchor init` wrote `.env` but `pyanchor doctor` saw "every
+  required var unset"** — root cause: bash's `source .env` creates
+  shell variables but does NOT propagate them to child processes
+  unless `export` is used (or `set -a` wraps the source). The
+  init "next steps" message said `source .env; pyanchor`, which
+  silently fails because npx spawns a child. Reviewers assumed
+  init had broken when it actually wrote the file correctly.
+  Fix: the CLI now auto-loads `.env.local` then `.env` from cwd
+  on every subcommand except `init` / `--version` / `--help`.
+  Existing `process.env` entries always win, so systemd
+  `EnvironmentFile=` / docker `--env-file=` / pm2 `env: {...}`
+  flows are unaffected. Vite, Next.js, and Astro all do this
+  by default; pyanchor not doing it was an inconsistency that
+  broke the very first command after init.
+- **`pyanchor doctor` now prints `loaded: .env (cwd dotenv autoload)`**
+  so users can see *why* their values resolved, not just that
+  they did.
+- **`pyanchor init` final-steps message rewritten** to drop the
+  misleading `source .env; pyanchor` line. New flow: `npx pyanchor
+  doctor` (verifies the .env you just wrote) → `npx pyanchor`
+  (autoloads it for real). Production reminder kept inline.
+- **Bootstrap snippet `REPLACE_WITH_PYANCHOR_TOKEN` placeholder**
+  is now replaced inline with the freshly generated token (which
+  the user has just seen written to their `.env`). Pre-v0.32.2
+  the printed snippet was paste-and-then-go-find-the-token-yourself;
+  now it's paste-as-is.
+- **Bootstrap snippet hardcoded port 3010** even when init asked
+  the user for a different port and wrote that to `.env`. Same
+  bug in the Next.js `next.config` rewrite snippet. Fix:
+  `renderBootstrapSnippet` and `renderNextConfigSnippet` now take
+  the actual port from `gatherAnswers().port`.
+
+### Added
+- `src/cli/load-env.ts` — 100-line dependency-free `.env` parser
+  (no `dotenv` npm dep). Supports `KEY=VALUE`, `export KEY=VALUE`,
+  surrounding quotes, trailing `# ...` comments, and URL fragments
+  (no false-positive comment stripping). Documented to NEVER do
+  interpolation or multi-line values — pyanchor doesn't need them
+  and skipping that surface keeps the parser auditable in 60s.
+- `tests/cli/load-env.test.ts` — 16 tests covering parser edge
+  cases (quotes, exports, URL fragments, equals-in-values) and
+  the load priority (shell env wins; `.env.local` beats `.env`).
+
+### Reviewer-sim verification
+The sim that found these issues now passes the entire flow:
+1. `npm install --save-dev pyanchor` — fresh install
+2. `npx pyanchor init` — accept defaults
+3. `npx pyanchor doctor` — 14/17 ✓ (3 prod-only warnings, OK for dev)
+4. `npx pyanchor` — sidecar boots on configured port
+5. Paste bootstrap snippet (token already inline) into index.html
+6. Paste vite proxy config into vite.config.ts (port matches .env)
+7. `npm run dev` + browser → headless playwright confirms
+   `<div id="pyanchor-overlay-root">` mounts, all 4 sidecar
+   requests (bootstrap.js, overlay.js, api/session, api/status)
+   return 200, zero console errors, zero failed requests.
+
+877 unit tests pass (was 859, +18 from load-env coverage).
+
 ## [0.32.1] - 2026-04-21
 
 P0 hotfix. The npm-install code path of pyanchor has been broken
