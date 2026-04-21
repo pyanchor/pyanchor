@@ -1,6 +1,6 @@
 {
   "name": "pyanchor",
-  "version": "0.31.2",
+  "version": "0.31.3",
   "description": "Agent-agnostic AI live-edit sidecar for Next.js. Anchor edits straight into your running app.",
   "license": "MIT",
   "author": "PYAN <ikellllllll@users.noreply.github.com>",
@@ -78,5 +78,14 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild@<0.25.0": ">=0.25.0"
+    },
+    "_overrides_notes": {
+      "esbuild": "GHSA-67mh-4wv8-2f99 — dev-server fetch hijack in vitest > vite > esbuild transitive. Patch: 0.25+. Forces transitive bump without touching vitest/vite versions.",
+      "vite": "GHSA-4w7w-66w2-5vf9 — path traversal in vite optimized-deps .map handling. Patched in 6.4.2, but vitest@2.x peers vite@^5 — overriding vite to 6.x breaks the testsuite. Holding until vitest@3.x upgrade lands as a separate ship. Risk in our case: dev-server only, never in shipped runtime; vite reaches us via vitest dev dep, not production."
+    }
   }
 }

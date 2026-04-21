@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.3] - 2026-04-21
+
+Closes one of the two transitive `pnpm audit` advisories surfaced
+during the launch-demo deployment. dev-only impact (neither dep
+ships in the npm tarball), but Dependabot/audit was flagging both
+on every push and the cleanup unblocks the security tab.
+
+### Fixed
+- **`esbuild` advisory (GHSA-67mh-4wv8-2f99)** — dev-server fetch
+  hijack in versions ≤0.24.2, surfaced via `vitest > vite > esbuild`
+  transitive. Patched in 0.25+. Forced via a new `pnpm.overrides`
+  block (`"esbuild@<0.25.0": ">=0.25.0"`). Doesn't touch the
+  pinned vitest/vite versions, so `pnpm test` stays green
+  (836 unit + 69 e2e) on the same command line.
+
+### Deferred
+- **`vite` advisory (GHSA-4w7w-66w2-5vf9)** — path traversal in
+  vite's optimized-deps `.map` handling. Patched in 6.4.2.
+  Reaches us only via `vitest@2.x` (which peers `vite@^5`); a
+  vite override to 6.4.2 breaks the testsuite (39/49 files fail).
+  Real-world impact in our case: dev-server-only, never in the
+  shipped npm tarball. Holding until a vitest@3.x upgrade ships
+  separately (vitest 3 → vite 6.4+ peer range — single coordinated
+  bump). Documented as such in the `_overrides_notes` block of
+  `package.json` so future-me sees the plan.
+
 ## [0.31.2] - 2026-04-21
 
 Surfaced during real-browser deployment of pyanchor.pyan.kr (the
