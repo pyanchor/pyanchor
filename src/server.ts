@@ -19,7 +19,18 @@ import {
   type WebhookSink
 } from "./webhooks";
 
-validateConfig();
+// v0.32.7 — clean exit on missing required env. Pre-v0.32.7 the
+// throw bubbled to Node's default unhandled-exception printer,
+// which wrapped our message in a 10-line stack trace. First-time
+// users saw the trace before the actual list of missing vars and
+// often assumed pyanchor itself crashed. Now: print just our
+// message to stderr and exit(1).
+try {
+  validateConfig();
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
 
 if (pyanchorConfig.fastReload) {
   console.warn(
@@ -292,7 +303,25 @@ for (const basePath of runtimeBases) {
         actorVerification.kind === "ok" || actorVerification.kind === "unsigned"
           ? actorVerification.actor
           : undefined;
-      const body = request.body as AiEditStartInput;
+      // v0.32.7 — validate the request body shape BEFORE dispatch.
+      // Pre-fix, a missing/non-string `prompt` reached startAiEdit
+      // and threw "Cannot read properties of undefined (reading
+      // 'trim')" inside an async path → the global error handler
+      // turned it into a 500. Caught by codex audit (C11). Now we
+      // fail fast with a 400 + a message the caller can act on.
+      const body = (request.body ?? {}) as AiEditStartInput;
+      if (typeof body.prompt !== "string" || body.prompt.trim().length === 0) {
+        handleError(response, new Error("Field `prompt` is required and must be a non-empty string."), 400);
+        return;
+      }
+      if (body.targetPath !== undefined && typeof body.targetPath !== "string") {
+        handleError(response, new Error("Field `targetPath`, if provided, must be a string."), 400);
+        return;
+      }
+      if (body.mode !== undefined && body.mode !== "edit" && body.mode !== "chat") {
+        handleError(response, new Error('Field `mode`, if provided, must be "edit" or "chat".'), 400);
+        return;
+      }
       const result = await startAiEdit({
         ...body,
         ...(actor !== undefined ? { actor } : {})

@@ -34,6 +34,7 @@ import {
   REQUIRED_PLACEHOLDER,
   commandExists,
   executablePathExists,
+  numericEnvErrors,
   pathExists,
   pyanchorConfig
 } from "../config";
@@ -87,22 +88,34 @@ function checkRequiredEnv(): CheckGroup {
     { name: "PYANCHOR_HEALTHCHECK_URL", value: pyanchorConfig.healthcheckUrl }
   ];
 
+  const checks: CheckResult[] = required.map(({ name, value }): CheckResult => {
+    if (value === REQUIRED_PLACEHOLDER) {
+      return {
+        name,
+        status: "fail",
+        fix: `Set ${name} in your environment (see .env.example or run \`pyanchor init\`).`
+      };
+    }
+    const detail = name === "PYANCHOR_TOKEN" ? `set (${value.length} chars)` : value;
+    return { name, status: "ok", detail };
+  });
+
+  // v0.32.7 — surface numeric env parse errors collected at config
+  // load time. Pre-fix `PYANCHOR_PORT=not-a-number` silently
+  // resolved to default 3010; doctor said everything was fine.
+  // Caught by codex audit (C12).
+  for (const errMsg of numericEnvErrors) {
+    checks.push({
+      name: "numeric env parse",
+      status: "fail",
+      detail: errMsg,
+      fix: `Fix the value above and re-run \`pyanchor doctor\`.`
+    });
+  }
+
   return {
     title: "Required environment variables",
-    checks: required.map(({ name, value }): CheckResult => {
-      if (value === REQUIRED_PLACEHOLDER) {
-        return {
-          name,
-          status: "fail",
-          fix: `Set ${name} in your environment (see .env.example or run \`pyanchor init\`).`
-        };
-      }
-      // Mask the token in output — paranoid against accidentally
-      // capturing doctor output into a Slack channel.
-      const detail =
-        name === "PYANCHOR_TOKEN" ? `set (${value.length} chars)` : value;
-      return { name, status: "ok", detail };
-    })
+    checks
   };
 }
 
@@ -419,6 +432,46 @@ function checkOptional(): CheckGroup {
       ? undefined
       : "Recommended for any team / production deploy."
   });
+
+  // v0.32.7 — when audit log is enabled, also check that the
+  // parent directory exists and is writable. Pre-fix doctor said
+  // "enabled" without verifying the path, and the worker silently
+  // dropped events with stderr noise that nobody saw. Caught by
+  // codex audit harness (C6).
+  if (pyanchorConfig.auditLogEnabled) {
+    const parent = path.dirname(pyanchorConfig.auditLogFile);
+    if (!existsSync(parent)) {
+      checks.push({
+        name: "audit log dir exists",
+        status: "warn",
+        detail: parent,
+        fix:
+          `Parent directory of PYANCHOR_AUDIT_LOG_FILE does not exist. ` +
+          `The sidecar will try to mkdir -p on first event but if that ` +
+          `fails (read-only mount, missing permissions), every audit ` +
+          `event silently drops. Pre-create with \`mkdir -p ${parent}\`.`
+      });
+    } else {
+      try {
+        accessSync(parent, constants.W_OK);
+        checks.push({
+          name: "audit log dir writable",
+          status: "ok",
+          detail: parent
+        });
+      } catch {
+        checks.push({
+          name: "audit log dir writable",
+          status: "fail",
+          detail: parent,
+          fix:
+            `Parent directory of PYANCHOR_AUDIT_LOG_FILE is not writable ` +
+            `by the sidecar process. Audit events will silently fail to ` +
+            `append. Check ownership/permissions on \`${parent}\`.`
+        });
+      }
+    }
+  }
 
   if (pyanchorConfig.actorSigningSecret) {
     checks.push({

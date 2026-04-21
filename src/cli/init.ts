@@ -27,7 +27,7 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { detect, summarize, type AgentBin, type Detection, type Framework } from "./detect";
@@ -104,6 +104,37 @@ interface Plan {
   actions: PlanAction[];
   /** Things we deliberately won't auto-do — printed for the user. */
   postSteps: string[];
+}
+
+// v0.32.7 — read PYANCHOR_TOKEN (or NEXT_PUBLIC_PYANCHOR_TOKEN as
+// fallback for Next.js .env.local files) from an existing env file
+// so re-running init without --force keeps the on-disk token in
+// sync with the printed bootstrap snippet. Returns null if the
+// file isn't readable or has neither key.
+function readExistingToken(envPath: string): string | null {
+  let content: string;
+  try {
+    content = readFileSync(envPath, "utf8");
+  } catch {
+    return null;
+  }
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const stripped = trimmed.startsWith("export ") ? trimmed.slice(7).trimStart() : trimmed;
+    const m = stripped.match(/^(?:NEXT_PUBLIC_)?PYANCHOR_TOKEN\s*=\s*(.+)$/);
+    if (m && m[1]) {
+      let v = m[1].trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      // Strip an inline `# comment` after whitespace (URL frags survive).
+      const cm = v.match(/\s+#.*$/);
+      if (cm) v = v.slice(0, v.length - cm[0].length).trim();
+      if (v) return v;
+    }
+  }
+  return null;
 }
 
 const writeIfMissing = (filePath: string, contents: string, force: boolean, mode?: number): boolean => {
@@ -303,8 +334,39 @@ export async function runInit(argv: string[]): Promise<number> {
   console.log();
   const answers = await gatherAnswers(d, args);
 
-  const token = randomBytes(32).toString("hex");
+  // v0.32.7 — when re-running init without --force and an env file
+  // already exists, REUSE its PYANCHOR_TOKEN instead of generating
+  // a fresh one. Pre-v0.32.7 init always rolled a new token but
+  // skipped the env write if the file existed; the printed
+  // bootstrap snippet then carried a token that wasn't anywhere on
+  // disk, and pasting it into layout.tsx made every overlay call
+  // 401. Caught by the codex audit harness (C2). Force still
+  // rolls a new token (existing behavior with the warning above).
+  const envFileNameEarly = d.framework === "nextjs" ? ".env.local" : ".env";
+  const existingEnvPath = path.join(d.cwd, envFileNameEarly);
+  let token: string;
+  let tokenReused = false;
+  if (!args.force && existsSync(existingEnvPath)) {
+    const reused = readExistingToken(existingEnvPath);
+    if (reused) {
+      token = reused;
+      tokenReused = true;
+    } else {
+      // env file exists but no PYANCHOR_TOKEN line — generate fresh
+      // (writeIfMissing will then SKIP the env write, so the user
+      // still gets a snippet that matches… nothing. Surface that.)
+      token = randomBytes(32).toString("hex");
+    }
+  } else {
+    token = randomBytes(32).toString("hex");
+  }
   const plan = buildPlan(d, args, answers, token);
+  if (tokenReused) {
+    console.log(
+      `\n  (reusing existing PYANCHOR_TOKEN from ${envFileNameEarly} — ` +
+        `bootstrap snippet below matches what's on disk)`
+    );
+  }
 
   // v0.29.0 — round 18 recommendation 6: --force re-rolls the token
   // (every init invocation calls randomBytes(32)), which silently

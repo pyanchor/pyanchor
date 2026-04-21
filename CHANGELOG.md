@@ -7,6 +7,113 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.7] - 2026-04-21
+
+5 P1 onboarding gaps surfaced by a codex-driven audit pass. The
+audit harness from v0.32.6 was extended (`audit/scenarios-codex.mjs`,
+12 new scenarios) and run by codex itself acting as an external
+reviewer. Codex flagged 5 P1 issues + 7 by-design behaviors;
+v0.32.7 fixes all 5.
+
+### Fixed
+- **C1: `pyanchor` started with no env vars dumped a Node stack
+  trace before our actual error message** — `validateConfig()`
+  threw and Node's default uncaught-exception printer wrapped
+  the message in 10 lines of trace. First-time users saw the
+  trace and assumed pyanchor itself crashed.
+
+  Fix: `src/server.ts` now wraps `validateConfig()` in try/catch,
+  prints just `err.message` to stderr, and exits(1). The
+  validation message itself also gained a paste-ready next step
+  (`npx pyanchor init` → `npx pyanchor doctor` → `npx pyanchor`).
+
+- **C2: `pyanchor init` re-run desynced the bootstrap snippet
+  token from the on-disk `.env`** — pre-fix, every init
+  invocation called `randomBytes(32)` for a new token. The env
+  file write was idempotent (`writeIfMissing` skipped existing
+  files without `--force`), but the printed bootstrap snippet
+  always carried the *new* token. Users who copied the snippet
+  on their second `init` run got a token that wasn't anywhere
+  on disk → every overlay API call returned 401.
+
+  Fix: `src/cli/init.ts` now reads the existing `PYANCHOR_TOKEN`
+  (or `NEXT_PUBLIC_PYANCHOR_TOKEN`) from the env file when
+  `--force` is NOT in effect and the file exists. The snippet
+  uses that reused token. New helper `readExistingToken()` does
+  the parsing without a `dotenv` dep. Init also prints
+  `(reusing existing PYANCHOR_TOKEN from .env — bootstrap
+  snippet below matches what's on disk)` so the operator knows.
+
+- **C6: `PYANCHOR_AUDIT_LOG=true` with a missing parent
+  directory silently dropped every event** — `FileAuditSink.emit`
+  caught the ENOENT and logged to stderr, but the worker spawn
+  used `stdio: "ignore"` so nothing surfaced. Doctor reported
+  `enabled` without verifying the path. Operators ran prod with
+  audit "on" and no audit lines anywhere.
+
+  Fix: two layers.
+  - `src/audit.ts` `FileAuditSink` now does `mkdir -p` once on
+    first ENOENT and retries the append. After that one attempt
+    it stops trying (real permission issues shouldn't spam
+    stderr every event).
+  - `src/cli/doctor.ts` adds two new checks under "Optional
+    knobs": `audit log dir exists` (warn if missing — sidecar
+    will try to create) and `audit log dir writable` (fail if
+    parent exists but isn't writable).
+
+- **C11: `POST /api/edit` with a missing/invalid prompt
+  returned 500** with `Cannot read properties of undefined
+  (reading 'trim')`. The error reached the client as an opaque
+  server crash; overlays / curl-based callers had no actionable
+  signal.
+
+  Fix: `src/server.ts` `/api/edit` handler now validates the
+  request body shape BEFORE dispatch and returns 400 + a clean
+  message: "Field `prompt` is required and must be a non-empty
+  string." Same treatment for non-string `targetPath` and
+  invalid `mode` values.
+
+- **C12: invalid numeric env vars (`PYANCHOR_PORT=not-a-number`)
+  silently fell back to defaults** — `optionalNumber()` returned
+  the fallback whenever `Number()` produced NaN, so operator
+  typos resulted in port collisions and wrong reverse-proxy
+  targets. Doctor said everything was fine.
+
+  Fix: `src/config.ts` `optionalNumber` now records the parse
+  failure in a module-level `numericEnvErrors[]`. `validateConfig`
+  surfaces the list before checking required fields. `doctor`
+  imports the same list and surfaces it under "Required
+  environment variables" so the failure is loud at the diagnostic
+  stage too.
+
+### Audit harness verification
+```
+=== pyanchor codex reviewer scenarios ===
+Group C — first-hour onboarding gaps
+  ✓ C1: bare pyanchor explains missing env cleanly
+  ✓ C2: init twice keeps snippet token in sync
+  ✓ C3: init --force warns about token rotation
+  ✓ C4: logs -f missing file has actionable error
+  ✓ C5: doctor catches pr mode without gh
+  ✓ C6: audit log path is preflighted before edits
+  ✓ C7: 0.0.0.0 bind is refused without allowlist
+  ✓ C8: edit API enforces PYANCHOR_ALLOWED_ORIGINS
+  ✓ C9: query token rejected by default
+  ✓ C10: session cookie works for bootstrap API calls
+  ✓ C11: malformed edit payload returns 4xx
+  ✓ C12: doctor rejects invalid PYANCHOR_PORT
+=== pass: 12  fail: 0  gap: 0  skip: 0  total: 12 ===
+```
+
+872 unit tests pass + 13 skip + 0 fail.
+
+### No-API-break
+- Behavior changes are all error-path: cleaner messages, 400
+  instead of 500 for one validation case, mkdir auto-fix in the
+  audit sink. Successful paths are byte-identical.
+- The `numericEnvErrors` export is new — internal API only,
+  not advertised.
+
 ## [0.32.6] - 2026-04-21
 
 Reviewer-sim audit harness round. Built a synthetic Next.js app

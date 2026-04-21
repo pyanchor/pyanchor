@@ -74,16 +74,37 @@ export const sha256Hex = (input: string): string =>
  * Re-opens the file on every event so log-rotation is safe.
  */
 export class FileAuditSink implements AuditSink {
+  // v0.32.7 — only attempt mkdir-on-miss once per process. After
+  // that, if the parent dir keeps coming up missing it's a real
+  // permission/mount issue and retrying every event would just
+  // spam stderr.
+  private mkdirAttempted = false;
+
   constructor(private readonly filePath: string) {}
 
   async emit(event: AuditEvent): Promise<void> {
     try {
-      // JSON.stringify is intentional (not pretty-printed). One event
-      // per line lets tail / jq / Splunk parse without reassembly.
       await appendFile(this.filePath, `${JSON.stringify(event)}\n`, "utf8");
     } catch (err) {
-      // Audit failure must not break the worker. Log to stderr so
-      // operators see it in their normal log pipeline.
+      const code = (err as NodeJS.ErrnoException)?.code;
+      // v0.32.7 — when parent dir is missing, try to create it once.
+      // Caught by codex audit (C6): pre-fix, audit silently dropped
+      // every event when PYANCHOR_AUDIT_LOG_FILE pointed at a path
+      // whose parent didn't exist. Now we mkdir -p once and retry;
+      // if that also fails (real permission issue), fall through to
+      // the stderr warning.
+      if (code === "ENOENT" && !this.mkdirAttempted) {
+        this.mkdirAttempted = true;
+        try {
+          const { mkdir } = await import("node:fs/promises");
+          const path = await import("node:path");
+          await mkdir(path.dirname(this.filePath), { recursive: true });
+          await appendFile(this.filePath, `${JSON.stringify(event)}\n`, "utf8");
+          return;
+        } catch {
+          // fall through to the stderr warning
+        }
+      }
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[pyanchor:audit] failed to append to ${this.filePath}: ${message}`);
     }

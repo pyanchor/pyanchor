@@ -11,11 +11,29 @@ const PLACEHOLDER = REQUIRED_PLACEHOLDER;
 
 const requireEnv = (name: string): string => env[name]?.trim() || PLACEHOLDER;
 const optionalEnv = (name: string, fallback: string): string => env[name]?.trim() || fallback;
+// v0.32.7 — invalid env values are collected here and surfaced by
+// validateConfig() so the failure mode matches the missing-required
+// path (clean exit + actionable message instead of an uncaught
+// throw at module load time, which would print a stack trace before
+// our message). Exported for `pyanchor doctor` to surface the same
+// errors without booting the sidecar.
+export const numericEnvErrors: string[] = [];
+
 const optionalNumber = (name: string, fallback: number): number => {
   const value = env[name]?.trim();
   if (!value) return fallback;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  if (!Number.isFinite(parsed)) {
+    // Caught by codex audit (C12). Pre-fix `PYANCHOR_PORT=not-a-
+    // number` silently resolved to the default 3010, surprising
+    // operators with collisions and bad reverse-proxy targets.
+    numericEnvErrors.push(
+      `${name}=${JSON.stringify(value)} is not a valid number ` +
+        `(remove it to use the default ${fallback}, or set a numeric value)`
+    );
+    return fallback;
+  }
+  return parsed;
 };
 const optionalBool = (name: string, fallback: boolean): boolean => {
   const value = env[name]?.trim().toLowerCase();
@@ -405,6 +423,17 @@ export function isPyanchorConfigured() {
  * Throws with a single grouped error listing every missing variable.
  */
 export function validateConfig(): void {
+  // v0.32.7 — surface numeric env parse errors first. These are
+  // operator typos that would otherwise silently fall back and
+  // bind the wrong port / set the wrong timeout.
+  if (numericEnvErrors.length > 0) {
+    const list = numericEnvErrors.map((m) => `  - ${m}`).join("\n");
+    throw new Error(
+      `[pyanchor] Invalid numeric environment variables:\n${list}\n\n` +
+        `Fix the values above and re-run \`npx pyanchor\`.`
+    );
+  }
+
   const required: Record<string, string> = {
     PYANCHOR_APP_DIR: pyanchorConfig.appDir,
     PYANCHOR_RESTART_SCRIPT: pyanchorConfig.restartFrontendScript,
@@ -419,9 +448,15 @@ export function validateConfig(): void {
 
   if (missing.length > 0) {
     const list = missing.map((name) => `  - ${name}`).join("\n");
+    // v0.32.7 — include a paste-ready next step. Pre-v0.32.7 this
+    // error reached the user as a Node uncaught exception with a
+    // full stack trace before the actual message; the trace was
+    // noise. server.ts now catches and prints just the message.
     throw new Error(
       `[pyanchor] Missing required environment variables:\n${list}\n\n` +
-      `Provide these via your shell, .env file, or process manager.\n` +
+      `Run \`npx pyanchor init\` from your app root to scaffold them, ` +
+      `then \`npx pyanchor doctor\` to verify, then \`npx pyanchor\` to start.\n` +
+      `Or provide them via your shell / .env file / process manager directly. ` +
       `See .env.example in the repository root for documented values.`
     );
   }
