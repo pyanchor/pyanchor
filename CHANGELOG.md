@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.6] - 2026-04-21
+
+Reviewer-sim audit harness round. Built a synthetic Next.js app
+under `/home/bot/pyanchor-nextjs-audit/` (5 pages, App Router,
+20+ test-id elements) plus a scenario harness (`audit/run.mjs`)
+that covers ~10 onboarding paths a real user would walk through.
+The harness ran a full Group A (config / error paths, no agent
+calls) + Group B (real agent edits via codex / claude-code /
+gemini) and surfaced two backend-specific P0/P1 gaps that
+weren't visible to the prior reviewer sim because that sim only
+exercised codex.
+
+### Fixed
+- **Gemini adapter — `--output-format stream-json` was removed
+  upstream** (P0). `@google/gemini-cli` ~0.1.x dropped the
+  `--output-format` flag entirely; `-p` mode now only emits
+  plain text. pyanchor's gemini adapter (v0.25.0–v0.32.5) still
+  passed the deprecated flag, so every `PYANCHOR_AGENT=gemini`
+  edit failed with `gemini exited with code 1.` plus a help-text
+  dump on stderr. Caught by the audit harness on a clean install
+  against gemini-cli 0.1.9.
+
+  Fix:
+  - `src/agents/gemini.ts`: argv changed from
+    `["-p", prompt, "--output-format", "stream-json", "--yolo"]`
+    to `["-p", prompt, "--yolo"]`. The stream-json NDJSON parser
+    + nested `message.content` block handling are gone — the
+    adapter now captures stdout as plain text and emits it as a
+    single `log` + `result` summary. Trade-off: no live `thinking`
+    events during the edit (CLI doesn't emit them in plain mode);
+    the final summary is the same.
+  - `tests/agents/gemini-runner.test.ts`: argv contract test
+    updated to the new shape + a new test asserting `--output-format`
+    + `stream-json` are NOT in the args (catches future regressions
+    if someone re-adds the flag).
+
+- **Doctor now actually probes for claude-code SDK + API key**
+  (P1). Pre-v0.32.6 doctor printed a vague "we can't tell"
+  warning when `PYANCHOR_AGENT=claude-code`, and users only saw
+  the SDK-missing error at first edit. Reviewer-sim audit
+  flagged this as a real onboarding cliff for the claude-code
+  backend.
+
+  Fix: `checkAgent()` in `src/cli/doctor.ts` now:
+  - Looks for `@anthropic-ai/claude-agent-sdk/package.json` in
+    both `process.cwd()/node_modules/` and
+    `pyanchorConfig.appDir/node_modules/` (covers npm + workspace
+    layouts). On hit, shows the installed SDK version. On miss,
+    fails with a paste-ready `npm install @anthropic-ai/claude-
+    agent-sdk` fix line.
+  - Checks `ANTHROPIC_API_KEY` is non-empty (warn, not fail —
+    the SDK also accepts Claude's OAuth session, which we can't
+    detect from outside the SDK's runtime state).
+
+### Audit harness (now lives at `pyanchor-nextjs-audit/`)
+The harness itself isn't shipped in the npm tarball — it's a
+separate test rig under the operator's home. Documented for the
+follow-up "Re-enable subprocess-smoke isolation" task because
+this kind of synthetic-user run is the only way pre-1.0 catches
+adapter-version drift like the gemini CLI breakage.
+
+### Verified
+- 872 unit tests pass + 13 skipped + 0 fail (1 new gemini test
+  for the stream-json removal regression).
+- Group A audit: 5/6 pass (A6 PORT collision detection — minor,
+  separate follow-up).
+- pyanchor-demo systemd: still alive (was 22.5min at v0.32.5
+  ship, growing).
+- Live demo `https://pyanchor.pyan.kr/` + magic gate cookie:
+  overlay mounts, 0 console errors.
+
+### No-API-break
+- gemini adapter argv contract changed (1 test updated). User-
+  facing behavior: gemini works again where it was 100% broken.
+- doctor output adds 1-2 new lines for `claude-code` agent
+  (SDK check + API key check). No machine-readable fields removed.
+
 ## [0.32.5] - 2026-04-21
 
 Follow-on to v0.32.4. The v0.32.4 release CI failed (status check

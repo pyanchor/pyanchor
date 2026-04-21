@@ -27,7 +27,7 @@
  * `pyanchor doctor && pyanchor` works).
  */
 
-import { existsSync, accessSync, constants, statSync } from "node:fs";
+import { existsSync, accessSync, constants, statSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -213,18 +213,59 @@ function checkAgent(): CheckGroup {
   checks.push({ name: "PYANCHOR_AGENT", status: "ok", detail: agent });
 
   if (agent === "claude-code") {
-    // claude-code uses an npm peer dep (@anthropic-ai/claude-agent-sdk),
-    // not a binary. We can't tell from the sidecar process whether the
-    // host installed it; that error surfaces at first edit instead.
-    checks.push({
-      name: "claude-code agent",
-      status: "warn",
-      detail: "uses @anthropic-ai/claude-agent-sdk peer dep",
-      fix:
-        `Verify the host project has \`@anthropic-ai/claude-agent-sdk\` ` +
-        `installed and ANTHROPIC_API_KEY exported. Doctor can't probe this from ` +
-        `the sidecar process.`
-    });
+    // v0.32.6 — actually probe whether the peer dep is installed.
+    // Pre-v0.32.6 doctor printed a vague "we can't tell" warning,
+    // and users only saw the install error at first edit. The
+    // reviewer-sim audit harness flagged this as a P1 onboarding
+    // gap. Now we check both filesystem layouts (cwd/node_modules
+    // and PYANCHOR_APP_DIR/node_modules) and surface a fail with
+    // a paste-ready install command if missing.
+    const sdkPkg = "@anthropic-ai/claude-agent-sdk";
+    const candidates = [
+      path.join(process.cwd(), "node_modules", sdkPkg, "package.json"),
+      path.join(pyanchorConfig.appDir, "node_modules", sdkPkg, "package.json")
+    ];
+    const sdkPath = candidates.find((p) => existsSync(p));
+    if (sdkPath) {
+      let version = "?";
+      try {
+        version = (JSON.parse(readFileSync(sdkPath, "utf8")) as { version?: string }).version || "?";
+      } catch {}
+      checks.push({
+        name: "claude-code SDK installed",
+        status: "ok",
+        detail: `${sdkPkg}@${version}`
+      });
+    } else {
+      checks.push({
+        name: "claude-code SDK installed",
+        status: "fail",
+        detail: `${sdkPkg} not found in cwd or PYANCHOR_APP_DIR node_modules`,
+        fix:
+          `The claude-code adapter loads ${sdkPkg} at edit time. Without it, ` +
+          `the first edit fails with an "Install it" error. Fix:\n` +
+          `      npm install ${sdkPkg}\n` +
+          `  Then export ANTHROPIC_API_KEY=<key> (or use Claude's OAuth flow).`
+      });
+    }
+    // Auth hint — we can't verify the key works, but we can at least
+    // tell the operator if it's literally unset.
+    if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+      checks.push({
+        name: "ANTHROPIC_API_KEY exported",
+        status: "warn",
+        detail: "(empty)",
+        fix:
+          `claude-code authenticates via ANTHROPIC_API_KEY (or Claude's OAuth ` +
+          `session). If neither is set, the SDK call will fail with an auth error.`
+      });
+    } else {
+      checks.push({
+        name: "ANTHROPIC_API_KEY exported",
+        status: "ok",
+        detail: "set"
+      });
+    }
     return { title: "Agent", checks };
   }
 
