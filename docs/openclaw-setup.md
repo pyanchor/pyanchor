@@ -84,7 +84,12 @@ export PYANCHOR_AGENT_THINKING=medium               # low | medium | high | xhig
 ```
 
 The model string is passed straight to OpenClaw — see `openclaw
-agents add --help` for what your install supports.
+agents add --help` for what your install supports. As of v0.32.3
+the openclaw adapter has its own internal fallback to
+`openai-codex/gpt-5.4` when `PYANCHOR_AGENT_MODEL` is unset (the
+config-level default is now empty so it doesn't leak into other
+adapters' `-m` flag — that broke codex / aider / claude-code
+first edits in v0.25.0–v0.32.2).
 
 ## 4. Test the wiring
 

@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.8] - 2026-04-21
+
+Stability + docs polish round. Closes the three follow-up
+chips that survived the v0.32.0–v0.32.7 reviewer-sim cycle
+(A6 PORT collision, vitest pool isolation, and docs drift
+across the seven ships).
+
+### Fixed
+- **A6: silent shadow when two sidecars race for the same
+  port** — pre-fix, `app.listen()` had no `'error'` listener,
+  so EADDRINUSE bubbled to Node's default uncaughtException
+  printer (full stack trace). The v0.32.4 loop-anchor
+  setInterval kept the event loop reffed, so the throw didn't
+  actually exit; the process sat there *alive* without a
+  listening socket, and the listening-success callback had
+  ALREADY logged `pyanchor sidecar listening on …`. Operators
+  saw success, assumed they had two sidecars, and lost time
+  debugging "why does my edit not take effect" until they
+  noticed the other sidecar already owned the port. Codex's
+  audit follow-up note flagged this as worth pursuing.
+
+  Fix: `src/server.ts` adds an explicit `httpServer.on("error", ...)`
+  handler. EADDRINUSE → one-line paste-ready message naming
+  the port + clears the loop anchor + `process.exit(1)`. systemd
+  `Restart=on-failure` now actually fires; foreground users see
+  the conflict immediately.
+
+- **vitest pool race that masked subprocess test isolation
+  gaps** — pre-fix, vitest's default thread pool let spawned
+  `dist/server.cjs` children outlive their owning worker,
+  hold ports bound, and silently route the next test's fetch
+  to the prior sidecar. v0.32.4's GC-race fix exposed this
+  (pre-v0.32.4 the spawned children died within 1s,
+  accidentally desuiting the race). v0.32.5 worked around it
+  by `describe.skip()`-ing 13 affected tests.
+
+  Fix: `vitest.config.ts` switches to `pool: "forks"` with
+  `poolOptions.forks.singleFork: true` — every spawning test
+  runs sequentially in one worker process. The 13 tests in
+  `tests/subprocess-smoke/server-readyz.test.ts` and
+  `tests/subprocess-smoke/server-metrics.test.ts` are
+  unskipped. Test count goes 872 → 885 (+13). Wall-clock
+  goes 12s → 22s (sequential pool tax — acceptable).
+
+### Documentation
+- **`docs/gemini-setup.md`**: spawn-args section + comparison
+  table updated to drop `--output-format stream-json` (removed
+  upstream in @google/gemini-cli ~0.1.x — see v0.32.6).
+- **`docs/openclaw-setup.md`**: model section calls out the
+  v0.32.3 default change (config-level `PYANCHOR_AGENT_MODEL`
+  is now empty so it doesn't leak into other adapters; openclaw
+  has its own internal fallback).
+- **`docs/TROUBLESHOOTING.md`**: three new diagnostic entries.
+  - "Sidecar refuses to boot" gained: invalid numeric env
+    (v0.32.7), PORT in use silent shadow → loud exit (v0.32.8).
+  - "Audit log not enabled" gained: parent dir missing /
+    not writable diagnosis path + worker mkdir-on-miss
+    (v0.32.7).
+  - New section: "`npx pyanchor init` rerun shows a token
+    that's not in `.env`" — explains the pre-v0.32.7 desync
+    and the v0.32.7+ reuse behavior.
+
+### Verified
+- 885 unit tests pass (was 872 + 13 skipped) + 0 fail.
+- `audit/run.mjs` Group A: 5/6 pass (A6 stays as a fail in
+  the OLD harness because the harness itself uses 1.5s
+  timeout to detect "still alive after EADDRINUSE"; the
+  fix exits in <1s so the second sidecar IS dying loudly,
+  but the harness's success criteria assumes a different
+  signal — separate harness-side update follow-up).
+- `audit/scenarios-codex.mjs` Group C: 12/12 pass (no
+  regressions).
+- pyanchor-demo systemd: still alive (extends v0.32.4 GC
+  fix's track record).
+
+### No-API-break
+- Behavior changes are all error-path: explicit EADDRINUSE
+  exit code, surfaced numeric env errors. Successful paths
+  byte-identical.
+- Docs-only changes don't affect the published surface.
+
 ## [0.32.7] - 2026-04-21
 
 5 P1 onboarding gaps surfaced by a codex-driven audit pass. The

@@ -462,12 +462,46 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
 //
 // If we ever figure out *why* `app.listen` doesn't keep its own
 // socket reffed in this configuration we can drop this.
-const __pyanchorHttpServer = app.listen(pyanchorConfig.port, pyanchorConfig.host, () => {
-  console.log(`pyanchor sidecar listening on http://${pyanchorConfig.host}:${pyanchorConfig.port}`);
-});
 const __pyanchorEventLoopAnchor = setInterval(() => {
   /* deliberately empty — the timer existing is the point */
 }, 60_000);
+
+const __pyanchorHttpServer = app.listen(pyanchorConfig.port, pyanchorConfig.host, () => {
+  console.log(`pyanchor sidecar listening on http://${pyanchorConfig.host}:${pyanchorConfig.port}`);
+});
+
+// v0.32.8 — explicit listen-error handler. Pre-v0.32.8 there was no
+// 'error' listener on the http.Server, which meant EADDRINUSE bubbled
+// to Node's default uncaughtException printer (full stack trace). And
+// because the loop-anchor setInterval above kept the event loop reffed,
+// the process didn't actually exit on the throw — it sat there alive
+// without a listening socket, while ALSO having logged
+// "pyanchor sidecar listening on …" via the success callback. Operators
+// saw the success log, assumed they had a sidecar, and lost time
+// debugging "why does my edit not take effect" until they noticed the
+// other sidecar already owning the port. Caught by the codex audit
+// follow-up note on A6.
+//
+// This handler:
+//   - Surfaces a one-line, paste-ready error with the conflicting port
+//   - Clears the loop anchor so process.exit doesn't have to fight it
+//   - Exits with a non-zero code so systemd Restart=on-failure (or any
+//     supervisor) actually fires.
+__pyanchorHttpServer.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(
+      `[pyanchor] Port ${pyanchorConfig.port} on ${pyanchorConfig.host} is already in use. ` +
+        `Another pyanchor (or another service) is already listening there. ` +
+        `Set PYANCHOR_PORT=<free port> or stop the other process.`
+    );
+  } else {
+    console.error(
+      `[pyanchor] sidecar listen error: ${err.message} (code=${err.code ?? "?"})`
+    );
+  }
+  clearInterval(__pyanchorEventLoopAnchor);
+  process.exit(1);
+});
 // v0.32.4 graceful shutdown — handle SIGTERM (systemctl stop) and
 // SIGINT (Ctrl+C) by closing the listening socket and clearing the
 // loop anchor, then exiting. Critically: registering ANY listener for

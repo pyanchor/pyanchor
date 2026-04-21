@@ -97,7 +97,7 @@ afterEach(async () => {
   serverProcess = null;
 });
 
-describe.skip("/api/admin/metrics (v0.23.1)", () => {
+describe("/api/admin/metrics (v0.23.1)", () => {
   it("requires auth — 401 without bearer", async () => {
     const r = await fetch(`${BASE}/api/admin/metrics`);
     expect(r.status).toBe(401);

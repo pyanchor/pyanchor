@@ -44,6 +44,14 @@ the cause is almost always one of:
   (not executable)
 - `PYANCHOR_HOST=0.0.0.0` is set but `PYANCHOR_ALLOWED_ORIGINS` is
   empty (sidecar refuses this combination as a CSRF guard)
+- A numeric env var has a non-numeric value (`PYANCHOR_PORT=abc`,
+  `PYANCHOR_AGENT_TIMEOUT_S=foo`). v0.32.7+ rejects these loudly at
+  startup with the offending name+value; older versions silently
+  fell back to the default and bound an unexpected port.
+- The PORT (default 3010) is **already in use** by another sidecar
+  or service. v0.32.8+ prints `Port N on HOST is already in use ...`
+  and exits 1 immediately; older versions logged a misleading
+  "listening" success line while actually failing to bind.
 
 ## Bootstrap doesn't mount
 
@@ -181,6 +189,33 @@ If `PYANCHOR_AUDIT_LOG` is unset or `false`, the worker silently
 drops audit events. Default is **off** so existing setups don't
 grow a new file silently — flip it on for any team / production
 deploy.
+
+If audit IS on but no events are being written, check that the
+parent directory of `PYANCHOR_AUDIT_LOG_FILE` exists and is
+writable by the sidecar process. v0.32.7+ surfaces this in
+`pyanchor doctor` ("audit log dir exists" / "audit log dir
+writable") and v0.32.7+ workers also `mkdir -p` once on first
+ENOENT before falling back to a stderr warning.
+
+## `npx pyanchor init` rerun shows a token that's not in `.env`
+
+Symptom: you ran `pyanchor init` once, then ran it again, and
+the bootstrap snippet in stdout has a different token from
+your `.env` / `.env.local`. Pasting the new snippet → every
+overlay API call returns 401.
+
+Pre-v0.32.7 this happened by design: `init` always rolled a fresh
+`PYANCHOR_TOKEN`, but skipped writing the env file (since it
+already existed). The printed snippet carried the never-written
+new token.
+
+v0.32.7+ behavior: when `--force` is NOT in effect and the env
+file exists, init reads the existing `PYANCHOR_TOKEN` (or
+`NEXT_PUBLIC_PYANCHOR_TOKEN`) and reuses it for the printed
+snippet. You'll see a `(reusing existing PYANCHOR_TOKEN from
+.env — bootstrap snippet below matches what's on disk)` line.
+If you actually want a fresh token, pass `--force` (the warning
+about updating any pasted `data-pyanchor-token=` still fires).
 
 ## Auth + gate cookie
 

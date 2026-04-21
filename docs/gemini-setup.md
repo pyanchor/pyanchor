@@ -73,7 +73,7 @@ Restart the sidecar. That's it.
 For every edit job, the worker invokes:
 
 ```
-gemini -p "<brief>" --output-format stream-json --yolo [-m <model>]
+gemini -p "<brief>" --yolo [-m <model>]
 ```
 
 with `cwd` set to the workspace dir. The `<brief>` is the same
@@ -82,9 +82,13 @@ mode, recent conversation, the user prompt, and a framework-
 specific build hint. See `src/agents/gemini.ts` for the full
 schema.
 
-The CLI's NDJSON event stream is parsed line-by-line: assistant
-text becomes the job summary, `thought` events stream into the
-overlay's "thinking" indicator.
+The CLI's plain-text stdout is captured and forwarded as the job
+`summary`. (Earlier pyanchor versions used `--output-format
+stream-json` to split assistant text from thinking traces into
+separate channels, but the upstream `@google/gemini-cli`
+removed `--output-format` in ~0.1.x — the adapter follows.
+Trade-off: no live `thinking` events during the edit, just the
+final summary.)
 
 ### Why `--yolo`?
 
@@ -136,7 +140,7 @@ as openclaw / codex / aider.
 | `claude-code` | JS SDK in-process | `ANTHROPIC_API_KEY` env | full workspace, configurable |
 | `codex` | CLI shell-out (`exec --json`) | `codex login` (OAuth) | full workspace |
 | `aider` | CLI shell-out | `OPENAI_API_KEY` etc. | full workspace, git-aware |
-| **`gemini`** | **CLI shell-out (`-p --output-format stream-json --yolo`)** | **`GEMINI_API_KEY` / OAuth / Vertex AI** | **full workspace, 1M tokens** |
+| **`gemini`** | **CLI shell-out (`-p --yolo`)** | **`GEMINI_API_KEY` / OAuth / Vertex AI** | **full workspace, 1M tokens** |
 
 Pick the one whose model + auth story fits your team. All five
 share the same `AgentRunner` interface and the same

@@ -109,7 +109,7 @@ afterEach(async () => {
 // Pre-v0.32.4 these passed because a GC bug killed the spawned
 // sidecar within ~1s; the GC fix exposed deeper PORT-race issues
 // across vitest's parallel file pool. Tracked as a follow-up task.
-describe.skip("/healthz (liveness, v0.0+)", () => {
+describe("/healthz (liveness, v0.0+)", () => {
   beforeEach(() => startServer());
 
   it("returns 200 with no auth", async () => {
@@ -127,7 +127,7 @@ describe.skip("/healthz (liveness, v0.0+)", () => {
   });
 });
 
-describe.skip("/readyz (readiness, v0.27.0+)", () => {
+describe("/readyz (readiness, v0.27.0+)", () => {
   beforeEach(() => startServer());
 
   it("returns 200 with no auth when fully configured", async () => {
@@ -147,7 +147,7 @@ describe.skip("/readyz (readiness, v0.27.0+)", () => {
   });
 });
 
-describe.skip("/readyz returns 503 when misconfigured", () => {
+describe("/readyz returns 503 when misconfigured", () => {
   beforeEach(() =>
     startServer({
       // Point at a path that definitely doesn't exist so
@@ -175,7 +175,7 @@ describe.skip("/readyz returns 503 when misconfigured", () => {
 // executable restart script. These tests lock the corrected
 // contract so future refactors of isPyanchorConfigured() don't
 // re-introduce the false-positive cases.
-describe.skip("/readyz contract (v0.28.1+)", () => {
+describe("/readyz contract (v0.28.1+)", () => {
   it("503 when PYANCHOR_WORKSPACE_DIR doesn't exist", async () => {
     await startServer({
       PYANCHOR_WORKSPACE_DIR: "/tmp/pyanchor-readyz-no-such-workspace-xyz"
