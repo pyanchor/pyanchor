@@ -98,12 +98,31 @@ if (!session?.user?.email || !PYANCHOR_DEV_EMAILS.includes(session.user.email)) 
   return redirect("/");  // silent — don't leak gate existence
 }
 response.cookies.set("pyanchor_dev", "1", {
-  httpOnly: true,
+  // ⚠️ NOT HttpOnly — see "Gate cookie + HttpOnly trade-off" below.
+  // The bootstrap fail-safe reads document.cookie; HttpOnly hides
+  // the cookie from JS and breaks the fail-safe layer.
   sameSite: "strict",
   path: "/",
   maxAge: 60 * 60 * 24 * 30
 });
 ```
+
+> **Gate cookie + HttpOnly trade-off** (v0.31.2+): the bootstrap
+> script tag's `data-pyanchor-require-gate-cookie="<name>"`
+> attribute (layer 6 in the table above) reads `document.cookie`
+> client-side to confirm the gate before mounting the overlay.
+> If you set the cookie as `httpOnly: true`, the bootstrap can
+> never see it and the overlay never mounts — even for users who
+> passed the server-side check.
+>
+> The shipped examples all use **non-HttpOnly** gate cookies. The
+> cookie value is a literal `"1"` marker — it carries no auth
+> secret. The sidecar token (visible in HTML for any page reader)
+> is the actual privilege boundary, so HttpOnly on the gate cookie
+> adds no real security. If you really want HttpOnly (your security
+> review insists), drop the bootstrap fail-safe attribute and rely
+> on the server-side `PYANCHOR_REQUIRE_GATE_COOKIE` enforcement
+> alone (one fewer layer, but still defense in depth).
 
 Bootstrap tag with fail-safe:
 

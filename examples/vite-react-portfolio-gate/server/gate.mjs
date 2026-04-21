@@ -68,13 +68,19 @@ const server = http.createServer((req, res) => {
   const requested = url.searchParams.get("_pyanchor");
 
   // Magic-word URL handling — set / clear cookie + 302 to the same path.
+  // v0.31.2 — round-19 follow-on: cookies are NOT HttpOnly so the
+  // bootstrap script tag's `data-pyanchor-require-gate-cookie` fail-safe
+  // can read `document.cookie` and confirm the gate before mounting
+  // the overlay. The cookie value is just a marker ("1"); the sidecar
+  // token (visible in HTML) is the actual privilege boundary, so
+  // HttpOnly here adds no security and breaks the layered defense.
   if (requested !== null) {
     url.searchParams.delete("_pyanchor");
     const redirectTo = url.pathname + url.search;
     if (requested === "logout") {
       res.writeHead(302, {
         location: redirectTo,
-        "set-cookie": `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`
+        "set-cookie": `${COOKIE_NAME}=; Path=/; SameSite=Strict; Max-Age=0`
       });
       res.end();
       return;
@@ -84,7 +90,7 @@ const server = http.createServer((req, res) => {
       res.writeHead(302, {
         location: redirectTo,
         "set-cookie":
-          `${COOKIE_NAME}=1; Path=/; HttpOnly; SameSite=Strict; Max-Age=${COOKIE_MAX_AGE_S}${secure}`
+          `${COOKIE_NAME}=1; Path=/; SameSite=Strict; Max-Age=${COOKIE_MAX_AGE_S}${secure}`
       });
       res.end();
       return;
@@ -129,11 +135,11 @@ server.listen(PORT, () => {
  *   # Magic-word URL → set HttpOnly cookie + redirect
  *   location ~ ^/(.*)$ {
  *     if ($arg__pyanchor = "<your-secret>") {
- *       add_header Set-Cookie "pyanchor_dev=1; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000; Secure";
+ *       add_header Set-Cookie "pyanchor_dev=1; Path=/; SameSite=Strict; Max-Age=2592000; Secure";
  *       return 302 $1;
  *     }
  *     if ($arg__pyanchor = "logout") {
- *       add_header Set-Cookie "pyanchor_dev=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0; Secure";
+ *       add_header Set-Cookie "pyanchor_dev=; Path=/; SameSite=Strict; Max-Age=0; Secure";
  *       return 302 $1;
  *     }
  *     try_files $uri $uri/ /index.html;

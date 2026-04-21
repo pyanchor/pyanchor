@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.2] - 2026-04-21
+
+Surfaced during real-browser deployment of pyanchor.pyan.kr (the
+launch demo site): the v0.17.0 production-gate examples have been
+silently broken since they shipped. The server-side gate works,
+but the client-side **bootstrap fail-safe layer** never does.
+
+### Fixed
+- **Gate cookie + bootstrap fail-safe were incompatible (real bug
+  since v0.17.0)** — `examples/nextjs-portfolio-gate/middleware.ts`,
+  `examples/nextjs-nextauth-gate/app/api/pyanchor-gate/route.ts`,
+  and `examples/vite-react-portfolio-gate/server/gate.mjs` all set
+  `httpOnly: true` on the `pyanchor_dev` cookie. Meanwhile the
+  bootstrap script tag's `data-pyanchor-require-gate-cookie="<name>"`
+  attribute (layer 6 of `docs/ACCESS-CONTROL.md`'s 9-layer model)
+  reads `document.cookie` client-side. HttpOnly hides the cookie
+  from JS, so the fail-safe always trips and the overlay never
+  mounts — even for users who passed the server-side check.
+  Round 17/18/19 verifications missed it because none ran a real
+  browser end-to-end against the recipe-B examples. Caught when
+  pyanchor.pyan.kr's nginx-equivalent setup repeated the pattern
+  and the demo site refused to render the overlay.
+  Fix: removed `httpOnly` from all three example cookie issuers.
+  The cookie value is a marker only (`"1"`, no auth secret); the
+  sidecar token (visible in HTML for any page reader) is the
+  actual privilege boundary, so HttpOnly here adds no real
+  security and breaks the layered defense.
+- **`docs/ACCESS-CONTROL.md`** — new "Gate cookie + HttpOnly
+  trade-off" callout next to the recipe-B example, explaining
+  why the cookie is intentionally not HttpOnly + the alternative
+  (drop the fail-safe attribute and rely on server-side
+  enforcement only).
+
+### No code changes
+- pyanchor itself is unchanged. The fix is entirely in `examples/`
+  + docs. The published npm tarball doesn't include `examples/`,
+  so existing `npm install pyanchor` users are not affected at all.
+  The version bump exists so external links into the corrected
+  examples resolve at a stable git tag.
+
 ## [0.31.1] - 2026-04-20
 
 Round-19 Codex patches. Two P1 (docs/package surface drift after

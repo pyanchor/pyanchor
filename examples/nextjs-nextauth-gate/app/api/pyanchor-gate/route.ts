@@ -3,8 +3,14 @@
  * NextAuth session + allowlist. Hit GET /api/pyanchor-gate after
  * signing in; you'll get redirected to / with the cookie set.
  *
- * The cookie is HttpOnly + SameSite=Strict, so client JS can't
- * steal it; only requests from the same origin carry it.
+ * The cookie is SameSite=Strict; only requests from the same origin
+ * carry it. v0.31.2 — round-19 follow-on: the cookie is intentionally
+ * **NOT HttpOnly** so the bootstrap script tag's
+ * `data-pyanchor-require-gate-cookie="<name>"` fail-safe can read
+ * `document.cookie` and confirm the gate before mounting the
+ * overlay. The cookie value is a marker only ("1"); the sidecar
+ * token (visible in HTML for any reader) is the actual privilege
+ * boundary, so HttpOnly here adds no real security.
  */
 
 import { NextResponse } from "next/server";
@@ -40,8 +46,9 @@ export async function GET(request: Request) {
   }
 
   const response = NextResponse.redirect(new URL(redirectTo, url));
+  // NOT HttpOnly — see header comment for the bootstrap-fail-safe
+  // compatibility rationale.
   response.cookies.set(COOKIE_NAME, "1", {
-    httpOnly: true,
     sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",

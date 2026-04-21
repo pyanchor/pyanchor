@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * The pattern: visit `/?_pyanchor=<your-secret>` once → middleware
  * verifies the secret matches `PYANCHOR_GATE_SECRET` env → sets a
- * 30-day HttpOnly cookie → redirects to the same path without the
+ * 30-day cookie → redirects to the same path without the
  * query param → all subsequent requests in this browser carry the
  * cookie → the layout conditionally renders the bootstrap script
  * AND the sidecar's `requireGateCookie` middleware admits the
@@ -47,8 +47,17 @@ export function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.redirect(url);
+  // v0.31.2 — round-19 follow-on: NOT HttpOnly. The bootstrap script
+  // tag's `data-pyanchor-require-gate-cookie="<name>"` fail-safe
+  // reads `document.cookie` to confirm the gate cookie is present
+  // before mounting the overlay; HttpOnly hides it from JS, so the
+  // fail-safe always trips and the overlay never mounts. The cookie
+  // value is just a marker ("1") — it carries no auth secret, and the
+  // sidecar token (also visible in HTML for any reader) is the actual
+  // privilege boundary. Server-side `PYANCHOR_REQUIRE_GATE_COOKIE`
+  // check still works because the sidecar reads the cookie from the
+  // request header, not from JS.
   response.cookies.set(COOKIE_NAME, "1", {
-    httpOnly: true,
     sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",
