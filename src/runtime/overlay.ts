@@ -215,7 +215,66 @@ const syncStateClient = createSyncStateClient({
 
 const syncState = (withOutcomeToast = false) => syncStateClient.sync(withOutcomeToast);
 
+// v0.32.10 — render skip cache. Pre-fix, render() ran on every
+// status poll (~2s cadence) regardless of whether anything actually
+// changed, doing a full innerHTML wipe + escapeHtml × 3 per message
+// × N messages + DOM tree rebuild. With 18 messages (the default
+// window) the per-poll work was small individually but accumulated
+// into visible lag during long sessions, especially on lower-spec
+// laptops. Reported by the operator.
+//
+// Strategy: build a cheap content-key from the inputs render() reads,
+// compare to the last successful render's key, skip when identical.
+// Inputs span serverState.{messages,status,jobId,queue,...} +
+// uiState.{isSubmitting,isCanceling,etc} + a few derived bits.
+//
+// Skip is wholesale (no partial DOM patch) — the wipe is the
+// expensive part, so saving it pays for itself even when only one
+// field would have changed. The next non-cached render rebuilds
+// everything as before.
+let __lastRenderKey: string | null = null;
+
+function buildRenderKey(): string {
+  // Stable JSON over the fields render() actually consumes.
+  // Order matters here — keep in sync with what render() reads.
+  return JSON.stringify({
+    s: serverState.status,
+    j: serverState.jobId,
+    p: serverState.pid,
+    cs: serverState.currentStep,
+    hb: serverState.heartbeatAt,
+    hbl: serverState.heartbeatLabel,
+    th: serverState.thinking,
+    er: serverState.error,
+    sa: serverState.startedAt,
+    ca: serverState.completedAt,
+    ua: serverState.updatedAt,
+    qd: serverState.queue.length,
+    al: serverState.activityLog.length,
+    ms: serverState.messages.map((m) => [m.id, m.text, m.status, m.role, m.mode]),
+    u: {
+      o: uiState.isOpen,
+      sub: uiState.isSubmitting,
+      can: uiState.isCanceling,
+      m: uiState.mode,
+      pr: uiState.prompt,
+      lj: uiState.lastSubmittedJobId,
+      lp: uiState.lastSubmittedPrompt,
+      lm: uiState.lastSubmittedMode,
+      // toast.message + tone (timer is implementation detail)
+      t: uiState.toast ? `${uiState.toast.tone}:${uiState.toast.message}` : null
+    },
+    loc: config?.locale ?? null
+  });
+}
+
 const render = () => {
+  // Cheap memoization — bail out when nothing render() reads has
+  // changed since the last successful render.
+  const key = buildRenderKey();
+  if (key === __lastRenderKey) return;
+  __lastRenderKey = key;
+
   const isWorking = serverState.status === "running" || serverState.status === "canceling";
   const isBusy = isWorking || uiState.isSubmitting || uiState.isCanceling;
   const canCancel = isWorking || trackedQueuePosition() > 0;

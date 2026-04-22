@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.10] - 2026-04-21
+
+Performance — operator reported the overlay started feeling
+laggy in long sessions with lots of messages. Status polling
+runs every ~2 seconds, and pre-fix every poll did a full
+`render()` (innerHTML wipe + escapeHtml × 3 per message × N
+messages + DOM tree rebuild + style recalc + reflow) regardless
+of whether anything had actually changed.
+
+### Fixed
+- **`render()` now skips when nothing changed** — added a cheap
+  content-key memoization at the top of `render()` in
+  `src/runtime/overlay.ts`. Builds a stable JSON over the
+  fields render() actually consumes (server status, jobId, queue
+  depth, the message list as `[id, text, status, role, mode]`,
+  ui state, locale), compares to the last successful render's
+  key, returns early when identical.
+
+  In an idle session (no edits in flight, just polling) every
+  call after the first becomes a no-op — DOM stays untouched,
+  no escapeHtml calls, no innerHTML rebuild. When state actually
+  changes (new message, status transition, queue update), the
+  full render fires as before.
+
+  Skip is wholesale, not partial DOM patch — the wipe is the
+  expensive part, so saving it pays for itself even when only
+  one field would have changed.
+
+### Verified
+- 885 unit tests pass (the render path's existing snapshot tests
+  for templates exercise the per-component output; the skip
+  cache is invisible to them by design).
+- Manual: open the overlay on a session with 18 messages, watch
+  poll cadence in DevTools Performance. Pre-fix each ~2s tick
+  had a 5–15ms paint+layout burst; post-fix the ticks only fire
+  when the server actually returns a changed payload.
+
+### No-API-break
+- Pure performance optimization. `render()` produces the same
+  DOM when it does run. Server payloads + diagnostics shape
+  byte-identical. The skip cache module-scope variable is
+  internal.
+
 ## [0.32.9] - 2026-04-21
 
 UX bug. The overlay's diagnostics panel (`<details
