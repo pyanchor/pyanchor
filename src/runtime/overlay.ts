@@ -129,16 +129,21 @@ const renderMessages = () =>
 // Diagnostics panel (v0.9.7 — Codex round-9 feature suggestion #6).
 // Collapsible disclosure widget showing the live runtime + server
 // state. Uses native <details>/<summary> for built-in keyboard +
-// screen-reader semantics. Persists open/closed state in the DOM
-// itself; no extra UIState field needed.
-const renderDiagnostics = () => {
+// screen-reader semantics.
+//
+// v0.32.9 — open state is now passed in by render() (which captures
+// the previous <details>.open BEFORE the innerHTML wipe). Pre-fix
+// the panel snapped shut on every status poll because the wipe
+// destroyed the open attribute; the original "Persists open/closed
+// state in the DOM itself" comment was wrong about that.
+const renderDiagnostics = (isOpen: boolean) => {
   const authMode = config.token ? s.diagAuthBearer : s.diagAuthCookie;
   const localeDisplay = config.locale ?? "—";
   const jobIdDisplay = serverState.jobId ?? "—";
   const modeDisplay = serverState.mode ?? "—";
   const lastUpdateDisplay = formatTime(serverState.updatedAt) ?? "—";
   return `
-    <details class="diagnostics" data-action="diagnostics">
+    <details class="diagnostics" data-action="diagnostics"${isOpen ? " open" : ""}>
       <summary>${escapeHtml(s.diagnosticsTitle)}</summary>
       <dl class="diagnostics__grid">
         <dt>${escapeHtml(s.diagRuntime)}</dt>
@@ -218,6 +223,11 @@ const render = () => {
   const meta = statusMeta();
 
   const previousActive = shadowRoot.activeElement as HTMLElement | null;
+  // v0.32.9 — capture <details class="diagnostics"> open state BEFORE
+  // the innerHTML wipe below, so the panel doesn't snap shut on every
+  // status poll. Same pattern we already use for focus + scroll.
+  const previousDiagnostics = shadowRoot.querySelector<HTMLDetailsElement>("details.diagnostics");
+  const diagnosticsOpen = previousDiagnostics ? previousDiagnostics.open : false;
   const previousMessagesPanel = shadowRoot.querySelector<HTMLElement>(".messages");
   const previousScrollState = previousMessagesPanel
     ? {
@@ -322,7 +332,7 @@ const render = () => {
 
           ${renderMessages()}
 
-          ${renderDiagnostics()}
+          ${renderDiagnostics(diagnosticsOpen)}
 
           <form class="composer" data-action="submit">
             <div>

@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.9] - 2026-04-21
+
+UX bug. The overlay's diagnostics panel (`<details
+class="diagnostics">`) snapped shut on every status poll
+(~2-second cadence). User-visible symptom: "the diagnostics
+panel opens then closes by itself almost immediately."
+
+### Fixed
+- **Diagnostics panel auto-closes on every status poll** —
+  `render()` does an innerHTML wipe on every poll cycle to
+  re-render the panel's live data (status, queue, last
+  update). The wipe destroys the `<details>` node, taking
+  its `open` attribute with it. The next render re-creates
+  the element without `open`, so the panel snaps shut a
+  beat after the user opened it.
+
+  The original v0.9.7 comment said "Persists open/closed
+  state in the DOM itself; no extra UIState field needed"
+  — that was wrong about the wipe behavior.
+
+  Fix: `src/runtime/overlay.ts` `render()` now captures the
+  previous `<details class="diagnostics">.open` BEFORE the
+  innerHTML wipe (mirroring the existing focus + scroll
+  preservation pattern), and passes the boolean to
+  `renderDiagnostics(isOpen)` which adds the `open`
+  attribute to the new element when the panel was open.
+
+### Verified
+- 885 unit tests pass + 0 fail.
+- Manual: open the diagnostics panel on a running sidecar
+  + Vite/Next page, watch through several status polls.
+  Pre-fix: closes in 2-3 seconds. Post-fix: stays open
+  until the user explicitly closes it.
+
+### No-API-break
+- Pure UX fix. `<details>` shape unchanged, just gained the
+  `open` attribute when state warrants it. Server-side
+  payloads byte-identical.
+
 ## [0.32.8] - 2026-04-21
 
 Stability + docs polish round. Closes the three follow-up
