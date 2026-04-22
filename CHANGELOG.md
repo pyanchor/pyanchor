@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.1] - 2026-04-22
+
+Hotfix on top of v0.33.0. The v0.33.0 ci main e2e suite failed
+on `i18n-late-register.spec.ts` (locale bundle arrives via
+CustomEvent after overlay mount → UI should flip to Korean).
+Cause: the v0.32.10 render-skip cache key only included
+`config.locale`. Late-loaded bundles SWAP the in-memory `s`
+(strings) object without changing `config.locale` (the locale
+name is the same — only the string contents change). Skip key
+matched → render() returned early → UI never re-rendered with
+the new strings.
+
+### Fixed
+- `src/runtime/overlay.ts buildRenderKey()` now samples
+  `s.composerHeadlineEdit` so the key changes when the strings
+  table itself changes (independent of `config.locale`). Render
+  fires on bundle arrival; UI flips language as expected.
+
+### Verified
+- 885 unit tests pass.
+- Typecheck clean.
+- Will re-verify e2e on this ship's ci main.
+
 ## [0.33.0] - 2026-04-22
 
 Static-audit ship. Codex was given the entire `src/` tree

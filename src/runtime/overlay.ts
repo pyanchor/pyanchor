@@ -269,7 +269,15 @@ function buildRenderKey(): string {
       // toast.message + tone (timer is implementation detail)
       t: uiState.toast ? `${uiState.toast.tone}:${uiState.toast.message}` : null
     },
-    loc: config?.locale ?? null
+    loc: config?.locale ?? null,
+    // v0.33.0 — string-table identity sample. Late-loaded locale
+    // bundles (v0.13.1 CustomEvent re-render path) swap the `s`
+    // object without changing config.locale (locale name is the
+    // same; only the string contents change). Sample one
+    // user-facing string so the key changes when the bundle
+    // arrives → render fires → UI flips to the new language.
+    // Caught by ci e2e i18n-late-register.spec.ts on v0.33.0.
+    si: s.composerHeadlineEdit
   });
 }
 
