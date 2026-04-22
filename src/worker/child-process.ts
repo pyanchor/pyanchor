@@ -130,26 +130,40 @@ export function runCommand(
       reject(error);
     });
 
+    // v0.33.2 — give pending stdin EPIPE / stdout/stderr drain
+    // events one I/O tick to land in their buffers before we settle.
+    // Pre-fix, when a child exited before reading stdin, the close
+    // event could win the race against the stdin 'error' event,
+    // so the synthetic "[stdin closed early: EPIPE]" note never
+    // made it into the rejected error message — operators saw a
+    // bare "exited with code N" without the actual root cause.
+    // Caught by codex static audit (deferred chip from v0.33.0).
     child.on("close", (code, signal) => {
       options.activeChildren?.delete(child);
       clearTimers();
+      // setImmediate runs at the end of the current poll phase,
+      // after pending I/O callbacks (including queued stdin error
+      // events). One tick is enough to drain — Node delivers all
+      // pending events from the same poll batch before the
+      // setImmediate fires.
+      setImmediate(() => {
+        if (options.isCancelled?.()) {
+          reject(new Error(options.canceledError ?? DEFAULT_CANCELED_ERROR));
+          return;
+        }
 
-      if (options.isCancelled?.()) {
-        reject(new Error(options.canceledError ?? DEFAULT_CANCELED_ERROR));
-        return;
-      }
+        if (code === 0) {
+          resolve({ stdout, stderr });
+          return;
+        }
 
-      if (code === 0) {
-        resolve({ stdout, stderr });
-        return;
-      }
+        if (signal) {
+          reject(new Error(`${command} was terminated by ${signal}`));
+          return;
+        }
 
-      if (signal) {
-        reject(new Error(`${command} was terminated by ${signal}`));
-        return;
-      }
-
-      reject(new Error(stderr.trim() || stdout.trim() || `${command} exited with ${code}`));
+        reject(new Error(stderr.trim() || stdout.trim() || `${command} exited with ${code}`));
+      });
     });
 
     // Capture (don't crash on) stdin errors AND fold the diagnostic

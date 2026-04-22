@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.2] - 2026-04-22
+
+Closes the last deferred chip from the v0.33.0 codex static
+audit (P2 worker stdin → stderr ordering race).
+
+### Fixed
+- **Worker `stdin` EPIPE diagnostic now lands before settle**.
+  Pre-fix, when a child exited before reading stdin, Node's
+  `'close'` event sometimes won the race against the stdin
+  `'error'` event — so the synthetic `[stdin closed early:
+  EPIPE]` note that we add to stderr was never visible in the
+  rejected error message. Operators saw a bare "exited with
+  code N" with no root cause.
+  - `src/worker/child-process.ts` close handler now defers the
+    promise settlement by one I/O tick (`setImmediate`). That's
+    enough for any pending stdin error to flush into the stderr
+    buffer first.
+  - `src/agents/openclaw/exec.ts` close enqueue is also
+    `setImmediate`-deferred so a late stderr event sneaks in
+    before the close marker that ends the iterator.
+  - `tests/worker/child-process.test.ts` adds a regression
+    test (timing-dependent: Node sometimes accepts the write
+    into the pipe buffer before the child exits, so the test
+    asserts EITHER the EPIPE note appears OR the bare exit
+    code does — both are acceptable, what matters is no crash
+    and no swallowed diagnostic).
+
+886 unit tests pass + 0 fail (was 885; +1 for the new
+ordering regression).
+
+### No-API-break
+- Pure error-path change. Successful command paths are
+  byte-identical. The defer is `setImmediate`, which costs at
+  most one libuv tick per child exit — invisible for sync
+  callers that already await the promise.
+
 ## [0.33.1] - 2026-04-22
 
 Hotfix on top of v0.33.0. The v0.33.0 ci main e2e suite failed

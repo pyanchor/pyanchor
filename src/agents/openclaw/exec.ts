@@ -73,8 +73,15 @@ export async function* streamSpawn(
   });
 
   child.on("close", (code, signal) => {
-    queue.push({ kind: "close", code: code ?? 1, signal });
-    wake();
+    // v0.33.2 — defer the close event to the next I/O tick so any
+    // pending stdin EPIPE / late stderr drain lands in the queue
+    // BEFORE the close marker. Pre-fix the iterator returned on
+    // close, so a synthetic stderr note enqueued after close was
+    // never consumed by the caller. Caught by codex static audit.
+    setImmediate(() => {
+      queue.push({ kind: "close", code: code ?? 1, signal });
+      wake();
+    });
   });
 
   let timeoutId: NodeJS.Timeout | null = null;
