@@ -1,13 +1,26 @@
+import { mkdirSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const originalEnv = { ...process.env };
 
+// v0.33.0 — pre-create the new isolated app/ws dirs once. The
+// destructive-path guard added in v0.33.0 forbids /tmp itself, and
+// isPyanchorConfigured() needs the dirs to actually exist.
+mkdirSync("/tmp/pyanchor-config-test-app", { recursive: true });
+mkdirSync("/tmp/pyanchor-config-test-ws", { recursive: true });
+
 const setMinimalEnv = (overrides: Record<string, string> = {}) => {
   process.env.PYANCHOR_TOKEN = "test-token-32-chars-1234567890ab";
-  process.env.PYANCHOR_APP_DIR = "/tmp"; // exists
+  // v0.33.0 — distinct sub-paths under /tmp instead of /tmp itself.
+  // The destructive-path guard added in v0.33.0 rejects bare system
+  // dirs (/tmp, /home, /var, ...) for PYANCHOR_APP_DIR / WORKSPACE_DIR
+  // because a typo there would let `sudo rm -rf` clobber other
+  // processes' tmp state. Use isolated subdirs in tests.
+  process.env.PYANCHOR_APP_DIR = "/tmp/pyanchor-config-test-app";
   process.env.PYANCHOR_RESTART_SCRIPT = "/usr/bin/true"; // exists
   process.env.PYANCHOR_HEALTHCHECK_URL = "http://localhost:3000";
-  process.env.PYANCHOR_WORKSPACE_DIR = "/tmp";
+  process.env.PYANCHOR_WORKSPACE_DIR = "/tmp/pyanchor-config-test-ws";
   for (const [k, v] of Object.entries(overrides)) {
     process.env[k] = v;
   }

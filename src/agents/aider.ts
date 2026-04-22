@@ -72,8 +72,17 @@ function guessFilesForRoute(workspaceDir: string, targetPath: string): string[] 
   const framework = selectFramework(pyanchorConfig.framework);
   const candidates = framework.routeFileCandidates(targetPath);
 
+  // v0.33.0 — defense-in-depth workspace confinement. /api/edit
+  // already rejects targetPath traversal at the API boundary, but
+  // even if a future caller bypasses that check (or a profile starts
+  // emitting candidates with `..`), we re-verify here that the
+  // resolved absolute path stays inside the declared workspace.
+  // Caught by codex static audit.
+  const wsResolved = path.resolve(workspaceDir);
   for (const rel of candidates) {
-    const abs = path.join(workspaceDir, rel);
+    const abs = path.resolve(workspaceDir, rel);
+    const within = abs === wsResolved || abs.startsWith(wsResolved + path.sep);
+    if (!within) continue; // candidate escaped workspace — skip
     if (existsSync(abs)) return [abs];
   }
 

@@ -179,8 +179,17 @@ export function createRuntimeBuffer(opts: RuntimeBufferOptions): RuntimeBuffer {
     queueLog([config.step]);
     await pulseState({ step: config.step, label: config.label });
 
+    // v0.33.0 — heartbeat write failure now surfaces via the same
+    // onFlushError sink as the runtime-buffer flush. Pre-fix the
+    // catch swallowed the error completely; if disk filled up or
+    // permissions changed mid-job, the heartbeat would silently
+    // stop writing while the worker kept running and the overlay
+    // showed a stale "in progress" indicator. Caught by codex
+    // static audit.
     const timer = setInterval(() => {
-      void pulseState({ step: config.step, label: config.label }).catch(() => undefined);
+      void pulseState({ step: config.step, label: config.label }).catch((err) => {
+        opts.onFlushError?.(err);
+      });
     }, config.intervalMs ?? 8000);
 
     try {

@@ -249,7 +249,12 @@ function buildRenderKey(): string {
     sa: serverState.startedAt,
     ca: serverState.completedAt,
     ua: serverState.updatedAt,
-    qd: serverState.queue.length,
+    // v0.33.0 — queue identity, not just length. Pre-fix the key
+    // only included `queue.length`, so cancel-then-immediate-enqueue
+    // (depth stays 1) wouldn't re-render the cancel affordance and
+    // queue position. Caught by codex static audit. Order matters:
+    // FIFO position drives the overlay's "you're next" indicator.
+    q: serverState.queue.map((it) => `${it.jobId}:${it.mode}:${it.enqueuedAt}`),
     al: serverState.activityLog.length,
     ms: serverState.messages.map((m) => [m.id, m.text, m.status, m.role, m.mode]),
     u: {

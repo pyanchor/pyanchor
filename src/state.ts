@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { randomBytes, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -234,17 +235,57 @@ export async function ensureStateDir() {
   await mkdir(pyanchorConfig.stateDir, { recursive: true });
 }
 
-export async function writeAiEditState(next: AiEditState) {
+// v0.33.0 — server-local reentrant mutex around state read/write.
+// Pre-fix the server's `startAiEdit` did `current =
+// readAiEditState()` → `if (current.status === "idle") { ...
+// writeAiEditState(...) }` without holding a lock across the
+// read+write. Two simultaneous `/api/edit` requests could both
+// observe `status === "idle"`, both spawn workers, and the second
+// `writeAiEditState` would clobber the first's `pid`. Caught by
+// codex static audit.
+//
+// AsyncLocalStorage flag makes the lock reentrant — when an RMW
+// caller (startAiEdit) already holds the lock and calls
+// writeAiEditState (which also wraps in withServerStateLock), the
+// inner call short-circuits to the task instead of waiting on
+// itself (which would deadlock).
+//
+// Cross-process (server ↔ worker) coordination still relies on the
+// worker's own state-io lock + the atomic rename pattern below;
+// per-process unique temp files prevent the two processes from
+// clobbering each other's in-flight tmp.
+const __lockHolder = new AsyncLocalStorage<true>();
+let __serverStateLock: Promise<unknown> = Promise.resolve();
+async function withServerStateLock<T>(task: () => Promise<T>): Promise<T> {
+  if (__lockHolder.getStore() === true) {
+    // Already inside a holder — reentrant call. Run inline.
+    return task();
+  }
+  const run = () => __lockHolder.run(true, task);
+  const next = __serverStateLock.then(run, run);
+  __serverStateLock = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
+}
+
+async function writeAiEditStateUnlocked(next: AiEditState) {
   await ensureStateDir();
   const payload = normalizeState({ ...next, updatedAt: new Date().toISOString() });
-  // Atomic write: tmp file + rename. Crash mid-write leaves the old
-  // state.json intact instead of producing a half-written JSON the
-  // worker can't parse on restart.
+  // Atomic write: per-process unique tmp + rename. v0.33.0 added
+  // PID + random suffix so server and worker can't clobber each
+  // other's in-flight write (pre-fix both used the exact same
+  // `${target}.tmp`).
   const target = pyanchorConfig.stateFile;
-  const tmp = `${target}.tmp`;
+  const tmp = `${target}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
   await writeFile(tmp, JSON.stringify(payload, null, 2), "utf8");
   await rename(tmp, target);
   return payload;
+}
+
+export async function writeAiEditState(next: AiEditState) {
+  return withServerStateLock(() => writeAiEditStateUnlocked(next));
 }
 
 export async function readAiEditState(): Promise<AiEditState> {
@@ -384,16 +425,35 @@ export async function startAiEdit(input: AiEditStartInput) {
   }
 
   if (prompt.length > pyanchorConfig.promptMaxLength) {
-    throw new Error(
+    // v0.33.0 — typed status (HttpError) so the global error handler
+    // returns 413 instead of 500. Pre-fix this user-input error was
+    // indistinguishable from a server crash.
+    const err = new Error(
       `Prompt is too long (${prompt.length} > ${pyanchorConfig.promptMaxLength} chars). ` +
         `Raise PYANCHOR_PROMPT_MAX_LENGTH if this is expected.`
-    );
+    ) as Error & { status: number };
+    err.status = 413;
+    throw err;
   }
 
   if (!isPyanchorConfigured()) {
-    throw new Error("Sidecar is not fully configured yet.");
+    // v0.33.0 — 503 (Service Unavailable) is more accurate than 500.
+    // The sidecar isn't crashed — it's not yet ready to serve edits.
+    const err = new Error("Sidecar is not fully configured yet.") as Error & { status: number };
+    err.status = 503;
+    throw err;
   }
 
+  // v0.33.0 — RMW serialization. Pre-fix two simultaneous /api/edit
+  // POSTs could both observe `current.status === "idle"` between the
+  // read and the write, both spawn workers, and the second
+  // writeAiEditState would clobber the first's pid. Serialize the
+  // entire read→decision→write sequence behind the server-state
+  // lock. Caught by codex static audit.
+  return withServerStateLock(async () => startAiEditUnlocked(input, prompt));
+}
+
+async function startAiEditUnlocked(input: AiEditStartInput, prompt: string) {
   const targetPath = normalizeTargetPath(input.targetPath);
   const mode = input.mode === "chat" ? "chat" : "edit";
   const current = await readAiEditState();

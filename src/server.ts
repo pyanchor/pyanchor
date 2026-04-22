@@ -83,11 +83,31 @@ const setNoStore = (response: Response) => {
   response.setHeader("Expires", "0");
 };
 
+// v0.33.0 — typed errors with embedded status. The global asyncRoute
+// catch path used to fold every throw (including legitimate user-input
+// errors thrown deep inside startAiEdit) into a 500. Now if `error`
+// has a numeric `status` property in 4xx/5xx range, that wins over
+// the explicit status arg. Caught by codex static audit (prompt
+// length 500 → 413, sidecar not-configured 500 → 503).
+interface StatusedError { status?: number }
 const handleError = (response: Response, error: unknown, status = 500) => {
   const message = error instanceof Error ? error.message : "Request failed.";
+  const embedded = (error as StatusedError | null)?.status;
+  const finalStatus =
+    typeof embedded === "number" && embedded >= 400 && embedded <= 599
+      ? embedded
+      : status;
   setNoStore(response);
-  response.status(status).json({ error: message });
+  response.status(finalStatus).json({ error: message });
 };
+
+class HttpError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+export { HttpError };
 
 const serveRuntimeAsset = (fileName: string) => (_request: Request, response: Response) => {
   setNoStore(response);
@@ -318,6 +338,34 @@ for (const basePath of runtimeBases) {
         handleError(response, new Error("Field `targetPath`, if provided, must be a string."), 400);
         return;
       }
+      // v0.33.0 — reject targetPath traversal attempts. Pre-fix, the
+      // Aider adapter resolved `path.join(workspaceDir, targetPath)`
+      // and shipped the absolute path to `aider --` as an explicit
+      // file arg. A targetPath like `/../../etc/...` could escape
+      // the workspace and have aider edit files outside the
+      // sandbox the operator declared. Caught by codex static audit.
+      // The check rejects: `..` segments, backslashes, NUL, drive
+      // letters, percent-encoded traversal. Forward slashes are OK
+      // (they're the URL path shape we expect).
+      if (body.targetPath !== undefined) {
+        const tp = body.targetPath;
+        if (
+          tp.includes("\0") ||
+          tp.includes("\\") ||
+          /(^|\/)\.\.(\/|$)/.test(tp) ||
+          /^[a-zA-Z]:[\\/]/.test(tp) ||
+          /%2e%2e/i.test(tp) ||
+          /%2f/i.test(tp) ||
+          /%5c/i.test(tp)
+        ) {
+          handleError(
+            response,
+            new Error("Field `targetPath` contains an unsafe character or sequence (.. \\ NUL drive-letter or percent-encoded traversal)."),
+            400
+          );
+          return;
+        }
+      }
       if (body.mode !== undefined && body.mode !== "edit" && body.mode !== "chat") {
         handleError(response, new Error('Field `mode`, if provided, must be "edit" or "chat".'), 400);
         return;
@@ -350,7 +398,22 @@ for (const basePath of runtimeBases) {
     cancelLimiter,
     asyncRoute(async (request, response) => {
       setNoStore(response);
-      response.json(await cancelAiEdit(request.body as AiEditCancelInput));
+      // v0.33.0 — body shape validation. Pre-fix `null` body or
+      // `{ jobId: 123 }` reached cancelAiEdit and threw inside the
+      // async path → handleError converted to 500. Caught by codex
+      // static audit. Empty `{}` is the documented "cancel current /
+      // most-recent" shorthand.
+      const raw = request.body;
+      if (raw === null || (raw !== undefined && typeof raw !== "object")) {
+        handleError(response, new Error("Body must be a JSON object (use {} to cancel the current job)."), 400);
+        return;
+      }
+      const body = (raw ?? {}) as AiEditCancelInput;
+      if (body.jobId !== undefined && typeof body.jobId !== "string") {
+        handleError(response, new Error("Field `jobId`, if provided, must be a string."), 400);
+        return;
+      }
+      response.json(await cancelAiEdit(body));
     })
   );
 }
@@ -509,16 +572,36 @@ __pyanchorHttpServer.on("error", (err: NodeJS.ErrnoException) => {
 // MUST call process.exit itself — otherwise the sidecar hangs after
 // `systemctl stop` (caught when test isolation between sequential
 // spawns failed because the prior sidecar wasn't actually dying).
-const __shutdown = (signal: NodeJS.Signals) => {
+// v0.33.0 — also kill any active worker on shutdown. Pre-fix the
+// worker was spawned with `detached: true` + `stdio: "ignore"` +
+// `unref()`, so Ctrl+C / `systemctl stop` killed the sidecar but
+// the worker kept running — continuing to spawn agent calls, edit
+// the workspace, and (in apply mode) sync-back to appDir + restart
+// the frontend. Caught by codex static audit.
+//
+// We can't synchronously read the state file in a signal handler
+// (readAiEditState is async). Instead we read it best-effort and
+// SIGTERM the active worker pid before our own process.exit. If
+// the read fails or the worker is already gone, just continue —
+// shutdown should not be blocked by recovery.
+const __shutdown = async (signal: NodeJS.Signals) => {
   clearInterval(__pyanchorEventLoopAnchor);
-  // close() is async — but we don't wait. The OS will reclaim the
-  // socket when process.exit fires. close() just stops accepting
-  // new connections in the meantime.
   __pyanchorHttpServer.close();
-  // 128 + signal number is the conventional exit code for signal-
-  // initiated termination, but systemd is happy with 0 here too
-  // since the listener fired (treated as graceful, not "failed").
+  // Best-effort: cancel any in-flight worker. If readAiEditState
+  // throws, swallow — we're already on the exit path.
+  try {
+    const state = await readAiEditState();
+    if (state.pid && (state.status === "running" || state.status === "canceling")) {
+      try {
+        process.kill(state.pid, "SIGTERM");
+      } catch {
+        // ESRCH: worker already gone. Fine.
+      }
+    }
+  } catch {
+    // State unreadable — nothing to cancel. Continue.
+  }
   process.exit(signal === "SIGTERM" ? 0 : 130);
 };
-process.once("SIGTERM", __shutdown);
-process.once("SIGINT", __shutdown);
+process.once("SIGTERM", () => { void __shutdown("SIGTERM"); });
+process.once("SIGINT", () => { void __shutdown("SIGINT"); });

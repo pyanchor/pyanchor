@@ -24,9 +24,27 @@ export function tokenBucketMiddleware(options: TokenBucketOptions) {
 
   const pruneIfFull = () => {
     if (buckets.size <= maxKeys) return;
+    // First sweep: remove anything older than 60s.
     const cutoff = Date.now() - 60_000;
     for (const [key, bucket] of buckets) {
       if (bucket.updatedAt < cutoff) buckets.delete(key);
+    }
+    // v0.33.0 — hard cap. Pre-fix the 60s sweep could leave the
+    // map above maxKeys when every bucket was fresh (e.g. an
+    // attacker churning forwarded-IP values faster than 60s).
+    // Memory pressure could grow unbounded under that pattern.
+    // After the time-based sweep, if we're still over, drop the
+    // oldest entries until we're back under the cap. Caught by
+    // codex static audit.
+    if (buckets.size > maxKeys) {
+      const sorted = Array.from(buckets.entries()).sort(
+        (a, b) => a[1].updatedAt - b[1].updatedAt
+      );
+      const toDrop = sorted.length - maxKeys;
+      for (let i = 0; i < toDrop; i++) {
+        const entry = sorted[i];
+        if (entry) buckets.delete(entry[0]);
+      }
     }
   };
 

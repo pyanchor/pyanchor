@@ -180,7 +180,7 @@ export function renderAdminHtml(health: AdminHealth, state: AiEditState) {
           <h2>Runtime</h2>
           <dl class="meta">
             <dt>Runtime base</dt>
-            <dd><a href="${runtimeLink}">${escapeHtml(health.runtimeBasePath)}</a></dd>
+            <dd><a href="${escapeHtml(runtimeLink)}">${escapeHtml(health.runtimeBasePath)}</a></dd>
             <dt>Alias</dt>
             <dd>${escapeHtml(health.runtimeAliasPath)}</dd>
             <dt>Healthcheck</dt>

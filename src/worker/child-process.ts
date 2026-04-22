@@ -79,13 +79,38 @@ export function runCommand(
     let stdout = "";
     let stderr = "";
     let timeoutId: NodeJS.Timeout | null = null;
+    // v0.33.0 — track the nested SIGKILL fallback so we can cancel
+    // it when the child exits cleanly. Pre-fix the timer fired 5s
+    // after timeout regardless and only checked `child.pid`. In a
+    // process-churn environment that PID could already belong to
+    // an unrelated process, sending it an unintended SIGKILL.
+    // Caught by codex static audit.
+    let killTimerId: NodeJS.Timeout | null = null;
 
     if (options.timeoutMs) {
       timeoutId = setTimeout(() => {
         killChild(child, "SIGTERM");
-        setTimeout(() => killChild(child, "SIGKILL"), 5000).unref();
+        killTimerId = setTimeout(() => {
+          // Re-check that the child hasn't already exited before
+          // sending SIGKILL — exitCode/signalCode go non-null on
+          // close, so this is the safe gate against PID reuse.
+          if (child.exitCode !== null || child.signalCode !== null) return;
+          killChild(child, "SIGKILL");
+        }, 5000);
+        killTimerId.unref();
       }, options.timeoutMs);
     }
+
+    const clearTimers = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (killTimerId) {
+        clearTimeout(killTimerId);
+        killTimerId = null;
+      }
+    };
 
     child.stdout.on("data", (chunk) => {
       const text = chunk.toString();
@@ -101,13 +126,13 @@ export function runCommand(
 
     child.on("error", (error) => {
       options.activeChildren?.delete(child);
-      if (timeoutId) clearTimeout(timeoutId);
+      clearTimers();
       reject(error);
     });
 
     child.on("close", (code, signal) => {
       options.activeChildren?.delete(child);
-      if (timeoutId) clearTimeout(timeoutId);
+      clearTimers();
 
       if (options.isCancelled?.()) {
         reject(new Error(options.canceledError ?? DEFAULT_CANCELED_ERROR));

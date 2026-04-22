@@ -64,10 +64,28 @@ const resolveServiceRoot = () => {
 const serviceRoot = resolveServiceRoot();
 const currentUser = userInfo().username;
 
+// v0.33.0 — strict allowlist for runtime base/alias paths. Pre-fix
+// the only constraint was a leading slash, so a malicious
+// PYANCHOR_RUNTIME_BASE_PATH could include quote/control characters
+// that broke out of the admin page's <a href="..."> attribute. The
+// admin route is token-gated so this isn't a remote anonymous XSS,
+// but it IS a config-origin sink. Caught by codex static audit.
+const BASE_PATH_RE = /^\/[A-Za-z0-9._~/-]+$/;
 const normalizeBasePath = (value: string | undefined, fallback: string) => {
   const trimmed = (value ?? fallback).trim();
   const normalized = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  return normalized === "/" ? fallback : normalized.replace(/\/+$/, "");
+  const stripped = normalized === "/" ? fallback : normalized.replace(/\/+$/, "");
+  if (!BASE_PATH_RE.test(stripped)) {
+    // Use the same numericEnvErrors-style deferred surfacing so the
+    // failure shows up in validateConfig() / doctor instead of
+    // throwing at module load with a stack trace.
+    numericEnvErrors.push(
+      `runtime base/alias path ${JSON.stringify(stripped)} is not URL-path-shaped ` +
+        `(allowed: leading "/" + [A-Za-z0-9._~/-]+). Falling back to "${fallback}".`
+    );
+    return fallback;
+  }
+  return stripped;
 };
 
 const stateDir = env.PYANCHOR_STATE_DIR?.trim() || path.join(homedir(), ".pyanchor");
@@ -334,10 +352,27 @@ export function commandExists(command: string) {
     // Path-shaped — must both exist AND be executable.
     return executablePathExists(command);
   }
+  // v0.33.0 — strict allowlist for bare-name lookups + no shell.
+  // Pre-fix this path used `spawnSync("command", ["-v", X], { shell: true })`,
+  // which combined with the v0.32.2 cwd .env autoload meant an
+  // untrusted repo could set `PYANCHOR_CODEX_BIN=codex; touch /tmp/pwned`
+  // and the doctor / sidecar boot would execute it through the shell.
+  // Caught by the codex static audit.
+  //
+  // Now: reject anything that isn't a plain CLI-name token. Real
+  // bin names are word-shaped (letters / digits / dot / dash /
+  // underscore). Anything outside that is either a path (handled
+  // above) or an attacker payload — refuse without spawning.
+  if (!/^[A-Za-z0-9._-]+$/.test(command)) return false;
   if (process.platform === "win32") {
     return spawnSync("where", [command], { stdio: "ignore" }).status === 0;
   }
-  return spawnSync("command", ["-v", command], { stdio: "ignore", shell: true }).status === 0;
+  // No shell. POSIX `command -v` is itself a shell builtin, so we
+  // wrap with `/bin/sh -c` BUT pass the value as a positional arg
+  // so the shell can't word-split it.
+  return spawnSync("/bin/sh", ["-c", 'command -v -- "$1"', "sh", command], {
+    stdio: "ignore"
+  }).status === 0;
 }
 
 /**
@@ -486,6 +521,106 @@ export function validateConfig(): void {
         `cross-origin token-bearing requests; set PYANCHOR_ALLOWED_ORIGINS to a ` +
         `CSV of trusted origins (e.g. https://app.example.com) before publishing ` +
         `pyanchor on this host. See docs/SECURITY.md and docs/PRODUCTION-HARDENING.md.`
+    );
+  }
+
+  // v0.33.0 — destructive path safety. Pre-fix the worker would
+  // happily run `sudo rm -rf "$PYANCHOR_WORKSPACE_DIR"` (when fresh
+  // workspace is enabled), `rsync --delete ws/ -> appDir`, and
+  // `sudo chown -R appDirOwner appDir` against any path the operator
+  // typed. A `.env` typo of `PYANCHOR_WORKSPACE_DIR=/` would be
+  // catastrophic. Caught by codex static audit.
+  //
+  // We only fail-closed on system-dir matches here (the unrecoverable
+  // category). workspaceDir==appDir + parent-overlap shapes are
+  // warn-only at boot — the worker re-checks them right before any
+  // destructive op (rm -rf / rsync --delete). That keeps "in-place
+  // dev" setups (some operators intentionally run with workspace
+  // == app, with apply mode disabled) workable.
+  assertSafeMutablePath("PYANCHOR_WORKSPACE_DIR", pyanchorConfig.workspaceDir);
+  assertSafeMutablePath("PYANCHOR_APP_DIR", pyanchorConfig.appDir);
+  const wsResolved = path.resolve(pyanchorConfig.workspaceDir);
+  const appResolved = path.resolve(pyanchorConfig.appDir);
+  if (wsResolved === appResolved) {
+    console.warn(
+      `[pyanchor] PYANCHOR_WORKSPACE_DIR and PYANCHOR_APP_DIR resolve to the ` +
+        `same path (${wsResolved}). Apply-mode sync-back will refuse to run ` +
+        `(rsync into itself). For dryrun / chat mode this is fine.`
+    );
+  } else if (
+    wsResolved.startsWith(appResolved + path.sep) ||
+    appResolved.startsWith(wsResolved + path.sep)
+  ) {
+    console.warn(
+      `[pyanchor] PYANCHOR_WORKSPACE_DIR (${wsResolved}) and PYANCHOR_APP_DIR ` +
+        `(${appResolved}) overlap (one is a parent of the other). Apply-mode ` +
+        `sync-back may corrupt the parent — pyanchor will refuse the destructive ` +
+        `op at runtime. Recommended: use sibling directories.`
+    );
+  }
+}
+
+/**
+ * v0.33.0 — refuse paths that are clearly unsafe for `rm -rf`,
+ * `rsync --delete`, or `chown -R`. Caught by codex static audit.
+ *
+ * Rejects:
+ *   - `/`, `/home`, `/var`, `/usr`, `/etc`, `/opt`, `/srv`, `/tmp` (the dir
+ *     itself, not children)
+ *   - the operator's home directory itself
+ *   - the pyanchor stateDir or its parent
+ *   - relative paths (must be absolute)
+ *
+ * Allows children of those (e.g. `/tmp/pyanchor-ws-xyz` is fine,
+ * `/home/alice/pyanchor-ws` is fine). Symlink-resolved comparison
+ * uses the resolved absolute path.
+ */
+function assertSafeMutablePath(envName: string, value: string): void {
+  if (!value || value === REQUIRED_PLACEHOLDER) return; // already covered above
+  if (!path.isAbsolute(value)) {
+    throw new Error(
+      `[pyanchor] ${envName}=${JSON.stringify(value)} is not an absolute path. ` +
+        `Destructive workspace operations need an absolute path you intend to fully own.`
+    );
+  }
+  const resolved = path.resolve(value);
+  const FORBIDDEN_DIRS = new Set([
+    "/",
+    "/home",
+    "/var",
+    "/var/lib",
+    "/usr",
+    "/usr/local",
+    "/etc",
+    "/opt",
+    "/srv",
+    "/tmp",
+    "/root",
+    "/bin",
+    "/sbin",
+    "/lib",
+    "/boot"
+  ]);
+  if (FORBIDDEN_DIRS.has(resolved)) {
+    throw new Error(
+      `[pyanchor] ${envName}=${JSON.stringify(resolved)} is a system directory. ` +
+        `Refusing to start — an operator-side typo could lead to data loss when the ` +
+        `worker runs sudo rm -rf / rsync --delete / chown -R against it. ` +
+        `Use a dedicated child directory (e.g. /var/lib/pyanchor or /tmp/pyanchor-ws).`
+    );
+  }
+  if (resolved === homedir()) {
+    throw new Error(
+      `[pyanchor] ${envName}=${JSON.stringify(resolved)} is the operator's home ` +
+        `directory itself. Use a child directory.`
+    );
+  }
+  // stateDir: pyanchor's own state file lives here. Don't mutate it.
+  const stateDirResolved = path.resolve(stateDir);
+  if (resolved === stateDirResolved || stateDirResolved.startsWith(resolved + path.sep)) {
+    throw new Error(
+      `[pyanchor] ${envName}=${JSON.stringify(resolved)} contains pyanchor's own ` +
+        `state directory (${stateDirResolved}). The worker would clobber its own state.`
     );
   }
 }

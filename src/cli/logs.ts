@@ -123,19 +123,41 @@ Examples:
 `;
 }
 
-/** Parse JSONL — skip blank/malformed lines, return AuditEvent array. */
+/**
+ * v0.33.0 — schema narrow on top of JSON parse. Pre-fix the parser
+ * accepted any syntactically valid JSON line and cast it to
+ * AuditEvent, so a `{}` or `{"ts":123}` line (from log rotation,
+ * manual edit, or a misconfigured external shipper) crashed the
+ * CLI inside renderEvent (`e.ts.replace`, `e.outcome.padEnd`,
+ * etc.) instead of being skipped. Caught by codex static audit.
+ */
+function isAuditEvent(value: unknown): value is AuditEvent {
+  if (!value || typeof value !== "object") return false;
+  const e = value as Record<string, unknown>;
+  return (
+    typeof e.ts === "string" &&
+    typeof e.outcome === "string" &&
+    (e.outcome === "success" || e.outcome === "failed" || e.outcome === "canceled") &&
+    typeof e.mode === "string" &&
+    typeof e.output_mode === "string" &&
+    typeof e.duration_ms === "number"
+  );
+}
+
+/** Parse JSONL — skip blank/malformed/schema-mismatched lines. */
 function parseJsonl(content: string): AuditEvent[] {
   const out: AuditEvent[] = [];
   for (const raw of content.split("\n")) {
     const line = raw.trim();
     if (!line) continue;
+    let parsed: unknown;
     try {
-      out.push(JSON.parse(line) as AuditEvent);
+      parsed = JSON.parse(line);
     } catch {
-      // Tolerate the rare half-written line at end-of-file
-      // (sidecar appends + flushes per event, but a crash mid-write
-      // could leave a partial). Skipping is safer than throwing.
+      continue; // half-written line; skip
     }
+    if (!isAuditEvent(parsed)) continue; // schema-mismatched; skip
+    out.push(parsed);
   }
   return out;
 }

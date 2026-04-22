@@ -127,7 +127,11 @@ function terminate(child: ChildProcess, signal: NodeJS.Signals) {
   try {
     child.kill(signal);
   } catch {}
+  // v0.33.0 — exitCode/signalCode gate before SIGKILL so we don't
+  // accidentally signal a recycled PID. Mirrors the
+  // child-process.ts fix. Caught by codex static audit.
   setTimeout(() => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
     if (!child.pid) return;
     try {
       child.kill("SIGKILL");

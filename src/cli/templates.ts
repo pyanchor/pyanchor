@@ -111,22 +111,27 @@ export function renderRestartScript(input: RestartTemplateInput): string {
         `exit 0`,
         ``
       ].join("\n");
+    // v0.33.0 — shellQuote(input.name) so a project dir / prompt
+    // input like `my-app; touch /tmp/pwned` can't smuggle commands
+    // into the generated restart.sh. The systemctl preset is
+    // particularly sensitive because it runs under sudo. Caught by
+    // codex static audit.
     case "pm2":
       return [
         header,
-        `exec /usr/bin/pm2 reload ${input.name}`,
+        `exec /usr/bin/pm2 reload ${shellQuote(input.name)}`,
         ``
       ].join("\n");
     case "systemctl":
       return [
         header,
-        `exec /usr/bin/sudo /usr/bin/systemctl restart ${input.name}`,
+        `exec /usr/bin/sudo /usr/bin/systemctl restart ${shellQuote(input.name)}`,
         ``
       ].join("\n");
     case "docker":
       return [
         header,
-        `exec /usr/bin/docker restart ${input.name}`,
+        `exec /usr/bin/docker restart ${shellQuote(input.name)}`,
         ``
       ].join("\n");
     case "custom":

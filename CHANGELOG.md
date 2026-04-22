@@ -7,6 +7,148 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-04-22
+
+Static-audit ship. Codex was given the entire `src/` tree
+(`audit-codex-static.md`, run on v0.32.10) and flagged
+**5 P1 + 10 P2 + 5 by-design**. v0.33.0 ships fixes for all 5
+P1 + 9 of the 10 P2; the remaining P2 (worker stdin->stderr
+ordering race) is a deferred chip with a follow-up task queued.
+
+Minor bump justification: a few startup paths that pre-v0.33.0
+silently passed are now fail-closed (system-dir
+WORKSPACE_DIR/APP_DIR), and a few error paths that returned 500
+now return the semantically-correct 4xx/503. Pure operator-
+contract refinements; no API removals.
+
+### Fixed — Security (P1)
+
+- **`commandExists()` shell:false + name allowlist** — pre-fix
+  used `spawnSync("command", ["-v", X], { shell: true })` for
+  bare PATH lookups. Combined with the v0.32.2 cwd `.env`
+  autoload, an untrusted repo's `PYANCHOR_CODEX_BIN=codex; touch
+  /tmp/pwned` would execute through the shell on `pyanchor
+  doctor` / boot. v0.33.0 strict allowlists CLI-name tokens to
+  `[A-Za-z0-9._-]+`, removes `shell: true`, and uses positional
+  arg passing so the value can't be word-split.
+  (`src/config.ts`)
+
+- **Aider path traversal** — `/api/edit` only checked that
+  `targetPath` was a string. The framework profile's
+  `routeFileCandidates()` then produced candidates that the
+  Aider adapter resolved via `path.join(workspaceDir, rel)`
+  and shipped to `aider` as explicit file args. A targetPath
+  like `/../../etc/...` could escape the workspace.
+  - API boundary: rejects `..` segments, backslash, NUL,
+    drive letters, percent-encoded traversal with 400.
+  - Defense-in-depth: `aider.ts guessFilesForRoute()` now
+    re-resolves each candidate and skips any that escapes
+    the declared workspace root.
+  (`src/server.ts`, `src/agents/aider.ts`)
+
+- **Destructive path guard** — pre-fix, the worker's
+  `sudo rm -rf "$PYANCHOR_WORKSPACE_DIR"` (fresh-workspace
+  mode), `rsync --delete ws/ -> appDir`, and
+  `sudo chown -R appDirOwner appDir` ran against any path the
+  operator typed. A `.env` typo of `PYANCHOR_WORKSPACE_DIR=/`
+  or `=/home` would be catastrophic. v0.33.0 `validateConfig()`
+  rejects bare system dirs (`/`, `/home`, `/var`, `/usr`,
+  `/etc`, `/opt`, `/srv`, `/tmp`, `/root`, `/bin`, `/sbin`,
+  `/lib`, `/boot`, the operator's HOME, pyanchor's stateDir
+  parent). Sub-paths (e.g. `/tmp/pyanchor-ws-xyz`) still work.
+  workspace==appDir / parent-overlap shapes are warn-only at
+  boot — the worker re-checks before any destructive op.
+  (`src/config.ts`)
+
+- **Server-local RMW lock around state.json** — pre-fix two
+  simultaneous `/api/edit` POSTs could both see `status === "idle"`
+  between read and write, both spawn workers, and the second
+  `writeAiEditState` clobbered the first's `pid`. v0.33.0 wraps
+  `startAiEdit` in a reentrant `AsyncLocalStorage`-backed
+  promise-chain mutex. `writeAiEditState` lives inside the
+  same lock; per-process unique `.tmp.${pid}.${rand}` filenames
+  prevent server↔worker tmp clobber. (Cross-process file lock
+  is still future work — process-local is the high-impact win.)
+  (`src/state.ts`, `src/worker/state-io.ts`)
+
+- **Shutdown cancels active worker** — pre-fix the worker was
+  spawned `detached: true`, so `Ctrl+C` / `systemctl stop` killed
+  the sidecar but the worker kept editing the workspace and (in
+  apply mode) sync-back + restart-frontend ran orphaned. v0.33.0
+  shutdown handler best-effort reads `state.json`, `process.kill
+  (state.pid, "SIGTERM")` if a job is in-flight, then exits.
+  (`src/server.ts`)
+
+### Fixed — UX / API contract (P2)
+
+- `POST /api/cancel` body validation: `null` / `{ jobId: 123 }`
+  now returns **400** instead of 500. (`src/server.ts`)
+- Prompt length over `PYANCHOR_PROMPT_MAX_LENGTH` returns
+  **413** instead of 500. (`src/state.ts`, typed `HttpError`
+  in `src/server.ts`)
+- Edit attempted while `isPyanchorConfigured()` is false returns
+  **503** instead of 500. (`src/state.ts`)
+- Admin `<a href="...">` for `runtimeBasePath` is `escapeHtml`'d.
+  Base/alias paths now require `^/[A-Za-z0-9._~/-]+$` — invalid
+  values fall back to default with a doctor warning instead of
+  breaking out of the attribute boundary. (`src/admin.ts`,
+  `src/config.ts`)
+- `renderRestartScript()` shell-quotes `pm2 reload <name>`,
+  `systemctl restart <unit>`, `docker restart <container>` —
+  pre-fix a project dir / prompt input like `my-app; touch
+  /tmp/pwned` could smuggle commands into the generated
+  `scripts/pyanchor-restart.sh` (especially with the systemctl
+  preset's sudo). (`src/cli/templates.ts`)
+- Rate limiter map gained a hard cap. The 60s expiry sweep
+  could leave the map above `maxKeys` when every bucket was
+  fresh; v0.33.0 also drops the oldest entries to enforce
+  `<= maxKeys` after the time-based sweep. (`src/rate-limit.ts`)
+- Worker `SIGKILL` fallback timer now clears on close + checks
+  `child.exitCode/signalCode` before sending — kills the PID-
+  reuse race window (small but real on process-churn-heavy
+  hosts). (`src/worker/child-process.ts`,
+  `src/agents/openclaw/exec.ts`)
+- Heartbeat-interval write failures route through the same
+  `onFlushError` sink as the runtime buffer. Pre-fix they were
+  silently swallowed; if disk filled up mid-job the overlay
+  showed a stale "in progress" indicator with no warning.
+  (`src/worker/runtime-buffer.ts`)
+- `pyanchor logs` schema-narrows JSONL lines before render.
+  Pre-fix a syntactically-valid line missing `ts`/`outcome`
+  crashed the CLI inside `renderEvent()`; v0.33.0 skips schema-
+  mismatched lines the same way it already skipped half-written
+  ones. (`src/cli/logs.ts`)
+- Overlay v0.32.10 render-skip key now includes the queue
+  identity (jobId+mode+enqueuedAt list), not just length.
+  Cancel-then-immediate-enqueue (depth stays 1) now correctly
+  re-renders the cancel affordance and queue position.
+  (`src/runtime/overlay.ts`)
+
+### Deferred (chip queued)
+- P2 worker stdin→stderr ordering race: when the child closes
+  before reading stdin and our helper synthesizes a stderr
+  note for EPIPE, that note can lose the race against the
+  `close` event and never reach the resolved promise. Edge
+  case (mostly fast-fail spawns), so deferred to a follow-up
+  task with a regression test plan attached.
+
+### Verified
+- 885 unit tests pass + 0 fail (was 885/885 in v0.32.10; same
+  count, several tests updated for the new path-guard
+  expectations).
+- Typecheck clean.
+- Audit harness verification runs in next step (Group A
+  `audit/run.mjs` + Group C `audit/scenarios-codex.mjs`).
+
+### Trade-offs
+- The destructive-path guard is intentionally noisy. Operators
+  who used to set `PYANCHOR_WORKSPACE_DIR=/tmp` directly will
+  see a startup error. Fix: `mkdir /tmp/pyanchor-ws && export
+  PYANCHOR_WORKSPACE_DIR=/tmp/pyanchor-ws`. Rationale: a single
+  typo on a privileged user could `rm -rf` host state; making
+  this fail-closed costs operators 30 seconds and prevents
+  catastrophic loss.
+
 ## [0.32.10] - 2026-04-21
 
 Performance — operator reported the overlay started feeling
