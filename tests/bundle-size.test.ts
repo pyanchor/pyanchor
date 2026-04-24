@@ -37,9 +37,10 @@ const LIMITS: Array<{ file: string; maxBytes: number; note: string }> = [
   // still spawned as a child process, not inlined.
   //
   // Ceiling raised v0.30.0: 64KB → 256KB to accommodate the agents
-  // surface. Still well under server.cjs (1.2MB) which we explicitly
-  // don't guard.
-  { file: "cli.cjs", maxBytes: 256 * 1024, note: "init + doctor + logs + agent test + dispatcher (agents module inlined; server.cjs spawned as child)" }
+  // surface. v0.35.1: 256KB → 320KB for the 22-locale i18n string
+  // tables (~70KB total; each locale adds 3-4KB). Still well under
+  // server.cjs (1.2MB) which we explicitly don't guard.
+  { file: "cli.cjs", maxBytes: 320 * 1024, note: "init + doctor + logs + agent test + dispatcher + 22 i18n locale tables (agents module inlined; server.cjs spawned as child)" }
 ];
 
 // Per-locale bundle ceiling. Largest known is 'th' (Thai script).

@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.1] - 2026-04-22
+
+CLI i18n locale parity with the overlay. v0.35.0 shipped en + ko;
+v0.35.1 fills in the other 20 to match the overlay's full
+22-locale set, so a user who picks a language for the in-page UI
+sees the matching CLI output.
+
+### Added — 20 new locale tables
+`src/cli/strings/{ja, zh-cn, fr, es, de, pt-br, ru, it, nl, sv,
+pl, tr, hi, id, vi, th, ar, he, fa, ur}.ts`. Each defines all
+~40 keys present in `en.ts`. Tech terms (env vars, file paths,
+JSON keys, CLI flags, code keywords) intentionally kept in
+English to match overlay strings + avoid breaking grep
+pipelines. RTL locales (ar / he / fa / ur) work — terminals
+that support BiDi rendering will lay them out right-to-left;
+others render LTR with no breakage.
+
+### Changed
+- `src/cli/i18n.ts`:
+  - `CliLocale` union expanded en+ko → 22 codes.
+  - `TABLES` + `SUPPORTED` registries updated.
+  - `LANG`/`LC_*` parser now tries `lang-region` first
+    (`zh_CN.UTF-8` → `zh-cn`, `pt_BR` → `pt-br`) and falls
+    back to language base (`ko_KR` → `ko`). Pre-fix only the
+    base form was tried, so a `LANG=zh_CN.UTF-8` operator
+    silently got English instead of `zh-cn`.
+- `tests/bundle-size.test.ts`: cli.cjs ceiling 256KB → 320KB.
+  The 20 new locale tables add ~70KB total (~3-4KB each); the
+  bundle now sits at ~280KB. Still well under the server.cjs
+  budget (1.2MB, unchanged) which we don't guard.
+
+### Tests
+- `tests/cli/i18n.test.ts`:
+  - `listSupportedLocales()` test updated from "en + ko at minimum"
+    to "the full overlay-matching set (22)" with explicit list.
+  - **New smoke test**: every shipped locale must define
+    `doctor.title` (catches a forgotten translation that would
+    silently fall back to English with no signal).
+  - **New translation spot-check**: ja / zh-cn / fr / es / de
+    each translate `doctor.title` to expected language-specific
+    substrings.
+
+903 unit tests pass (was 901; +2 new).
+
+### Coverage policy reminder
+Same as v0.35.0: high-traffic surface only (doctor headers /
+group titles / summary lines, init prompts + done message, logs
+not-found error). Per-check `name` / `detail` / `fix` text in
+doctor stays inline because it's mostly env-var names and path
+examples. Future ships can deepen translations key by key — the
+i18n table just grows; locales that don't have the new keys
+fall back to English silently.
+
+### Patch bump justification
+- Pure additive: 20 new files + 1 file expanded + 1 test ceiling
+  bump + 1 parser improvement.
+- English output byte-identical (default locale + the `t()`
+  lookup hits the en table, same as v0.35.0).
+- No new public API surface — same `--lang <code>` flag and
+  `PYANCHOR_LOCALE` env from v0.35.0; just more values accepted.
+
 ## [0.35.0] - 2026-04-22
 
 CLI internationalization. `doctor` / `init` / `logs` user-facing

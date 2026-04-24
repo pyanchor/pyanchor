@@ -24,17 +24,72 @@
  * unblocked — they ship what they have, English fills gaps.
  */
 
+import { strings as arStrings } from "./strings/ar";
+import { strings as deStrings } from "./strings/de";
 import { strings as enStrings } from "./strings/en";
+import { strings as esStrings } from "./strings/es";
+import { strings as faStrings } from "./strings/fa";
+import { strings as frStrings } from "./strings/fr";
+import { strings as heStrings } from "./strings/he";
+import { strings as hiStrings } from "./strings/hi";
+import { strings as idStrings } from "./strings/id";
+import { strings as itStrings } from "./strings/it";
+import { strings as jaStrings } from "./strings/ja";
 import { strings as koStrings } from "./strings/ko";
+import { strings as nlStrings } from "./strings/nl";
+import { strings as plStrings } from "./strings/pl";
+import { strings as ptBrStrings } from "./strings/pt-br";
+import { strings as ruStrings } from "./strings/ru";
+import { strings as svStrings } from "./strings/sv";
+import { strings as thStrings } from "./strings/th";
+import { strings as trStrings } from "./strings/tr";
+import { strings as urStrings } from "./strings/ur";
+import { strings as viStrings } from "./strings/vi";
+import { strings as zhCnStrings } from "./strings/zh-cn";
 
-export type CliLocale = "en" | "ko";
+/**
+ * v0.35.1 — match the overlay's 22-locale set exactly. Adding a
+ * locale = create `strings/<code>.ts` (start by copying en.ts +
+ * translating in place; missing keys silently fall back to
+ * English) + add the import + push the code into TABLES + SUPPORTED.
+ */
+export type CliLocale =
+  | "en" | "ko" | "ja" | "zh-cn" | "fr" | "es" | "de"
+  | "pt-br" | "ru" | "it" | "nl" | "sv" | "pl"
+  | "tr" | "hi" | "id" | "vi" | "th"
+  | "ar" | "he" | "fa" | "ur";
 
 const TABLES: Record<CliLocale, Record<string, string>> = {
   en: enStrings,
-  ko: koStrings
+  ko: koStrings,
+  ja: jaStrings,
+  "zh-cn": zhCnStrings,
+  fr: frStrings,
+  es: esStrings,
+  de: deStrings,
+  "pt-br": ptBrStrings,
+  ru: ruStrings,
+  it: itStrings,
+  nl: nlStrings,
+  sv: svStrings,
+  pl: plStrings,
+  tr: trStrings,
+  hi: hiStrings,
+  id: idStrings,
+  vi: viStrings,
+  th: thStrings,
+  ar: arStrings,
+  he: heStrings,
+  fa: faStrings,
+  ur: urStrings
 };
 
-const SUPPORTED: CliLocale[] = ["en", "ko"];
+const SUPPORTED: CliLocale[] = [
+  "en", "ko", "ja", "zh-cn", "fr", "es", "de",
+  "pt-br", "ru", "it", "nl", "sv", "pl",
+  "tr", "hi", "id", "vi", "th",
+  "ar", "he", "fa", "ur"
+];
 
 /**
  * Resolve the active locale once at startup and cache the result.
@@ -46,12 +101,19 @@ let activeLocale: CliLocale = resolveLocaleFromEnv();
 function resolveLocaleFromEnv(): CliLocale {
   const fromExplicit = (process.env.PYANCHOR_LOCALE ?? "").trim().toLowerCase();
   if (fromExplicit && isSupported(fromExplicit)) return fromExplicit;
-  // POSIX LANG / LC_*: parse `ko_KR.UTF-8` → `ko`.
+  // POSIX LANG / LC_*: try `lang-region` first (so zh_CN.UTF-8 →
+  // zh-cn, pt_BR → pt-br), then fall back to the language-only
+  // form (so ko_KR → ko).
   for (const envName of ["LC_ALL", "LC_MESSAGES", "LANG"]) {
     const raw = process.env[envName];
     if (!raw) continue;
-    const code = raw.trim().toLowerCase().split(/[._@]/)[0];
-    if (code && isSupported(code)) return code;
+    const lower = raw.trim().toLowerCase();
+    const langRegion = lower.split(/[._@]/)[0]; // "ko_kr" / "ko" / "zh_cn"
+    if (!langRegion) continue;
+    const dashed = langRegion.replace("_", "-"); // "ko-kr" / "zh-cn"
+    if (isSupported(dashed)) return dashed;
+    const base = dashed.split("-")[0]; // "ko" / "zh"
+    if (isSupported(base)) return base;
   }
   return "en";
 }

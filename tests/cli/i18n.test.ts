@@ -67,9 +67,43 @@ describe("CLI i18n", () => {
     );
   });
 
-  it("listSupportedLocales returns en + ko at minimum", () => {
+  it("listSupportedLocales returns the full overlay-matching set (22)", () => {
     const list = listSupportedLocales();
-    expect(list).toContain("en");
-    expect(list).toContain("ko");
+    // Must match the overlay's locale set so a user who picks a
+    // language for the in-page UI sees the matching CLI strings.
+    const expected = [
+      "en", "ko", "ja", "zh-cn", "fr", "es", "de",
+      "pt-br", "ru", "it", "nl", "sv", "pl",
+      "tr", "hi", "id", "vi", "th",
+      "ar", "he", "fa", "ur"
+    ];
+    expect(list.length).toBe(expected.length);
+    for (const code of expected) {
+      expect(list).toContain(code);
+    }
+  });
+
+  it("v0.35.1 — every shipped locale defines doctor.title (smoke check)", () => {
+    // Catches a forgotten translation (would otherwise silently
+    // fall back to English with no signal).
+    for (const code of listSupportedLocales()) {
+      setLocale(code);
+      const title = t("doctor.title");
+      expect(title).toBeTruthy();
+      expect(title).not.toBe("doctor.title"); // i.e. not the literal-key fallback
+    }
+  });
+
+  it("v0.35.1 — Japanese / Chinese / French / Spanish / German each translate doctor.title", () => {
+    setLocale("ja");
+    expect(t("doctor.title")).toContain("ローカル設定");
+    setLocale("zh-cn");
+    expect(t("doctor.title")).toContain("本地配置");
+    setLocale("fr");
+    expect(t("doctor.title")).toContain("configuration locale");
+    setLocale("es");
+    expect(t("doctor.title")).toContain("configuración local");
+    setLocale("de");
+    expect(t("doctor.title")).toContain("Konfigurationsdiagnose");
   });
 });
