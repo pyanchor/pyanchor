@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.1] - 2026-04-22
+
+Operator UX — drop the `npx` prefix + per-app install scope
+guidance.
+
+### Added
+- **`pyanchor init` patches `package.json` scripts** — adds three
+  full-name keys so the operator stops typing `npx` every
+  invocation:
+  - `"pyanchor": "pyanchor"` → `npm run pyanchor`
+  - `"pyanchor:doctor": "pyanchor doctor"` → `npm run pyanchor:doctor`
+  - `"pyanchor:init": "pyanchor init"` → `npm run pyanchor:init`
+  Skips silently if any of those keys already exist with a
+  different value (no clobber). The post-install "next steps"
+  message picks the npm-run form when the patch landed, npx
+  form otherwise. Names are intentionally full (`pyanchor`, not
+  `py`) to match how operators address other CLIs (no one
+  aliases `codex` to `cd`).
+- **`pyanchor doctor` flags global install** — pyanchor is a
+  per-app sidecar (one running instance handles one
+  `PYANCHOR_APP_DIR`). A global install (`npm i -g pyanchor`)
+  works for single-machine single-project setups, but lacks
+  the lockfile pin a per-app `--save-dev` install gives you.
+  Doctor now adds an `install scope` check: `ok` for per-app,
+  `warn` for global with a paste-ready `npm install --save-dev
+  pyanchor` fix.
+- **README "Why `--save-dev` and not `npm install -g`?" section**
+  — explains the per-app sidecar design + lockfile pin reasoning
+  + the package.json-scripts patch that init applies. The
+  Quick start example now opens with `npm install --save-dev
+  pyanchor` and uses `npm run pyanchor` for the sidecar
+  invocation.
+
+### Verified
+- 894 unit tests pass.
+- Typecheck clean.
+
+### No-API-break
+- All changes are init/doctor UX. Server runtime + adapter
+  surface byte-identical with v0.34.0.
+
 ## [0.34.0] - 2026-04-22
 
 Sixth built-in framework profile.

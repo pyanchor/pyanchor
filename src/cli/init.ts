@@ -108,6 +108,61 @@ interface Plan {
 }
 
 /**
+ * v0.34.1 — describes what `init` would do to the user's
+ * package.json scripts block. Returned by `computeScriptPatch()`.
+ */
+type ScriptPatch =
+  | { kind: "skip-no-pkg" }
+  | { kind: "skip-conflict"; conflict: string }
+  | { kind: "skip-already-set" }
+  | { kind: "patch"; newJson: string; added: string[] };
+
+const PYANCHOR_SCRIPTS: Record<string, string> = {
+  pyanchor: "pyanchor",
+  "pyanchor:doctor": "pyanchor doctor",
+  "pyanchor:init": "pyanchor init"
+};
+
+function computeScriptPatch(pkgPath: string): ScriptPatch {
+  if (!existsSync(pkgPath)) return { kind: "skip-no-pkg" };
+  let raw: string;
+  try {
+    raw = readFileSync(pkgPath, "utf8");
+  } catch {
+    return { kind: "skip-no-pkg" };
+  }
+  let pkg: { scripts?: Record<string, string> };
+  try {
+    pkg = JSON.parse(raw);
+  } catch {
+    return { kind: "skip-no-pkg" };
+  }
+  const existing = pkg.scripts ?? {};
+  // Conflict: any of our keys is already present with a different
+  // value. Don't clobber — skip the whole patch and instruct the
+  // user. (Same value = already set = also skip, but cleanly.)
+  for (const [key, expected] of Object.entries(PYANCHOR_SCRIPTS)) {
+    if (key in existing && existing[key] !== expected) {
+      return { kind: "skip-conflict", conflict: key };
+    }
+  }
+  // All keys either match or are missing.
+  const missing = Object.entries(PYANCHOR_SCRIPTS).filter(([key]) => !(key in existing));
+  if (missing.length === 0) return { kind: "skip-already-set" };
+  const next = {
+    ...pkg,
+    scripts: { ...existing, ...Object.fromEntries(missing) }
+  };
+  // Preserve trailing newline if the original had one (most editors do).
+  const trailing = raw.endsWith("\n") ? "\n" : "";
+  return {
+    kind: "patch",
+    newJson: JSON.stringify(next, null, 2) + trailing,
+    added: missing.map(([key]) => key)
+  };
+}
+
+/**
  * v0.33.3 — pick a sidecar PORT that's actually free on this host.
  * Pre-fix `init` always defaulted to 3010 even when something else
  * (studio next dev, an old pyanchor instance, another service) was
@@ -365,6 +420,29 @@ function buildPlan(d: Detection, args: ParsedArgs, ans: Answers, token: string):
     apply: () => mkdirSync(ans.workspaceDir, { recursive: true })
   });
 
+  // 4. v0.34.1 — patch package.json scripts so the user doesn't
+  // have to type `npx pyanchor` every time. Adds three keys
+  // (`pyanchor`, `pyanchor:doctor`, `pyanchor:init`) iff none of
+  // them already exist. If a key conflicts (user already has
+  // `"pyanchor": "<something else>"`), skip the whole action and
+  // tell the user to add manually.
+  const pkgPath = path.join(d.cwd, "package.json");
+  const scriptPatch = computeScriptPatch(pkgPath);
+  actions.push({
+    label:
+      scriptPatch.kind === "skip-no-pkg"
+        ? `patch package.json scripts (SKIP — no package.json found)`
+        : scriptPatch.kind === "skip-conflict"
+          ? `patch package.json scripts (SKIP — '${scriptPatch.conflict}' already exists; add the others manually)`
+          : scriptPatch.kind === "skip-already-set"
+            ? `patch package.json scripts (SKIP — pyanchor scripts already present)`
+            : `patch package.json scripts (adds ${scriptPatch.added.join(", ")})`,
+    apply: () => {
+      if (scriptPatch.kind !== "patch") return;
+      writeFileSync(pkgPath, scriptPatch.newJson, "utf8");
+    }
+  });
+
   // Post steps the user must do themselves.
   const postSteps: string[] = [];
 
@@ -378,10 +456,21 @@ function buildPlan(d: Detection, args: ParsedArgs, ans: Answers, token: string):
   postSteps.push("");
   postSteps.push("Quick check (auto-loads the .env we just wrote):");
   postSteps.push(`  cd ${shellQuote(d.cwd)}`);
-  postSteps.push(`  npx pyanchor doctor`);
+  // v0.34.1 — prefer the npm script if init added them. Falls back
+  // to npx so the post-step works even when the patch was skipped.
+  const usedNpmScripts = scriptPatch.kind === "patch" || scriptPatch.kind === "skip-already-set";
+  if (usedNpmScripts) {
+    postSteps.push(`  npm run pyanchor:doctor       # or: pnpm pyanchor:doctor / yarn pyanchor:doctor`);
+  } else {
+    postSteps.push(`  npx pyanchor doctor`);
+  }
   postSteps.push("");
   postSteps.push("Then start the sidecar:");
-  postSteps.push(`  npx pyanchor`);
+  if (usedNpmScripts) {
+    postSteps.push(`  npm run pyanchor              # or: pnpm pyanchor / yarn pyanchor`);
+  } else {
+    postSteps.push(`  npx pyanchor`);
+  }
   postSteps.push(
     `  # (Production: feed the same vars via systemd EnvironmentFile=, docker --env-file, pm2 ecosystem env, etc.)`
   );

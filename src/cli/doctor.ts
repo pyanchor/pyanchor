@@ -473,6 +473,41 @@ function checkOptional(): CheckGroup {
     }
   }
 
+  // v0.34.1 — flag global install. pyanchor is a per-app sidecar:
+  // one running instance handles one PYANCHOR_APP_DIR. A global
+  // install lets `pyanchor` resolve from PATH without a per-project
+  // lockfile entry, which means: no version pin, no team-reproducible
+  // bin, surprises when two projects expect different pyanchor
+  // majors. Recommend devDependency for any team / multi-project
+  // workflow.
+  const exePath = process.execPath; // node binary, not pyanchor's path
+  // Detect whether the loaded pyanchor came from a node_modules adjacent
+  // to a node_modules/.bin/pyanchor symlink, vs a global prefix bin.
+  const looksGlobal =
+    !__dirname.includes(path.sep + "node_modules" + path.sep) ||
+    __dirname.startsWith("/usr/") ||
+    __dirname.startsWith("/opt/") ||
+    /\/lib\/node_modules\//.test(__dirname);
+  if (looksGlobal) {
+    checks.push({
+      name: "install scope",
+      status: "warn",
+      detail: "global install detected",
+      fix:
+        `pyanchor is a per-app sidecar. A global install (\`npm i -g pyanchor\`) works for a ` +
+        `single-project / single-version host, but lacks the version pin a per-app ` +
+        `devDependency gives you. For team / multi-project setups, install per-app instead:\n` +
+        `      npm install --save-dev pyanchor\n` +
+        `   Then call via \`npm run pyanchor:doctor\` (init can patch package.json scripts for you).`
+    });
+  } else {
+    checks.push({
+      name: "install scope",
+      status: "ok",
+      detail: "per-app devDependency (recommended)"
+    });
+  }
+
   if (pyanchorConfig.actorSigningSecret) {
     checks.push({
       name: "PYANCHOR_ACTOR_SIGNING_SECRET",

@@ -143,13 +143,41 @@ trying pyanchor for the first time.
 ### TL;DR (~30 seconds, 5 required env vars, the rest defaulted)
 
 ```bash
-cd ~/projects/your-app          # Next.js / Vite / Astro / SvelteKit / Remix
+cd ~/projects/your-app          # Next.js / Vite / Astro / SvelteKit / Remix / Nuxt
+npm install --save-dev pyanchor # per-app devDependency (see "Why --save-dev" below)
 npx pyanchor init               # detects framework + agent, generates env file
 # → answer 5 questions (token, agent, paths) — defaults for everything else
+# → init also patches package.json scripts so you can drop the `npx` prefix
 pnpm dev &                      # your normal dev command
-pyanchor                        # the sidecar (in a second terminal)
+npm run pyanchor                # the sidecar (in a second terminal); pnpm pyanchor / yarn pyanchor work too
 # open http://localhost:3000, click the floating button, describe a change
 ```
+
+### Why `--save-dev` and not `npm install -g`?
+
+pyanchor is a **per-app sidecar** — one running instance handles
+one `PYANCHOR_APP_DIR`. Each project pins its own pyanchor version
+via the lockfile, so:
+
+- A team-mate cloning your repo gets the same pyanchor version
+  you tested against — no "works on my machine" between
+  pyanchor majors.
+- Two projects on the same host can run different pyanchor
+  versions side by side (the sidecar processes are independent;
+  each finds its `node_modules/pyanchor/dist/server.cjs`).
+- Production deploy is just "the same `pyanchor` package the
+  lockfile already pinned" — no extra global install step on
+  the prod host.
+
+Global install (`npm i -g pyanchor`) works for a single-machine
+single-project setup, but `pyanchor doctor` will print a warning
+flagging it as "not the recommended scope for team / multi-project
+workflows".
+
+`pyanchor init` patches your `package.json` to add three scripts
+(`pyanchor`, `pyanchor:doctor`, `pyanchor:init`) so you don't
+type `npx` every invocation. Skips silently if a key already
+exists.
 
 That's the whole thing. Pyanchor has 60 env vars total, but you
 only ever set the 5 required ones — `init` writes them for you and
