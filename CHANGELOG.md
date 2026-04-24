@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.4] - 2026-04-22
+
+Docs-only ship. No source / runtime / API changes.
+
+### Added
+- **`docs/PRODUCTION-DEPLOYMENT.md`** — three working recipes
+  (systemd / Docker-compose / managed PaaS like Coolify /
+  Railway / Render), each with a paste-ready `.env`, supervisor
+  config, sudoers (where needed), and an nginx vhost block.
+  Plus a "production checklist" the operator runs against any
+  recipe before going live. Reference deployment is the live
+  `pyanchor.pyan.kr` site (recipe 1).
+- **`README-ko.md`** — Korean translation of the README's core
+  sections (overview, audiences, comparison table, quick start,
+  supported agents, supported frameworks, output modes,
+  security, docs index, live demo). Linked from the English
+  README's header. Tech terms (CLI commands, env vars, file
+  paths, file extensions) intentionally kept in English to
+  match the rest of the docs.
+- **`README.md` header** picked up the bilingual link (English /
+  Korean) — operators landing on either side now find the other.
+
+### Live demo
+- `https://pyanchor.pyan.kr` rebuilt + redeployed to v0.33.3
+  via the systemd recipe documented in
+  `docs/PRODUCTION-DEPLOYMENT.md`. systemd unit alive, nginx
+  vhost OK, magic-word gate cookie working. v0.33.3's
+  `findFreePort()` + claude-code SDK upfront notice are now
+  on the live npm tarball.
+
+### Verified
+- 886 unit tests pass (no source changes, just docs).
+- Typecheck clean (no source changes).
+
 ## [0.33.3] - 2026-04-22
 
 Operator UX polish + supply-chain documentation.
