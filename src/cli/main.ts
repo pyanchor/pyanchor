@@ -26,6 +26,7 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 
 import { loadCwdDotenv } from "./load-env.js";
+import { setLocale } from "./i18n.js";
 
 // CJS bundle output — esbuild keeps __dirname / __filename as
 // native CJS globals. We declare them here so TypeScript is happy
@@ -48,6 +49,17 @@ const here = __dirname;
 const sub = process.argv[2];
 if (sub !== "init" && sub !== "--version" && sub !== "-v" && sub !== "--help" && sub !== "-h") {
   loadCwdDotenv();
+}
+
+// v0.35.0 — `--lang <code>` global flag overrides PYANCHOR_LOCALE
+// / LANG. Parsed before the subcommand dispatcher so doctor /
+// init / logs / agent test all see the resolved locale via
+// `t()` from i18n.ts. The flag is consumed (filtered out of
+// argv) so subcommand parsers don't have to know about it.
+const langIdx = process.argv.findIndex((a) => a === "--lang");
+if (langIdx !== -1 && process.argv[langIdx + 1]) {
+  setLocale(process.argv[langIdx + 1]);
+  process.argv.splice(langIdx, 2);
 }
 
 async function main(): Promise<number> {

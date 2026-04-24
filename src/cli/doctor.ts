@@ -38,6 +38,7 @@ import {
   pathExists,
   pyanchorConfig
 } from "../config";
+import { t } from "./i18n";
 
 interface CheckResult {
   /** What was checked (display name). */
@@ -114,7 +115,7 @@ function checkRequiredEnv(): CheckGroup {
   }
 
   return {
-    title: "Required environment variables",
+    title: t("doctor.group.required"),
     checks
   };
 }
@@ -216,7 +217,7 @@ function checkFilesystem(): CheckGroup {
     });
   }
 
-  return { title: "Filesystem", checks };
+  return { title: t("doctor.group.fs"), checks };
 }
 
 /** Agent CLI presence + auth-state hints. */
@@ -279,7 +280,7 @@ function checkAgent(): CheckGroup {
         detail: "set"
       });
     }
-    return { title: "Agent", checks };
+    return { title: t("doctor.group.agent"), checks };
   }
 
   const binMap: Record<string, string> = {
@@ -298,7 +299,7 @@ function checkAgent(): CheckGroup {
         `PYANCHOR_AGENT="${agent}" doesn't match any built-in adapter. ` +
         `Use one of: openclaw, claude-code, codex, aider, gemini.`
     });
-    return { title: "Agent", checks };
+    return { title: t("doctor.group.agent"), checks };
   }
 
   if (commandExists(bin)) {
@@ -389,7 +390,7 @@ function checkOutputMode(): CheckGroup {
     });
   }
 
-  return { title: `Output mode: ${mode}`, checks };
+  return { title: t("doctor.group.outputMode", { mode }), checks };
 }
 
 /** Optional but commonly important knobs — flagged as warn (not fail). */
@@ -516,7 +517,7 @@ function checkOptional(): CheckGroup {
     });
   }
 
-  return { title: "Optional knobs", checks };
+  return { title: t("doctor.group.optional"), checks };
 }
 
 /** Render one group to stdout. */
@@ -641,9 +642,13 @@ export function runDoctor(argv: string[] = []): DoctorReport {
     return { groups, passed, failed, warned, exitCode };
   }
 
-  // Human-readable rendering (the v0.29.0 path, unchanged).
-  console.log("pyanchor doctor — local config diagnostics");
-  console.log(colorize("dim", "  (does not start the sidecar; only inspects what it would observe)"));
+  // Human-readable rendering. v0.35.0 — header / dotenv banner /
+  // summary lines + group titles flow through i18n. Per-check
+  // name / detail / fix text stays inline (mostly tech terms +
+  // env var names — translating those would hurt grep / log
+  // pipelines more than it would help).
+  console.log(t("doctor.title"));
+  console.log(colorize("dim", `  ${t("doctor.subtitle")}`));
 
   // v0.32.2 — surface dotenv autoload status. main.ts already loaded
   // cwd `.env*` before runDoctor() was called; we recompute the file
@@ -652,12 +657,10 @@ export function runDoctor(argv: string[] = []): DoctorReport {
     .map((f) => require("node:path").join(process.cwd(), f))
     .filter((p: string) => require("node:fs").existsSync(p));
   if (dotenvFiles.length > 0) {
-    console.log(
-      colorize(
-        "dim",
-        `  loaded: ${dotenvFiles.map((p: string) => require("node:path").basename(p)).join(", ")} (cwd dotenv autoload)`
-      )
-    );
+    const fileList = dotenvFiles
+      .map((p: string) => require("node:path").basename(p))
+      .join(", ");
+    console.log(colorize("dim", `  ${t("doctor.dotenv.loaded", { files: fileList })}`));
   }
 
   for (const g of groups) {
@@ -667,17 +670,16 @@ export function runDoctor(argv: string[] = []): DoctorReport {
   const total = passed + failed + warned;
   console.log("");
   if (failed === 0) {
+    const warnSuffix =
+      warned > 0
+        ? t("doctor.summary.warnSuffix", { warned, plural: warned === 1 ? "" : "s" })
+        : "";
     console.log(
-      colorize("green", `All required checks passed`) +
-        ` (${passed}/${total} ok` +
-        (warned > 0 ? `, ${warned} warning${warned === 1 ? "" : "s"}` : "") +
-        `). Ready to run \`pyanchor\`.`
+      colorize("green", t("doctor.summary.allOk", { passed, total, warnSuffix }))
     );
   } else {
     console.log(
-      colorize("red", `${failed} check(s) failed`) +
-        `, ${warned} warning(s), ${passed} passed (total ${total}). ` +
-        `Fix the ✗ items above and re-run \`pyanchor doctor\`.`
+      colorize("red", t("doctor.summary.failed", { failed, warned, passed, total }))
     );
   }
 
@@ -686,13 +688,7 @@ export function runDoctor(argv: string[] = []): DoctorReport {
   // tells you "the sidecar will boot"; the access-control doc
   // tells you "the sidecar will reject the right requests".
   if (warned > 0 || failed > 0) {
-    console.log(
-      colorize(
-        "dim",
-        `For configuring access control (gate cookie, allowed origins, HMAC actor, ` +
-          `production setups), see docs/ACCESS-CONTROL.md.`
-      )
-    );
+    console.log(colorize("dim", t("doctor.summary.accessControlHint")));
   }
 
   return { groups, passed, failed, warned, exitCode };

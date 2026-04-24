@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-04-22
+
+CLI internationalization. `doctor` / `init` / `logs` user-facing
+text now flows through a per-locale strings table. English
+default; Korean shipped as the first non-English locale. Other
+locales fall back to English silently per key (so a locale
+contributor can ship partial coverage without breaking output).
+
+### Added
+- **`src/cli/i18n.ts`** — locale resolver + `t(key, params?)`
+  accessor. Resolution priority: `--lang <code>` flag →
+  `PYANCHOR_LOCALE` env → POSIX `LC_ALL` / `LC_MESSAGES` /
+  `LANG` (parses `ko_KR.UTF-8` → `ko`) → fallback `en`.
+  Missing keys return the literal key (so missing-translation
+  bugs surface as readable text instead of `undefined`).
+- **`src/cli/strings/en.ts`** — English baseline (40+ keys
+  covering doctor headers / group titles / summary lines, all
+  init prompts + done message, logs not-found error).
+- **`src/cli/strings/ko.ts`** — Korean translations of every
+  key in en.ts. Tech terms (env vars, file paths, JSON keys,
+  CLI flags) intentionally kept in English to match how the
+  rest of pyanchor docs / overlay strings handle them.
+- **`--lang <code>` global CLI flag** — overrides env-detected
+  locale. Parsed in `main.ts` before the subcommand
+  dispatcher so doctor / init / logs / agent test all see the
+  same resolved locale. Flag is consumed (filtered out of
+  argv) so subcommand parsers don't have to know about it.
+- **`tests/cli/i18n.test.ts`** — 7 tests: default English,
+  Korean override, unknown-locale fallback, missing-key
+  fallback, parameter interpolation in both locales, supported
+  locale list.
+
+### Coverage policy
+First-ship i18n covers the **high-traffic surface**: command
+headers, group titles, summary lines, init prompt questions,
+init done-message section headers. Per-check `name` / `detail` /
+`fix` text in doctor stays inline (next ship) — those are
+mostly env var names + path examples, which translate poorly
+piecemeal.
+
+The four restart-approach option labels (`pm2 reload <name>`,
+`sudo systemctl restart <unit>`, etc.) and the three output-
+mode option labels (`apply` / `pr` / `dryrun` descriptions)
+also stay inline — they include unquoted CLI tokens that
+shouldn't be word-translated.
+
+### Verified
+- 901 unit tests pass (894 + 7 new i18n).
+- Typecheck clean.
+- Manual:
+  ```
+  PYANCHOR_LOCALE=ko npx pyanchor doctor
+  → "pyanchor doctor — 로컬 설정 진단"
+  → "필수 환경 변수" / "파일 시스템" / "Agent" / "선택 옵션"
+  → "필수 검사 모두 통과 (...개 정상). `pyanchor` 실행 준비 완료."
+  ```
+  Same with `LANG=ko_KR.UTF-8` (POSIX env auto-detect).
+
+### Minor bump justification
+- New `--lang` flag + new `PYANCHOR_LOCALE` env var = additive
+  CLI surface (semver minor).
+- English output is byte-identical (default locale + the
+  `t()` lookup hits the en table). No grep regression for
+  log pipelines that match against the English wording.
+
+### Deferred (future ship)
+- Doctor per-check `name` / `detail` / `fix` strings
+- Logs renderEvent column headers + outcome labels (deliberate
+  — those stay machine-grepable in `--json` mode anyway)
+- agent-test detailed status messages
+- Adding ja / zh / es / fr locales to match the overlay set
+  (mechanical: copy en.ts, translate, register in i18n.ts)
+
 ## [0.34.1] - 2026-04-22
 
 Operator UX — drop the `npx` prefix + per-app install scope

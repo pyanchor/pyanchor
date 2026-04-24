@@ -24,6 +24,7 @@ import { existsSync, readFileSync, statSync, watchFile, unwatchFile } from "node
 
 import { pyanchorConfig } from "../config";
 import type { AuditEvent } from "../audit";
+import { t } from "./i18n";
 
 interface LogsArgs {
   file: string;
@@ -236,13 +237,7 @@ export function runLogs(argv: string[] = []): number {
   }
 
   if (!existsSync(args.file)) {
-    console.error(`pyanchor logs: audit log not found at ${args.file}`);
-    console.error(
-      `  Set PYANCHOR_AUDIT_LOG=true on the sidecar (and optionally`
-    );
-    console.error(
-      `  PYANCHOR_AUDIT_LOG_FILE=...) before any edits would land here.`
-    );
+    console.error(`pyanchor logs: ${t("logs.error.notFound", { path: args.file })}`);
     return 1;
   }
 

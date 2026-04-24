@@ -32,6 +32,7 @@ import { createServer } from "node:net";
 import path from "node:path";
 
 import { detect, summarize, type AgentBin, type Detection, type Framework } from "./detect";
+import { t } from "./i18n";
 import { ask, confirm, select } from "./prompts";
 import {
   renderBootstrapSnippet,
@@ -303,25 +304,23 @@ async function gatherAnswers(d: Detection, args: ParsedArgs): Promise<Answers> {
     value: a,
     label: agentChoiceLabel(a, d)
   }));
-  const agent = (await select("Which agent do you want to use?", agentChoices, agentDefault)) as AgentBin;
+  const agent = (await select(t("init.prompt.agent"), agentChoices, agentDefault)) as AgentBin;
 
   if (agent === "claude-code") {
-    console.log(
-      `\n  note: claude-code uses an in-process SDK (@anthropic-ai/claude-agent-sdk),\n` +
-        `        not a binary. After init, also run:\n` +
-        `          npm install @anthropic-ai/claude-agent-sdk\n` +
-        `          export ANTHROPIC_API_KEY=<key>   # or use Claude's OAuth flow\n` +
-        `        \`pyanchor doctor\` will warn if either is missing.`
-    );
+    console.log(t("init.claudeCode.note"));
   }
 
   const workspaceDir = await ask(
-    "Workspace dir (scratch space the agent edits before sync-back)",
+    t("init.prompt.workspaceDir"),
     path.join("/tmp", `pyanchor-${cwdName}-workspace`)
   );
 
+  // Restart-approach option labels stay inline — they include
+  // tech tokens (`next dev`, `pm2`, `systemctl`, `docker`) that
+  // shouldn't be translated piecemeal. The QUESTION above the
+  // options is i18n'd.
   const approach = (await select(
-    "Restart approach (how do you reload your frontend after a successful edit?)",
+    t("init.prompt.restartApproach"),
     [
       { value: "noop", label: "no-op — fine for `next dev` / `vite` (hot reload handles it)" },
       { value: "pm2", label: "pm2 reload <name>" },
@@ -339,9 +338,9 @@ async function gatherAnswers(d: Detection, args: ParsedArgs): Promise<Answers> {
       approach === "systemctl" ? `${cwdName}.service` :
       cwdName;
     restartName = await ask(
-      approach === "pm2" ? "pm2 process name" :
-      approach === "systemctl" ? "systemd unit name" :
-      "docker container name",
+      approach === "pm2" ? t("init.prompt.pm2Name") :
+      approach === "systemctl" ? t("init.prompt.systemctlUnit") :
+      t("init.prompt.dockerContainer"),
       suggested
     );
   }
@@ -353,20 +352,20 @@ async function gatherAnswers(d: Detection, args: ParsedArgs): Promise<Answers> {
   const suggestedPort = await findFreePort(3010);
   const portLabel =
     suggestedPort === 3010
-      ? "Sidecar port"
-      : `Sidecar port (3010 was busy — suggesting ${suggestedPort})`;
+      ? t("init.prompt.port")
+      : t("init.prompt.portBusy", { preferred: 3010, suggested: suggestedPort });
   const portStr = await ask(portLabel, String(suggestedPort));
   const port = Number.parseInt(portStr, 10) || suggestedPort;
 
   const healthcheckUrl = await ask(
-    "Healthcheck URL (returns 2xx once your frontend is back up)",
+    t("init.prompt.healthcheckUrl"),
     `http://127.0.0.1:${d.defaultDevPort}/`
   );
 
-  const requireGate = await confirm("Enable production gate cookie? (recommended for non-localhost)", false);
+  const requireGate = await confirm(t("init.prompt.requireGate"), false);
 
   const outputMode = (await select(
-    "Output mode",
+    t("init.prompt.outputMode"),
     [
       { value: "apply", label: "rsync workspace → app + restart (default — fastest dev loop)" },
       { value: "pr", label: "git push + open PR (review before live; needs gh CLI)" },
@@ -454,7 +453,7 @@ function buildPlan(d: Detection, args: ParsedArgs, ans: Answers, token: string):
   }
 
   postSteps.push("");
-  postSteps.push("Quick check (auto-loads the .env we just wrote):");
+  postSteps.push(t("init.done.quickCheck"));
   postSteps.push(`  cd ${shellQuote(d.cwd)}`);
   // v0.34.1 — prefer the npm script if init added them. Falls back
   // to npx so the post-step works even when the patch was skipped.
@@ -465,15 +464,13 @@ function buildPlan(d: Detection, args: ParsedArgs, ans: Answers, token: string):
     postSteps.push(`  npx pyanchor doctor`);
   }
   postSteps.push("");
-  postSteps.push("Then start the sidecar:");
+  postSteps.push(t("init.done.startSidecar"));
   if (usedNpmScripts) {
     postSteps.push(`  npm run pyanchor              # or: pnpm pyanchor / yarn pyanchor`);
   } else {
     postSteps.push(`  npx pyanchor`);
   }
-  postSteps.push(
-    `  # (Production: feed the same vars via systemd EnvironmentFile=, docker --env-file, pm2 ecosystem env, etc.)`
-  );
+  postSteps.push(t("init.done.prodHint"));
 
   return { actions, postSteps };
 }
@@ -492,13 +489,13 @@ export async function runInit(argv: string[]): Promise<number> {
     return 0;
   }
 
-  console.log("pyanchor init — interactive scaffolder\n");
+  console.log(`${t("init.title")}\n`);
 
   const d = detect(args.cwd);
-  console.log(`  detected: ${summarize(d)}`);
+  console.log(t("init.detected", { summary: summarize(d) }));
 
   if (!d.hasPackageJson) {
-    console.error("\nNo package.json in this directory. Run init from your app's root.");
+    console.error(t("init.error.noPackageJson"));
     return 1;
   }
 
@@ -533,10 +530,7 @@ export async function runInit(argv: string[]): Promise<number> {
   }
   const plan = buildPlan(d, args, answers, token);
   if (tokenReused) {
-    console.log(
-      `\n  (reusing existing PYANCHOR_TOKEN from ${envFileNameEarly} — ` +
-        `bootstrap snippet below matches what's on disk)`
-    );
+    console.log(t("init.tokenReused", { envFile: envFileNameEarly }));
   }
 
   // v0.29.0 — round 18 recommendation 6: --force re-rolls the token
@@ -546,30 +540,24 @@ export async function runInit(argv: string[]): Promise<number> {
   // update the bootstrap snippet too.
   const envFileNameForWarn = d.framework === "nextjs" ? ".env.local" : ".env";
   if (args.force && existsSync(path.join(d.cwd, envFileNameForWarn))) {
-    console.warn(
-      `\n⚠️  --force is in effect. PYANCHOR_TOKEN will be regenerated.`
-    );
-    console.warn(
-      `    Update data-pyanchor-token in your bootstrap script tag to the new value below,`
-    );
-    console.warn(
-      `    or your overlay will get 401 on every API call.`
-    );
+    console.warn(t("init.forceWarning.intro"));
+    console.warn(t("init.forceWarning.update"));
+    console.warn(t("init.forceWarning.401"));
   }
 
-  console.log("\nPlan:");
+  console.log(`\n${t("init.plan.header")}`);
   plan.actions.forEach((a) => console.log(`  - ${a.label}`));
 
   if (args.dryRun) {
-    console.log("\n(dry run — no files written)");
-    console.log("\nWould-be next steps:");
+    console.log(`\n${t("init.dryRun")}`);
+    console.log(`\n${t("init.dryRun.nextSteps")}`);
     plan.postSteps.forEach((s) => console.log(s));
     return 0;
   }
 
-  const proceed = args.yes ? true : await confirm("Apply these changes?", true);
+  const proceed = args.yes ? true : await confirm(t("init.prompt.confirmApply"), true);
   if (!proceed) {
-    console.log("\nAborted — no files written.");
+    console.log(`\n${t("init.aborted")}`);
     return 0;
   }
 
@@ -584,7 +572,7 @@ export async function runInit(argv: string[]): Promise<number> {
     }
   }
 
-  console.log("\nDone. Next steps (we don't auto-patch source files — too easy to mangle):\n");
+  console.log(`\n${t("init.done.header")}\n`);
   plan.postSteps.forEach((s) => console.log(s));
   console.log();
 
