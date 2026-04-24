@@ -28,6 +28,7 @@
 
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import path from "node:path";
 
 import { detect, summarize, type AgentBin, type Detection, type Framework } from "./detect";
@@ -106,6 +107,60 @@ interface Plan {
   postSteps: string[];
 }
 
+/**
+ * v0.33.3 — pick a sidecar PORT that's actually free on this host.
+ * Pre-fix `init` always defaulted to 3010 even when something else
+ * (studio next dev, an old pyanchor instance, another service) was
+ * already listening there. The user accepted the default, started
+ * the sidecar, and got an immediate EADDRINUSE → confusion.
+ *
+ * Walk the candidate range (3010 → 3019, then 4710 → 4799 to dodge
+ * the 3xxx zone where dev servers usually live). Return the first
+ * one a TCP `listen` test succeeds on. Bind to 127.0.0.1 (the
+ * sidecar's default `host`) so the test reflects what the sidecar
+ * itself will see. Falls back to 3010 if every candidate is busy
+ * (rare; user can override after).
+ */
+/**
+ * v0.33.3 — per-backend label hint for the agent picker. The base
+ * "✓ available / not detected" check still applies for the four
+ * shell-out adapters; claude-code uses an SDK so we annotate it
+ * separately.
+ */
+function agentChoiceLabel(a: AgentBin, d: Detection): string {
+  if (a === "claude-code") {
+    return "(uses @anthropic-ai/claude-agent-sdk — install separately + ANTHROPIC_API_KEY)";
+  }
+  return d.agentBins[a]
+    ? "✓ available"
+    : "(not detected — install before running pyanchor)";
+}
+
+async function findFreePort(preferred: number = 3010): Promise<number> {
+  const candidates = [
+    preferred,
+    ...Array.from({ length: 9 }, (_, i) => preferred + i + 1),
+    ...Array.from({ length: 90 }, (_, i) => 4710 + i)
+  ];
+  for (const candidate of candidates) {
+    const free = await new Promise<boolean>((resolve) => {
+      const server = createServer();
+      server.unref();
+      server.once("error", () => resolve(false));
+      server.once("listening", () => {
+        server.close(() => resolve(true));
+      });
+      try {
+        server.listen(candidate, "127.0.0.1");
+      } catch {
+        resolve(false);
+      }
+    });
+    if (free) return candidate;
+  }
+  return preferred; // worst case — caller can override
+}
+
 // v0.32.7 — read PYANCHOR_TOKEN (or NEXT_PUBLIC_PYANCHOR_TOKEN as
 // fallback for Next.js .env.local files) from an existing env file
 // so re-running init without --force keeps the on-disk token in
@@ -170,22 +225,40 @@ async function gatherAnswers(d: Detection, args: ParsedArgs): Promise<Answers> {
   const agentDefault = pickAgentDefault(d);
 
   if (args.yes) {
+    // v0.33.3 — also auto-detect a free port in headless mode.
+    // The interactive path got the same treatment.
+    const headlessPort = await findFreePort(3010);
     return {
       agent: agentDefault,
       workspaceDir: path.join("/tmp", `pyanchor-${cwdName}-workspace`),
       restart: { approach: "noop", name: cwdName },
-      port: 3010,
+      port: headlessPort,
       healthcheckUrl: `http://127.0.0.1:${d.defaultDevPort}/`,
       requireGate: false,
       outputMode: "apply"
     };
   }
 
+  // v0.33.3 — agent labels carry per-backend install hints. The
+  // reviewer-sim (audit harness) flagged claude-code in particular:
+  // its npm peer dep + ANTHROPIC_API_KEY / OAuth setup wasn't
+  // surfaced at init time, so users only learned about it when the
+  // first edit failed at the SDK import step.
   const agentChoices = AGENT_ORDER.map((a) => ({
     value: a,
-    label: d.agentBins[a] ? "✓ available" : "(not detected — install before running pyanchor)"
+    label: agentChoiceLabel(a, d)
   }));
   const agent = (await select("Which agent do you want to use?", agentChoices, agentDefault)) as AgentBin;
+
+  if (agent === "claude-code") {
+    console.log(
+      `\n  note: claude-code uses an in-process SDK (@anthropic-ai/claude-agent-sdk),\n` +
+        `        not a binary. After init, also run:\n` +
+        `          npm install @anthropic-ai/claude-agent-sdk\n` +
+        `          export ANTHROPIC_API_KEY=<key>   # or use Claude's OAuth flow\n` +
+        `        \`pyanchor doctor\` will warn if either is missing.`
+    );
+  }
 
   const workspaceDir = await ask(
     "Workspace dir (scratch space the agent edits before sync-back)",
@@ -218,8 +291,17 @@ async function gatherAnswers(d: Detection, args: ParsedArgs): Promise<Answers> {
     );
   }
 
-  const portStr = await ask("Sidecar port", "3010");
-  const port = Number.parseInt(portStr, 10) || 3010;
+  // v0.33.3 — auto-detect a free port. Pre-fix the default was a
+  // hard-coded 3010; on hosts where studio/another dev server
+  // already owns 3010 the user accepted the default, started the
+  // sidecar, and immediately hit EADDRINUSE.
+  const suggestedPort = await findFreePort(3010);
+  const portLabel =
+    suggestedPort === 3010
+      ? "Sidecar port"
+      : `Sidecar port (3010 was busy — suggesting ${suggestedPort})`;
+  const portStr = await ask(portLabel, String(suggestedPort));
+  const port = Number.parseInt(portStr, 10) || suggestedPort;
 
   const healthcheckUrl = await ask(
     "Healthcheck URL (returns 2xx once your frontend is back up)",

@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.3] - 2026-04-22
+
+Operator UX polish + supply-chain documentation.
+
+### Added
+- **`pyanchor init` auto-detects a free port** — pre-fix the
+  default was a hard-coded `3010`, which collided with studio
+  next dev / a leftover sidecar / etc. on many hosts. Now
+  `findFreePort()` walks `3010..3019` first, then the `4710..4799`
+  range (intentionally outside the 3xxx zone where dev servers
+  live), and returns the first port a TCP listen test succeeds
+  on. The interactive prompt shows the suggestion inline:
+  `Sidecar port (3010 was busy — suggesting 4710)`. `--yes`
+  headless mode picks the same auto-detected port.
+- **`pyanchor init` calls out the claude-code SDK requirement**
+  the moment the user picks that backend. Pre-fix users only
+  learned about the `@anthropic-ai/claude-agent-sdk` peer dep
+  + `ANTHROPIC_API_KEY` requirement at first edit (the SDK
+  import threw inside the worker). Now init prints a 3-line
+  note immediately after the agent select, with the install
+  command + a pointer to `pyanchor doctor` for verification.
+  The agent picker label for `claude-code` itself is now
+  "uses @anthropic-ai/claude-agent-sdk — install separately +
+  ANTHROPIC_API_KEY" instead of the misleading "✓ available"
+  / "not detected" line that applied to the four shell-out
+  adapters.
+- **`.github/SECURITY.md`** — supported-versions table, threat
+  model, hardening history (v0.32.x → v0.33.x), and the
+  preferred GitHub Security Advisories disclosure path. Also
+  documents `--provenance` verification.
+
+### Verified
+- 886 unit tests pass + 0 fail.
+- Typecheck clean.
+- npm provenance: already enabled in `release.yml` since
+  v0.32.x — verified by `npm view pyanchor@0.33.2 --json`
+  returning a non-empty `dist.attestations`. No workflow
+  change needed.
+
+### No-API-break
+- All changes are init UX (interactive prompts + headless
+  defaults) and a new docs file. Server runtime + adapter
+  surface byte-identical with v0.33.2.
+
 ## [0.33.2] - 2026-04-22
 
 Closes the last deferred chip from the v0.33.0 codex static
