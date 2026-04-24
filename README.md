@@ -395,7 +395,8 @@ agent route hints.
 | `astro` | ✅ shipped (v0.32.0+) | `npm install` | `npx astro build` | `dist`, `.astro` |
 | `sveltekit` | ✅ shipped (v0.32.0+) | `npm install` | `npm run build` | `.svelte-kit`, `build`, `dist`, `.vite` |
 | `remix` | ✅ shipped (v0.32.0+) | `npm install` | `npm run build` | `build`, `.cache` |
-| Nuxt / CRA / your own | 🟡 | set explicitly | set explicitly | falls through to `nextjs` profile route hints |
+| `nuxt` | ✅ shipped (v0.34.0+) | `npm install` | `npx nuxt build` | `.nuxt`, `.output`, `dist` |
+| CRA / your own | 🟡 | set explicitly | set explicitly | falls through to `nextjs` profile route hints |
 
 For frameworks we don't ship a profile for, you usually only need:
 

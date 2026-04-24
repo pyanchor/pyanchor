@@ -130,6 +130,7 @@ npx pyanchor
 | `astro`     | `npm install`                      | `npx astro build`  | `dist`, `.astro`  |
 | `sveltekit` | `npm install`                      | `npm run build`    | `.svelte-kit`, `build`, `dist`, `.vite` |
 | `remix`     | `npm install`                      | `npm run build`    | `build`, `.cache` |
+| `nuxt`      | `npm install`                      | `npx nuxt build`   | `.nuxt`, `.output`, `dist` |
 
 다른 스택은 `PYANCHOR_INSTALL_COMMAND` + `PYANCHOR_BUILD_COMMAND` env로
 override.

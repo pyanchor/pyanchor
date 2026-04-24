@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-04-22
+
+Sixth built-in framework profile.
+
+### Added
+- **Nuxt 3+ framework profile** (`PYANCHOR_FRAMEWORK=nuxt`).
+  Brings the first-class footprint to **6 frameworks** (was: 5).
+  - `src/frameworks/nuxt.ts` — `npm install` + `npx nuxt build`,
+    excludes `.nuxt` (build cache), `.output` (`nuxt build`
+    output), `dist` (`nuxt generate` static output).
+  - Route candidates cover both flat (`pages/about.vue`) and
+    folder (`pages/about/index.vue`) routing, plus Pascal-cased
+    component lookups (`/Header` → `components/Header.vue`)
+    since Nuxt auto-imports anything in `components/`.
+  - Route hints mention auto-import + `layouts/default.vue` +
+    Vue 3 SFC blocks (`<script setup>` / `<template>` /
+    `<style>`) so the agent doesn't fight the framework's
+    conventions.
+- `tests/frameworks.test.ts`: **+8** Nuxt-specific tests
+  (install/build defaults, excludes, root + named-route
+  candidates, auto-import + SFC mention in hints). Total: 894
+  unit tests pass.
+
+### Changed
+- `README.md` + `README-ko.md` framework table picked up the
+  Nuxt row. The "🟡 Nuxt / CRA / your own" override-path row
+  shrunk to "🟡 CRA / your own" — Nuxt is no longer the
+  override-path example.
+
+### No-API-break
+- Pure addition. Existing `nextjs / vite / astro / sveltekit /
+  remix` profiles byte-identical. The `nuxt` registration is
+  net-new — operators who don't set `PYANCHOR_FRAMEWORK=nuxt`
+  see no change.
+
+### Minor bump justification
+- New first-class framework. While behavior for existing users
+  is unchanged, the public registry surface added a key — minor
+  bump per semver (the "MINOR version when you add functionality
+  in a backwards compatible manner" clause).
+
+### Deferred (chip queued)
+- diff/preview mode — a 4th output mode where the user sees the
+  agent's diff before accepting / discarding. Bigger feature
+  (~1 day, sidecar API + overlay panel + worker workflow
+  changes), tracked as a follow-up task with a design sketch.
+
 ## [0.33.4] - 2026-04-22
 
 Docs-only ship. No source / runtime / API changes.

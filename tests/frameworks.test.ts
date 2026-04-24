@@ -4,6 +4,7 @@ import {
   FRAMEWORK_NAMES,
   astroProfile,
   nextjsProfile,
+  nuxtProfile,
   remixProfile,
   selectFramework,
   sveltekitProfile,
@@ -62,8 +63,12 @@ describe("selectFramework", () => {
 
   it("exposes the registered framework names", () => {
     expect(FRAMEWORK_NAMES).toEqual(
-      expect.arrayContaining(["nextjs", "vite", "astro", "sveltekit", "remix"])
+      expect.arrayContaining(["nextjs", "vite", "astro", "sveltekit", "remix", "nuxt"])
     );
+  });
+
+  it("returns the nuxt profile when asked", () => {
+    expect(selectFramework("nuxt")).toBe(nuxtProfile);
   });
 });
 
@@ -238,5 +243,45 @@ describe("viteProfile", () => {
   it("warns the agent that vite has no file-system router by default", () => {
     const hints = viteProfile.routeHints("/dashboard").join("\n");
     expect(hints).toMatch(/no file-system router|router config/i);
+  });
+});
+
+describe("nuxtProfile", () => {
+  it("uses npm install as the default install command", () => {
+    expect(nuxtProfile.installCommand).toBe("npm install");
+  });
+
+  it("uses `npx nuxt build` as the default build command", () => {
+    expect(nuxtProfile.buildCommand).toBe("npx nuxt build");
+  });
+
+  it("excludes .nuxt + .output + dist from rsync", () => {
+    expect(nuxtProfile.workspaceExcludes).toEqual(
+      expect.arrayContaining([".nuxt", ".output", "dist"])
+    );
+  });
+
+  it("returns pages/index.vue + app.vue as root candidates", () => {
+    const root = nuxtProfile.routeFileCandidates("/");
+    expect(root).toContain("pages/index.vue");
+    expect(root).toContain("app.vue");
+  });
+
+  it("emits flat + folder + Pascal-cased component candidates for a named route", () => {
+    const candidates = nuxtProfile.routeFileCandidates("/user-profile");
+    expect(candidates).toContain("pages/user-profile.vue");
+    expect(candidates).toContain("pages/user-profile/index.vue");
+    expect(candidates).toContain("components/UserProfile.vue");
+    expect(candidates).toContain("components/user-profile.vue");
+  });
+
+  it("mentions auto-import in route hints (Nuxt-distinctive feature)", () => {
+    const hints = nuxtProfile.routeHints("/dashboard").join("\n");
+    expect(hints).toMatch(/auto-import/i);
+  });
+
+  it("mentions vue 3 SFC blocks in route hints", () => {
+    const hints = nuxtProfile.routeHints("/dashboard").join("\n");
+    expect(hints).toMatch(/script setup|template|<style>/i);
   });
 });
