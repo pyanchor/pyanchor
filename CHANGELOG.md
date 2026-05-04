@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.37.1] - 2026-05-04
+
+Default Pollinations model swapped from `openai-fast` to
+`nova-fast` (Amazon Nova Micro). Same Pollinations catalog,
+~55% cheaper per chat-completion call — significant because the
+anonymous-tier pollen quota is small (~$0.15/hr) and pyanchor's
+multi-turn tool loop fires 4-6 calls per edit cycle.
+
+### Changed
+- `src/agents/pollinations.ts` — `DEFAULT_MODEL` constant changed
+  from `"openai-fast"` (GPT-5 Nano) to `"nova-fast"` (Amazon Nova
+  Micro). Both are non-`paid_only` in the Pollinations catalog;
+  per-call cost at ~3K prompt + ~1K completion drops from
+  $0.00055 → $0.000245.
+- `docs/pollinations-setup.md` — "Pick a model" section now lists
+  the top 5 cheap non-`paid_only` candidates with per-call cost
+  estimates. Notes the anonymous-tier quota constraint
+  explicitly.
+- `docs/POLLINATIONS-APP-SUBMISSION.md` — model line + Tier
+  Requested rationale updated to mention `nova-fast` and the
+  cost-per-cycle math.
+
+### Notes
+- This is a behavior change, not just docs — sidecar instances
+  that don't set `PYANCHOR_POLLINATIONS_MODEL` explicitly will
+  start sending `model: "nova-fast"` to Pollinations after
+  upgrading. Set `PYANCHOR_POLLINATIONS_MODEL=openai-fast` to
+  pin the previous default.
+- No code/test changes apart from the constant swap; existing
+  test suite (gate-jwt, auth, unlock, registry, briefs) has no
+  hard-coded model name to update.
+
 ## [0.37.0] - 2026-05-04
 
 Real fix for the gate-cookie forgery gap. Pre-v0.37 the layer-5

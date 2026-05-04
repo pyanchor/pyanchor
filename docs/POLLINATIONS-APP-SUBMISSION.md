@@ -32,8 +32,9 @@ with `tools: auto` and runs its own tool loop —
 `list_files` → `read_file` → `write_file` → `done` — against
 pyanchor's scratch workspace. It honours `PYANCHOR_POLLINATIONS_TOKEN`
 (Bearer), `PYANCHOR_POLLINATIONS_REFERRER` (attribution), and
-`PYANCHOR_POLLINATIONS_MODEL` (default `openai-fast`, which is
-free-tier reachable and supports tool calling).
+`PYANCHOR_POLLINATIONS_MODEL` (default `nova-fast` since v0.37.1 —
+Amazon Nova Micro, the cheapest tool-capable model in your catalog,
+chosen specifically because anonymous-tier pollen quota is tight).
 
 Why this matters for Pollinations: pyanchor is positioned as
 "self-hosted, prod-attached, free-of-vendor-lock-in", and the
@@ -77,13 +78,16 @@ apply without local setup.)
 
 ## Tier requested
 
-🌸 **Flower** — the default `openai-fast` model is enough for
-small UI tweaks (the dominant pyanchor use case), but heavier
-multi-file edits hit the 1 pollen / IP / hr anonymous wall fast.
-A Flower allocation (≈10 pollen/day on the developer account
-that owns the `pyanchor.pyan.kr` referrer) covers normal demo
-traffic and lets us advertise Pollinations as the recommended
-"zero-install" backend in the README.
+🌸 **Flower** — the v0.37.1 default `nova-fast` model is the
+cheapest tool-capable option in your catalog (~$0.000245/call,
+~$0.0012 per typical 5-call edit cycle), so the dominant
+pyanchor use case (small UI tweaks) fits the anonymous quota for
+a handful of users. Heavier multi-file edits or sustained demo
+traffic still hit the wall fast, though. A Flower allocation
+(≈10 pollen/day on the developer account that owns the
+`pyanchor.pyan.kr` referrer) covers normal demo traffic and lets
+us advertise Pollinations as the recommended "zero-install"
+backend in the README.
 
 ## Verification
 

@@ -66,15 +66,35 @@ sits in the sidecar's environment.
 ## 2. Pick a model (optional)
 
 ```bash
-PYANCHOR_POLLINATIONS_MODEL=openai-fast    # default
+PYANCHOR_POLLINATIONS_MODEL=nova-fast      # default since v0.37.1
 ```
 
-The default `openai-fast` (GPT-OSS 20B reasoning) supports tool
-calling and is available on every tier including anonymous, so it's a
-safe baseline. Higher tiers unlock more capable models — see the
-live list at <https://text.pollinations.ai/models>. Pyanchor's
-`PYANCHOR_AGENT_MODEL` also overrides this if set, so you can swap
-models without touching adapter-specific config.
+The default `nova-fast` (Amazon Nova Micro) is the **cheapest
+tool-capable model** in the Pollinations catalog. At pyanchor's
+typical multi-turn usage (~3K prompt + ~1K completion per
+chat-completion call, 4-6 calls per edit cycle) it costs roughly
+**$0.000245 per call** — about **half** of the pre-v0.37.1 default
+`openai-fast` (GPT-5 Nano), which matters because Pollinations'
+anonymous-tier hourly pollen quota is small (~$0.15/hr at the time
+of writing).
+
+Other good non-`paid_only` candidates if you want to optimize for a
+different axis:
+
+| `PYANCHOR_POLLINATIONS_MODEL` | Description | per-call (est.) | When to pick |
+|---|---|---|---|
+| `nova-fast` ⭐ | Amazon Nova Micro — Ultra Cheap | $0.000245 | **Default** — best $/call |
+| `qwen-coder` | Qwen3 Coder 30B — code-specialized | $0.00040 | Multi-file refactors, dense codebases |
+| `openai-fast` | GPT-5 Nano | $0.00055 | Pre-v0.37.1 default; reasoning-heavy edits |
+| `mistral` | Mistral Small 3.2 | $0.00060 | Multilingual workloads |
+| `glm` | GLM-5.1 — Long Context Reasoning + agentic | $0.00420 | Heavy tool-loop edits, large context |
+
+Avoid models with `paid_only: true` (claude, claude-large, gpt-5.5,
+gemini, deepseek-pro, etc.) unless your account is on a paid plan.
+
+Live catalog: <https://text.pollinations.ai/models>. Pyanchor's
+`PYANCHOR_AGENT_MODEL` env also overrides this if set, so you can
+swap models without touching adapter-specific config.
 
 ## 3. Other knobs
 

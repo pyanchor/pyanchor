@@ -21,7 +21,7 @@ import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./
  *   PYANCHOR_AGENT=pollinations
  *   PYANCHOR_POLLINATIONS_TOKEN=sk_...     # backend bearer token (recommended)
  *   PYANCHOR_POLLINATIONS_REFERRER=...     # referrer for attribution / tier
- *   PYANCHOR_POLLINATIONS_MODEL=openai-fast  # any model from text.pollinations.ai/models
+ *   PYANCHOR_POLLINATIONS_MODEL=nova-fast    # default; any non-paid_only model works
  *   PYANCHOR_POLLINATIONS_BASE_URL=https://text.pollinations.ai
  *   PYANCHOR_POLLINATIONS_MAX_TURNS=12
  *
@@ -31,7 +31,19 @@ import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./
  */
 
 const DEFAULT_BASE_URL = "https://text.pollinations.ai";
-const DEFAULT_MODEL = "openai-fast";
+// v0.37.1 — default model changed `openai-fast` → `nova-fast` (Amazon
+// Nova Micro). Same Pollinations catalog, ~55% cheaper per turn for
+// the multi-turn pattern this adapter generates (system + brief +
+// 3-5 tool round-trips). Per-call cost at typical pyanchor usage
+// (~3K prompt + ~1K completion):
+//   nova-fast      — ~$0.000245  (default)
+//   qwen-coder     — ~$0.000400  (code-specialized fallback)
+//   openai-fast    — ~$0.000550  (pre-v0.37.1 default — GPT-5 Nano)
+//   mistral        — ~$0.000600
+// Override per-deployment with PYANCHOR_POLLINATIONS_MODEL=<name>.
+// Any non-`paid_only` model from text.pollinations.ai/models works;
+// see docs/pollinations-setup.md for the catalog snapshot.
+const DEFAULT_MODEL = "nova-fast";
 const DEFAULT_MAX_TURNS = 12;
 const READ_FILE_MAX_BYTES = 32_000;
 const TOOL_RESULT_MAX_CHARS = 8_000;
