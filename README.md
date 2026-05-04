@@ -10,6 +10,16 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg?style=flat-square)](./LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/pyanchor/pyanchor?style=flat-square)](https://github.com/pyanchor/pyanchor/stargazers)
 
+<br />
+
+<a href="https://pyanchor.pyan.kr">
+  <img src="https://pyanchor.pyan.kr/pyanchor-demo-ko.gif" alt="Pyanchor demo: floating overlay opens, user types a Korean prompt to change a button label, the agent installs deps, edits src/App.tsx, builds, and reloads — the new label appears live, all in ~30 seconds." width="900" />
+</a>
+
+<sub>Live demo at <a href="https://pyanchor.pyan.kr"><strong>pyanchor.pyan.kr</strong></a> — same flow, six interchangeable agent backends (openclaw / claude-code / codex / aider / gemini / pollinations), zero install for the Pollinations one.</sub>
+
+<br /><br />
+
 [**Documentation**](#-documentation) ·
 [**Quick start**](#-quick-start) ·
 [**Supported agents**](#supported-agents) ·

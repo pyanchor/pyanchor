@@ -9,6 +9,16 @@
 [![npm downloads](https://img.shields.io/npm/dm/pyanchor.svg?style=flat-square)](https://www.npmjs.com/package/pyanchor)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg?style=flat-square)](./LICENSE)
 
+<br />
+
+<a href="https://pyanchor.pyan.kr">
+  <img src="https://pyanchor.pyan.kr/pyanchor-demo-ko.gif" alt="Pyanchor 데모: 우하단 floating overlay → 한국어 prompt로 버튼 라벨 변경 → agent가 install / src/App.tsx 편집 / build / reload → 새 라벨이 라이브 페이지에 표시. 약 30초." width="900" />
+</a>
+
+<sub>라이브 데모: <a href="https://pyanchor.pyan.kr"><strong>pyanchor.pyan.kr</strong></a> — 같은 흐름, 6개 agent backend (openclaw / claude-code / codex / aider / gemini / pollinations) 중 Pollinations는 install 0.</sub>
+
+<br /><br />
+
 [**English**](./README.md) · [**문서**](#-문서) · [**빠른 시작**](#-빠른-시작) · [**지원 agent**](#지원-agent) · [**보안**](#-보안)
 
 </div>
