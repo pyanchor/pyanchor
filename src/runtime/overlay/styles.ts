@@ -461,6 +461,22 @@ export const OVERLAY_STYLES = `
     height: 18px;
     display: inline-block;
   }
+  /* v0.40.0 — host brand override. The default sparkIcon SVG fills
+     to currentColor at 18px; a host-supplied PNG/SVG needs to be
+     readable at button size, so it gets a bigger box. The trigger
+     button (58×58) gets a 40px image; the panel-header brand stays
+     at 22px so it doesn't crowd the title text. */
+  .brand-icon-img {
+    object-fit: contain;
+  }
+  .trigger .brand-icon-img {
+    width: 40px;
+    height: 40px;
+  }
+  .panel__title-line .brand-icon-img {
+    width: 22px;
+    height: 22px;
+  }
   @media (max-height: 860px) {
     .panel {
       max-height: calc(100dvh - 92px);

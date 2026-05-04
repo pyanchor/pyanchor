@@ -455,6 +455,100 @@ describe("runBootstrap — locale propagation (v0.9.2 fix, Codex round-8 #1)", (
   });
 });
 
+describe("runBootstrap — host brand override (v0.40.0)", () => {
+  const makeScriptWithBrand = (
+    iconUrl?: string,
+    name?: string
+  ): HTMLScriptElement => {
+    const script = makeScript({
+      src: "http://localhost/_pyanchor/bootstrap.js",
+      pyanchorToken: "tok"
+    });
+    if (iconUrl !== undefined) script.dataset.pyanchorBrandIconUrl = iconUrl;
+    if (name !== undefined) script.dataset.pyanchorBrandName = name;
+    return script;
+  };
+
+  it("reads data-pyanchor-brand-icon-url onto __PyanchorConfig.brand.iconUrl", () => {
+    const script = makeScriptWithBrand("/pyanchor-logo.png");
+    runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+    expect(window.__PyanchorConfig?.brand?.iconUrl).toBe("/pyanchor-logo.png");
+  });
+
+  it("reads data-pyanchor-brand-name onto __PyanchorConfig.brand.name", () => {
+    const script = makeScriptWithBrand(undefined, "Acme Editor");
+    runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+    expect(window.__PyanchorConfig?.brand?.name).toBe("Acme Editor");
+  });
+
+  it("reads both fields when both attributes are present", () => {
+    const script = makeScriptWithBrand("/logo.svg", "Acme");
+    runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+    expect(window.__PyanchorConfig?.brand).toEqual({
+      iconUrl: "/logo.svg",
+      name: "Acme"
+    });
+  });
+
+  it("omits the brand field entirely when neither attribute is present", () => {
+    const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });
+    runBootstrap({ window, document, fetch: vi.fn() as never, currentScript: script });
+    expect(window.__PyanchorConfig).toBeDefined();
+    expect(window.__PyanchorConfig?.brand).toBeUndefined();
+  });
+
+  it("treats empty-string brand attributes as 'unset' (no brand override)", () => {
+    const script = makeScriptWithBrand("", "");
+    runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+    expect(window.__PyanchorConfig?.brand).toBeUndefined();
+  });
+
+  it("preserves a pre-seeded __PyanchorConfig.brand (host JS wins over dataset)", () => {
+    (window as Window & {
+      __PyanchorConfig?: {
+        baseUrl?: string;
+        token?: string;
+        brand?: { iconUrl?: string; name?: string };
+      };
+    }).__PyanchorConfig = {
+      baseUrl: "ignored",
+      token: "ignored",
+      brand: { iconUrl: "/preseeded.png", name: "Preseeded" }
+    };
+
+    const script = makeScriptWithBrand("/dataset.png", "FromDataset");
+    runBootstrap({
+      window,
+      document,
+      fetch: vi.fn().mockResolvedValue({ ok: false }) as never,
+      currentScript: script
+    });
+
+    expect(window.__PyanchorConfig?.brand?.iconUrl).toBe("/preseeded.png");
+    expect(window.__PyanchorConfig?.brand?.name).toBe("Preseeded");
+  });
+});
+
 describe("runBootstrap — overlay script injection", () => {
   it("appends a <script src='.../overlay.js' data-pyanchor-overlay='1' defer> to <head>", () => {
     const script = makeScript({ src: "http://localhost/_pyanchor/bootstrap.js" });

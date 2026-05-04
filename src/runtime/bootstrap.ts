@@ -8,6 +8,18 @@ declare global {
       token: string;
       /** Optional locale code (e.g. "ko", "en"). v0.9.0+. */
       locale?: string;
+      /**
+       * Optional host brand override for the overlay UI (v0.40.0+).
+       * Both fields are independent — set just `name` to swap the panel
+       * title without changing the trigger icon, set just `iconUrl` to
+       * swap the icon while keeping the default "Pyanchor" header.
+       */
+      brand?: {
+        /** Image URL for the trigger button + panel title icon. PNG/SVG/any browser-renderable image works. Falls back to the default sparkIcon on load failure. */
+        iconUrl?: string;
+        /** Display text in the panel title (default: "Pyanchor"). */
+        name?: string;
+      };
     };
   }
 }
@@ -131,7 +143,29 @@ export function runBootstrap(deps: BootstrapDeps): BootstrapResult {
     return "skipped-missing-gate-cookie";
   }
 
-  win.__PyanchorConfig = { baseUrl, token, ...(locale ? { locale } : {}) };
+  // v0.40.0 — optional host brand override for the overlay UI.
+  // `data-pyanchor-brand-icon-url` and `data-pyanchor-brand-name` on the
+  // bootstrap <script> let the host swap the in-overlay logo + panel
+  // title without forking pyanchor. Both attributes are independent.
+  // The pre-seeded `__PyanchorConfig.brand` (if set by host JS before
+  // bootstrap ran) wins over the dataset reads, mirroring the locale
+  // resolution priority above.
+  const datasetBrandIconUrl = currentScript?.dataset.pyanchorBrandIconUrl?.trim();
+  const datasetBrandName = currentScript?.dataset.pyanchorBrandName?.trim();
+  const preBrand = win.__PyanchorConfig?.brand;
+  const brandIconUrl = preBrand?.iconUrl ?? (datasetBrandIconUrl || undefined);
+  const brandName = preBrand?.name ?? (datasetBrandName || undefined);
+  const brand =
+    brandIconUrl !== undefined || brandName !== undefined
+      ? { ...(brandIconUrl ? { iconUrl: brandIconUrl } : {}), ...(brandName ? { name: brandName } : {}) }
+      : undefined;
+
+  win.__PyanchorConfig = {
+    baseUrl,
+    token,
+    ...(locale ? { locale } : {}),
+    ...(brand ? { brand } : {})
+  };
 
   // Exchange the bearer token for an HttpOnly session cookie. On
   // success, blank window.__PyanchorConfig.token so the raw bearer

@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-05-04
+
+Host brand override for the overlay UI. Pre-v0.40 every pyanchor
+deployment displayed the same default sparkIcon (✦) on the trigger
+button + the literal string "Pyanchor" in the panel header. v0.40
+adds two opt-in `<script>` attributes so each host can put their
+own logo + name in the overlay without forking pyanchor.
+
+### Added — host brand attributes
+
+- `data-pyanchor-brand-icon-url="<url>"` on the bootstrap `<script>`.
+  When set, the overlay renders an `<img>` with the host URL in
+  place of the default sparkIcon — both on the trigger button (40px)
+  and in the panel header (22px). PNG / SVG / any browser-renderable
+  image works. On image-load failure the `<img>` hides itself
+  (`onerror`), so a broken URL degrades cleanly rather than showing
+  a broken-image glyph in the overlay chrome.
+- `data-pyanchor-brand-name="<name>"` on the bootstrap `<script>`.
+  When set, the panel header text becomes the host name instead of
+  the localized `panelTitle` ("Pyanchor"). Locale strings are still
+  used for every other piece of overlay text — only the title swaps.
+- Host JS that pre-seeds `window.__PyanchorConfig.brand = { iconUrl,
+  name }` before bootstrap runs wins over the dataset reads (mirrors
+  the existing locale resolution priority).
+- Empty-string attribute values are treated as "unset" so a host
+  template that always emits the attribute but sometimes empty
+  doesn't accidentally enter brand-override mode.
+
+### Changed
+
+- `src/runtime/bootstrap.ts` — `Window.__PyanchorConfig` types now
+  include `brand?: { iconUrl?: string; name?: string }`. The
+  bootstrap reader populates it from the new attributes (or the
+  pre-seeded value).
+- `src/runtime/overlay.ts`:
+  - new `brandIcon()` helper returns either the default `sparkIcon`
+    SVG or an `<img class="spark brand-icon-img">` with the host URL.
+    Trigger button + panel header both call it.
+  - new `brandName(fallback)` helper returns either the host name or
+    the localized fallback.
+  - new `escapeAttr()` helper for attribute-safe string substitution
+    so a hostile host string can at worst render a broken image, not
+    inject attributes or break out of the host element.
+- `src/runtime/overlay/styles.ts` — new sizing rules:
+  `.trigger .brand-icon-img { width: 40px; height: 40px }` for the
+  trigger button context and
+  `.panel__title-line .brand-icon-img { width: 22px; height: 22px }`
+  for the panel header context. The default sparkIcon (18×18 SVG,
+  fills currentColor) still uses `.spark` and is unaffected.
+
+### Tests
+
+- `tests/runtime/bootstrap.test.ts` (+6 cases): reads of each
+  attribute independently and together; omission when neither is
+  set; empty-string treated as unset; pre-seeded host JS wins over
+  dataset.
+- Total suite 949 → 955, all green.
+
+### Notes
+
+- Backward compatible — every existing deployment keeps the
+  default sparkIcon + "Pyanchor" header unchanged.
+- Use case worth flagging: bootstrap.js / overlay.js are served
+  from your sidecar's origin, so an `iconUrl` like
+  `/pyanchor-logo.png` resolves against the host page's origin
+  (NOT the sidecar). Easiest pattern: drop the icon into your
+  host app's static assets and reference it with a path-relative
+  URL.
+
 ## [0.39.0] - 2026-05-04
 
 Pollinations adapter gets a fifth tool: **`search_replace`** — a

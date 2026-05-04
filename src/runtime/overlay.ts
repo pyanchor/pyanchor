@@ -25,6 +25,11 @@ interface RuntimeConfig {
   token: string;
   /** Optional locale code (e.g. "ko", "en"). Falls back to English when unset. */
   locale?: string;
+  /** Optional host brand override for the overlay UI (v0.40.0+). */
+  brand?: {
+    iconUrl?: string;
+    name?: string;
+  };
 }
 
 declare global {
@@ -57,6 +62,30 @@ const localeFromScript = overlayScriptTag?.dataset.pyanchorLocale?.trim();
 // closure, so the next render picks up the new strings.
 const activeLocale = (config?.locale ?? localeFromScript ?? null)?.toLowerCase() ?? null;
 let s = resolveStrings(activeLocale);
+
+// v0.40.0 — host brand override for the overlay UI.
+//
+// brandIcon() returns the HTML for the trigger button + panel title
+// icon. When the host set `data-pyanchor-brand-icon-url`, render an
+// <img> with the host URL; otherwise the default sparkIcon. The img
+// element gets a same-class so existing CSS sizing applies.
+//
+// brandName() returns the panel title text. When the host set
+// `data-pyanchor-brand-name`, use that; otherwise fall back to the
+// localized panel title.
+const brandIcon = (): string => {
+  const url = config?.brand?.iconUrl;
+  if (!url) return sparkIcon;
+  // Trust the URL only insofar as we never put it inside a JS context.
+  // escapeHtml on the attribute value plus the static element shape
+  // means a hostile host string can at worst render a broken image.
+  return `<img class="spark brand-icon-img" src="${escapeAttr(url)}" alt="" aria-hidden="true" onerror="this.style.display='none'" />`;
+};
+const brandName = (fallback: string): string => config?.brand?.name?.trim() || fallback;
+
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 if (!config || window.__PyanchorOverlayLoaded) {
   throw new Error(s.errorRuntimeNotConfigured);
@@ -372,7 +401,7 @@ const render = () => {
         <div class="panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(s.panelTitle)}" aria-describedby="pyanchor-status-line">
           <div class="panel__header">
             <div class="panel__title">
-              <div class="panel__title-line">${sparkIcon}<span>${escapeHtml(s.panelTitle)}</span></div>
+              <div class="panel__title-line">${brandIcon()}<span>${escapeHtml(brandName(s.panelTitle))}</span></div>
               <div class="panel__context">
                 <span>${escapeHtml(s.panelContextLabel)}</span>
                 <code class="panel__path">${escapeHtml(currentPath())}</code>
@@ -430,7 +459,7 @@ const render = () => {
         </div>
       ` : ""}
       <button class="trigger ${isWorking ? "trigger--busy" : ""}" type="button" data-action="toggle" aria-label="${escapeHtml(uiState.isOpen ? s.toggleClose : s.toggleOpen)}" title="${escapeHtml(s.toggleTitle)}">
-        ${isWorking ? typingDots : sparkIcon}
+        ${isWorking ? typingDots : brandIcon()}
       </button>
     </div>
   `;
