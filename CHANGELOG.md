@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.2] - 2026-05-04
+
+v0.40.1 added a "respond in user's language" line to the system
+prompt, but small Pollinations models (qwen-coder, openai-fast,
+nova-fast) were still answering in English when the user wrote in
+Korean. Root cause: the rest of `SYSTEM_PROMPT` and `buildBrief()`
+is English, and small models lock onto the system / framing
+language for the assistant role's `done` summary, ignoring meta-
+hints that aren't reinforced near the end of the brief.
+
+This release adds character-set-based language detection on the
+user prompt and injects an explicit `IMPORTANT: respond in
+{Language}` line at the END of the brief. Recency bias means small
+models pay more attention to the last instruction in the brief
+than to anything in the system prompt.
+
+### Added
+- `src/agents/pollinations.ts` `detectPromptLanguage()` — regex
+  Unicode-block check for Korean (Hangul), Japanese (kana, before
+  CJK so kana wins), Chinese (CJK Unified Ideographs), Arabic,
+  Hebrew, Russian (Cyrillic), Thai, Hindi (Devanagari), Bengali.
+  Returns `null` for English / Latin scripts (those don't need
+  the hint).
+- `buildBrief()` appends a final-section
+  `"IMPORTANT: the user wrote in <X>. Write your `done` summary
+  in <X>, not in English. Tool-call arguments stay in their
+  original form — code is code."` whenever detection fires.
+
+### Tests
+- `tests/agents/adapter-briefs.test.ts` (+1 case): Korean prompt
+  → "respond in Korean" hint present; Japanese prompt → "user
+  wrote in Japanese" hint; English prompt → no hint added; mixed
+  prompt with even one Hangul char → Korean hint (false positives
+  preferred over false negatives).
+- Suite 955 → 956, all green.
+
+### Notes
+- Detection is character-set based, NOT a real language model. A
+  prompt like "open file 한글-test.txt" gets classified as
+  Korean — false positives are cheap (model answers in Korean,
+  fine if the user used Korean characters at all). The bug we're
+  fixing is the false-negative case (prompt is fully Korean,
+  response comes back English).
+- v0.40.1's system-prompt line is preserved as a backup hint —
+  small models that ignore the brief's recency bias for whatever
+  reason still get the system-level instruction.
+
 ## [0.40.1] - 2026-05-04
 
 Pollinations adapter — match response language to the user prompt's

@@ -86,6 +86,35 @@ type ChatMessage =
 // the last 4 user-facing turns.
 const ASSISTANT_BOILERPLATE = /^(done|done\.|done \(no explicit summary\)\.?)$/i;
 
+// v0.40.2 — quick natural-language detection for the user prompt.
+// Used by buildBrief() to add an explicit "respond in X" hint at the
+// END of the brief (recency bias — small models pay more attention
+// to instructions near the end). Returns null for English/Latin
+// scripts (those don't need the hint; the system prompt's English
+// already biases the model that way).
+//
+// Detection is character-set based, NOT a real language model — it
+// returns "Korean" for any prompt containing Hangul codepoints, even
+// if the prompt is "open the file 한글-test.txt". That's intentional:
+// false positives are cheap (model just answers in Korean, which is
+// fine if the user used Korean characters at all), false negatives
+// are the bug we're fixing.
+//
+// Order matters: Japanese check before CJK Unified Ideographs check
+// so a prompt with hiragana/katakana doesn't get classified as Chinese.
+function detectPromptLanguage(prompt: string): string | null {
+  if (/[가-힣ㄱ-ㆎ]/.test(prompt)) return "Korean";
+  if (/[぀-ゟ゠-ヿ]/.test(prompt)) return "Japanese";
+  if (/[一-龯]/.test(prompt)) return "Chinese";
+  if (/[؀-ۿ]/.test(prompt)) return "Arabic";
+  if (/[֐-׿]/.test(prompt)) return "Hebrew";
+  if (/[Ѐ-ӿ]/.test(prompt)) return "Russian";
+  if (/[฀-๿]/.test(prompt)) return "Thai";
+  if (/[ऀ-ॿ]/.test(prompt)) return "Hindi";
+  if (/[ঀ-৿]/.test(prompt)) return "Bengali";
+  return null;
+}
+
 function formatRecent(messages: AgentRunInput["recentMessages"]): string {
   const filtered = messages.filter((m) => {
     if (m.role === "system") return false;
@@ -135,6 +164,21 @@ export function buildBrief(input: AgentRunInput): string {
       "Inspect the relevant files with read_file and answer the user's question. " +
         "Do NOT call write_file or search_replace. Call the `done` tool with your " +
         "answer when finished."
+    );
+  }
+
+  // v0.40.2 — explicit response-language hint at the END of the brief
+  // (recency bias). The system prompt already says "respond in user's
+  // language" but small models often skip system-level meta hints when
+  // the brief is otherwise English. Detected language → explicit
+  // "Respond in X" line wins.
+  const promptLanguage = detectPromptLanguage(input.prompt);
+  if (promptLanguage) {
+    sections.push("");
+    sections.push(
+      `IMPORTANT: the user wrote in ${promptLanguage}. Write your \`done\` summary ` +
+        `in ${promptLanguage}, not in English. Tool-call arguments (file paths, code, ` +
+        `find/replace literal strings) stay in their original form — code is code.`
     );
   }
 

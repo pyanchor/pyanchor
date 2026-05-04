@@ -274,6 +274,23 @@ describe("pollinations.buildBrief (v0.36.0)", () => {
     expect(brief).toContain("pmsg-9");
   });
 
+  it("v0.40.2 — adds explicit response-language hint when prompt contains non-Latin script", async () => {
+    const { buildBrief } = await import("../../src/agents/pollinations");
+    // Korean prompt
+    const ko = buildBrief(baseInput({ prompt: "헤더 색깔 바꿔줘" }));
+    expect(ko).toMatch(/Respond in Korean|user wrote in Korean/i);
+    expect(ko).toMatch(/done.*summary in Korean/i);
+    // Japanese prompt (hiragana)
+    const ja = buildBrief(baseInput({ prompt: "ヘッダーの色を変えて" }));
+    expect(ja).toMatch(/user wrote in Japanese/i);
+    // Plain English — no hint added.
+    const en = buildBrief(baseInput({ prompt: "make the button red" }));
+    expect(en).not.toMatch(/user wrote in/i);
+    // Mixed prompt with even one Hangul character → Korean hint.
+    const mixed = buildBrief(baseInput({ prompt: "make the heading 안녕" }));
+    expect(mixed).toMatch(/user wrote in Korean/i);
+  });
+
   it("v0.38.1 — drops `system` rows and assistant boilerplate-done summaries", async () => {
     const { buildBrief } = await import("../../src/agents/pollinations");
     const messages = [
