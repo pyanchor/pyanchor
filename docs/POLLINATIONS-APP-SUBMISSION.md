@@ -27,19 +27,17 @@ specifically so users without a CLI agent installed (or without
 an OpenAI / Anthropic / Google account) can still drive the
 overlay end-to-end with zero install.
 
-The Pollinations adapter calls `POST https://text.pollinations.ai/openai`
+The Pollinations adapter calls `POST https://gen.pollinations.ai/v1/chat/completions`
 with `tools: auto` and runs its own tool loop —
 `list_files` → `read_file` → `write_file` → `done` — against
 pyanchor's scratch workspace. It honours `PYANCHOR_POLLINATIONS_TOKEN`
 (Bearer), `PYANCHOR_POLLINATIONS_REFERRER` (attribution), and
-`PYANCHOR_POLLINATIONS_MODEL` (default `openai-fast` — the only
-model the legacy `text.pollinations.ai/openai` endpoint reliably
-routes for authenticated callers). We briefly tried `nova-fast`
-(Amazon Nova Micro, ~55% cheaper per call) in v0.37.1 since it
-appeared in your catalog without `paid_only`, but that endpoint
-returns an empty response for it. Cheaper / specialized catalog
-models work on `enter.pollinations.ai` — let us know if you'd like
-us to migrate the adapter and we'll prioritize it.
+`PYANCHOR_POLLINATIONS_MODEL` (default `nova-fast` — Amazon Nova
+Micro, the cheapest tool-capable model in your catalog at
+~$0.000245/call vs `openai-fast` at ~$0.00055). v0.38.0 migrated
+the adapter from the legacy `text.pollinations.ai/openai` endpoint
+to `gen.pollinations.ai/v1/chat/completions` so the full ~36-model
+catalog is reachable.
 
 Why this matters for Pollinations: pyanchor is positioned as
 "self-hosted, prod-attached, free-of-vendor-lock-in", and the
@@ -73,27 +71,27 @@ apply without local setup.)
 ## Optional fields
 
 - **GitHub repository**: <https://github.com/pyanchor/pyanchor>
-  (MIT, public, regular releases on npm — current version 0.37.0;
-  the Pollinations adapter shipped in v0.36.0, with v0.36.1 and
-  v0.36.2 as docs catch-up patches and v0.37.0 adding HMAC-signed
-  gate cookies + an optional sidecar unlock endpoint that the
-  reviewer URL below uses.)
+  (MIT, public, regular releases on npm — current version 0.38.0;
+  the Pollinations adapter shipped in v0.36.0, v0.36.1 / v0.36.2
+  were docs catch-up patches, v0.37.0 added HMAC-signed gate
+  cookies + the optional sidecar unlock endpoint that the
+  reviewer URL below uses, and v0.38.0 migrated the adapter from
+  the legacy `text.pollinations.ai/openai` endpoint to the new
+  `gen.pollinations.ai/v1/chat/completions` gateway.)
 - **App language**: English (with Korean README at
   [`README-ko.md`](https://github.com/pyanchor/pyanchor/blob/main/README-ko.md)).
 
 ## Tier requested
 
-🌸 **Flower** — the default `openai-fast` model handles small
-UI tweaks (the dominant pyanchor use case) but at ~$0.00055/call
-× 4-6 calls per edit cycle, the anonymous-tier quota gets eaten
-by a handful of demo visitors. A Flower allocation (≈10 pollen/day
-on the developer account that owns the `pyanchor.pyan.kr`
-referrer) covers normal demo traffic and lets us advertise
-Pollinations as the recommended "zero-install" backend in the
-README. Migrating the adapter to `enter.pollinations.ai` would
-unlock the cheaper catalog models (`nova-fast`, `qwen-coder`)
-which would stretch the same Flower quota further — happy to
-prioritize that work post-approval if it'd help.
+🌸 **Flower** — the default `nova-fast` model is the cheapest
+tool-capable option in your catalog (~$0.000245/call, ~$0.0012
+per typical 5-call edit cycle), so the dominant pyanchor use
+case (small UI tweaks) fits the anonymous quota for a handful of
+users. Heavier multi-file edits or sustained demo traffic still
+hit the wall fast, though. A Flower allocation (≈10 pollen/day on
+the developer account that owns the `pyanchor.pyan.kr` referrer)
+covers normal demo traffic and lets us advertise Pollinations as
+the recommended "zero-install" backend in the README.
 
 ## Verification
 
@@ -113,11 +111,11 @@ can verify in three ways:
    to the demo. From there: click the floating pyanchor button,
    point at any heading, type a short instruction (e.g. "make this
    blue"), and hit enter. The browser Network tab will show `POST
-   text.pollinations.ai/openai` with `Referer:
+   gen.pollinations.ai/v1/chat/completions` with `Referer:
    https://pyanchor.pyan.kr` plus an `Authorization: Bearer sk_...`
-   header (Pyanchor's dedicated OSS-app token). The edit is then
-   rsynced into the live deploy by the sidecar and the page
-   reloads with the change visible.
+   header (Pyanchor's dedicated OSS-app token) and `model:
+   "nova-fast"`. The edit is then rsynced into the live deploy by
+   the sidecar and the page reloads with the change visible.
 
    The unlock secret is **not** included in this public submission
    body — it's emailed separately so reviewers don't need to share

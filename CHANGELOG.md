@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-05-04
+
+Migrated the Pollinations adapter to the new
+`gen.pollinations.ai/v1/chat/completions` gateway (per Pollinations'
+own deprecation notice on the legacy `text.pollinations.ai/openai`
+endpoint). The new gateway exposes the full ~36-model catalog at
+runtime, not just `openai-fast`, so the default also moves to the
+**cheapest tool-capable catalog model** (`nova-fast` = Amazon Nova
+Micro, ~$0.000245/call vs `openai-fast` ~$0.000550/call).
+
+This is the change v0.37.1 *should* have been before the misship —
+it didn't work that release because the cheaper catalog models
+(`nova-fast`, `qwen-coder`, etc.) only route on the new gateway,
+which we hadn't migrated to yet.
+
+### Changed
+- `src/agents/pollinations.ts`:
+  - `DEFAULT_BASE_URL` → `https://gen.pollinations.ai`
+  - new `DEFAULT_PATH` constant → `/v1/chat/completions`
+  - `DEFAULT_MODEL` → `nova-fast`
+  - `callChat()` now hits `${baseUrl}${path}` instead of the
+    hard-coded `${baseUrl}/openai` suffix.
+  - `readSettings()` honors a new `PYANCHOR_POLLINATIONS_PATH` env
+    so deployments that pin a base URL can still control the path.
+- `docs/pollinations-setup.md`: model table updated with per-call
+  cost estimates for the catalog. New "Migrating from the legacy
+  endpoint" section for pre-v0.38 deployments that pinned
+  `PYANCHOR_POLLINATIONS_BASE_URL`.
+- `docs/POLLINATIONS-APP-SUBMISSION.md`: reference URLs + model
+  defaults updated to the new gateway and `nova-fast`.
+
+### Backward compatibility
+- Deployments that previously pinned
+  `PYANCHOR_POLLINATIONS_BASE_URL=https://text.pollinations.ai`
+  keep working **only if** they also pin
+  `PYANCHOR_POLLINATIONS_PATH=/openai` +
+  `PYANCHOR_POLLINATIONS_MODEL=openai-fast`. Pollinations is
+  actively deprecating that endpoint, so this path is for
+  rollback / pinning only — the recommended upgrade is to drop
+  all three pins and accept the new gateway defaults.
+
+### Verification
+- Live integration test against the new endpoint passed end-to-end:
+  `list_files → read_file → write_file → done` cycle completed
+  with `model=amazon.nova-micro-v1:0` (Nova Micro), verification
+  comment appended to the test workspace as expected.
+
 ## [0.37.2] - 2026-05-04
 
 Emergency revert of v0.37.1's default-model swap. v0.37.1 changed

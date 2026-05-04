@@ -21,8 +21,9 @@ import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./
  *   PYANCHOR_AGENT=pollinations
  *   PYANCHOR_POLLINATIONS_TOKEN=sk_...     # backend bearer token (recommended)
  *   PYANCHOR_POLLINATIONS_REFERRER=...     # referrer for attribution / tier
- *   PYANCHOR_POLLINATIONS_MODEL=openai-fast  # default — only model the legacy endpoint reliably routes
- *   PYANCHOR_POLLINATIONS_BASE_URL=https://text.pollinations.ai
+ *   PYANCHOR_POLLINATIONS_MODEL=nova-fast              # default since v0.38.0
+ *   PYANCHOR_POLLINATIONS_BASE_URL=https://gen.pollinations.ai   # default since v0.38.0
+ *   PYANCHOR_POLLINATIONS_PATH=/v1/chat/completions    # default since v0.38.0
  *   PYANCHOR_POLLINATIONS_MAX_TURNS=12
  *
  * Anonymous (no token) works but is rate-limited per IP. Attribution via
@@ -30,20 +31,19 @@ import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./
  * tier on https://auth.pollinations.ai.
  */
 
-const DEFAULT_BASE_URL = "https://text.pollinations.ai";
-// v0.37.2 — reverted to `openai-fast`. v0.37.1 briefly tried
-// `nova-fast` (Amazon Nova Micro, ~55% cheaper per call in the
-// catalog), but the legacy `text.pollinations.ai/openai` endpoint
-// returns an empty response for that model name — Pollinations only
-// exposes the full multi-model catalog (qwen-coder / nova-fast /
-// gemini-fast / claude-fast etc.) on the new `enter.pollinations.ai`
-// gateway, which uses a different request path. Until the adapter is
-// migrated to that endpoint, `openai-fast` (= GPT-5 Nano on
-// authenticated calls, GPT-OSS 20B on anonymous) is the only model
-// the legacy text endpoint will reliably route. Override with
-// PYANCHOR_POLLINATIONS_MODEL=<name> + a matching
-// PYANCHOR_POLLINATIONS_BASE_URL if you've moved to the new endpoint.
-const DEFAULT_MODEL = "openai-fast";
+// v0.38.0 — migrated from the legacy `text.pollinations.ai/openai`
+// endpoint to the new `gen.pollinations.ai/v1/chat/completions`
+// gateway (per Pollinations' deprecation notice). The new endpoint
+// exposes the full ~36-model catalog at runtime, not just `openai-fast`,
+// so we can also default to a cheaper model (`nova-fast` = Amazon Nova
+// Micro, ~$0.000245/call vs `openai-fast` ~$0.000550/call).
+//
+// Pre-v0.38 env vars are still honored: deployments that pinned
+// `PYANCHOR_POLLINATIONS_BASE_URL=https://text.pollinations.ai` keep
+// working when paired with `PYANCHOR_POLLINATIONS_PATH=/openai`.
+const DEFAULT_BASE_URL = "https://gen.pollinations.ai";
+const DEFAULT_PATH = "/v1/chat/completions";
+const DEFAULT_MODEL = "nova-fast";
 const DEFAULT_MAX_TURNS = 12;
 const READ_FILE_MAX_BYTES = 32_000;
 const TOOL_RESULT_MAX_CHARS = 8_000;
@@ -272,6 +272,7 @@ function parseArgs(raw: string | undefined): Record<string, unknown> {
 
 interface PollinationsSettings {
   baseUrl: string;
+  path: string;
   model: string;
   token: string;
   referrer: string;
@@ -282,13 +283,15 @@ function readSettings(ctxModel: string): PollinationsSettings {
   const env = process.env;
   const rawBase = env.PYANCHOR_POLLINATIONS_BASE_URL?.trim() || DEFAULT_BASE_URL;
   const baseUrl = rawBase.replace(/\/+$/, "");
+  const rawPath = env.PYANCHOR_POLLINATIONS_PATH?.trim() || DEFAULT_PATH;
+  const path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
   const model = (ctxModel || env.PYANCHOR_POLLINATIONS_MODEL || DEFAULT_MODEL).trim();
   const token = env.PYANCHOR_POLLINATIONS_TOKEN?.trim() ?? "";
   const referrer = env.PYANCHOR_POLLINATIONS_REFERRER?.trim() ?? "";
   const rawTurns = Number.parseInt(env.PYANCHOR_POLLINATIONS_MAX_TURNS ?? "", 10);
   const maxTurns =
     Number.isFinite(rawTurns) && rawTurns > 0 && rawTurns <= 64 ? rawTurns : DEFAULT_MAX_TURNS;
-  return { baseUrl, model, token, referrer, maxTurns };
+  return { baseUrl, path, model, token, referrer, maxTurns };
 }
 
 async function callChat(
@@ -308,7 +311,7 @@ async function callChat(
     ...(settings.referrer ? { referrer: settings.referrer } : {})
   };
 
-  const response = await fetch(`${settings.baseUrl}/openai`, {
+  const response = await fetch(`${settings.baseUrl}${settings.path}`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),

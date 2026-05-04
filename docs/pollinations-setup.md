@@ -66,43 +66,45 @@ sits in the sidecar's environment.
 ## 2. Pick a model (optional)
 
 ```bash
-PYANCHOR_POLLINATIONS_MODEL=openai-fast    # default
+PYANCHOR_POLLINATIONS_MODEL=nova-fast       # default since v0.38.0
 ```
 
-The default `openai-fast` is currently the **only model the legacy
-`text.pollinations.ai/openai` endpoint reliably routes for
-authenticated callers** — other catalog names (`nova-fast`,
-`qwen-coder`, `mistral`, etc.) get an empty response from that
-endpoint. The full multi-model catalog (~36 models) is exposed on
-the new `https://enter.pollinations.ai` gateway, which uses a
-different request path (the OpenAI-compat shape we use today does
-not work there yet).
+The default `nova-fast` (Amazon Nova Micro) is the **cheapest
+tool-capable model** in the Pollinations catalog. At pyanchor's
+typical multi-turn usage (~3K prompt + ~1K completion per
+chat-completion call, 4-6 calls per edit cycle) it costs roughly
+**$0.000245 per call** — about **half** of `openai-fast` (GPT-5
+Nano, the pre-v0.37.1 default). That matters because the
+anonymous-tier hourly pollen quota is small (~$0.15/hr at the time
+of writing).
 
-To use a different model, you need both env vars:
+Top non-`paid_only` candidates from the live catalog at
+<https://gen.pollinations.ai/api/docs>:
 
-```bash
-PYANCHOR_POLLINATIONS_BASE_URL=https://enter.pollinations.ai/...   # see Pollinations docs for the path
-PYANCHOR_POLLINATIONS_MODEL=qwen-coder                              # any non-paid_only catalog name
-```
-
-Cost reference for the typical pyanchor multi-turn pattern (~3K
-prompt + ~1K completion per chat-completion call, 4-6 calls per
-edit cycle), based on the catalog at <https://text.pollinations.ai/models>:
-
-| `PYANCHOR_POLLINATIONS_MODEL` | Description | per-call (est.) | Available on legacy endpoint? |
+| `PYANCHOR_POLLINATIONS_MODEL` | Description | per-call (est.) | Notes |
 |---|---|---|---|
-| `openai-fast` ⭐ | GPT-5 Nano (authenticated) / GPT-OSS 20B (anonymous) | $0.00055 | ✅ default |
-| `nova-fast` | Amazon Nova Micro — Ultra Cheap | $0.00025 | ❌ enter.pollinations.ai only |
-| `qwen-coder` | Qwen3 Coder 30B — code-specialized | $0.00040 | ❌ enter.pollinations.ai only |
-| `mistral` | Mistral Small 3.2 | $0.00060 | ❌ enter.pollinations.ai only |
-| `glm` | GLM-5.1 — Long Context Reasoning + agentic | $0.00420 | ❌ enter.pollinations.ai only |
+| `nova-fast` ⭐ | Amazon Nova Micro — Ultra Cheap | $0.000245 | **Default** — best $/call |
+| `qwen-coder` | Qwen3 Coder 30B — code-specialized | $0.00040 | Multi-file refactors, dense codebases |
+| `openai-fast` | GPT-5 Nano | $0.00055 | Pre-v0.37.1 default; reasoning-heavy edits |
+| `mistral` | Mistral Small 3.2 | $0.00060 | Multilingual workloads |
+| `glm` | GLM-5.1 — Long Context Reasoning + agentic | $0.00420 | Heavy tool-loop edits, large context |
 
-Avoid models marked `paid_only: true` in the catalog (`claude`,
-`claude-large`, `gpt-5.5`, `gemini`, `deepseek-pro`, etc.) unless
-your account is on a paid plan.
+Avoid models marked `paid_only: true` (`claude`, `claude-large`,
+`gpt-5.5`, `gemini`, `deepseek-pro`, etc.) unless your account is
+on a paid plan.
 
 Pyanchor's `PYANCHOR_AGENT_MODEL` env also overrides this if set,
 so you can swap models without touching adapter-specific config.
+
+### Migrating from the legacy endpoint (pre-v0.38.0 deployments)
+
+If you had `PYANCHOR_POLLINATIONS_BASE_URL=https://text.pollinations.ai`
+pinned in your env (the pre-v0.38 default), pair it with
+`PYANCHOR_POLLINATIONS_PATH=/openai` and `PYANCHOR_POLLINATIONS_MODEL=openai-fast`
+to keep the legacy behavior — Pollinations is deprecating that
+endpoint, but it still works as of this release. Removing both env
+vars (and the model pin) hands you the new gateway with the cheaper
+default.
 
 ## 3. Other knobs
 
