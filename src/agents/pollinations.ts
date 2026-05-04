@@ -21,7 +21,7 @@ import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./
  *   PYANCHOR_AGENT=pollinations
  *   PYANCHOR_POLLINATIONS_TOKEN=sk_...     # backend bearer token (recommended)
  *   PYANCHOR_POLLINATIONS_REFERRER=...     # referrer for attribution / tier
- *   PYANCHOR_POLLINATIONS_MODEL=nova-fast    # default; any non-paid_only model works
+ *   PYANCHOR_POLLINATIONS_MODEL=openai-fast  # default — only model the legacy endpoint reliably routes
  *   PYANCHOR_POLLINATIONS_BASE_URL=https://text.pollinations.ai
  *   PYANCHOR_POLLINATIONS_MAX_TURNS=12
  *
@@ -31,19 +31,19 @@ import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./
  */
 
 const DEFAULT_BASE_URL = "https://text.pollinations.ai";
-// v0.37.1 — default model changed `openai-fast` → `nova-fast` (Amazon
-// Nova Micro). Same Pollinations catalog, ~55% cheaper per turn for
-// the multi-turn pattern this adapter generates (system + brief +
-// 3-5 tool round-trips). Per-call cost at typical pyanchor usage
-// (~3K prompt + ~1K completion):
-//   nova-fast      — ~$0.000245  (default)
-//   qwen-coder     — ~$0.000400  (code-specialized fallback)
-//   openai-fast    — ~$0.000550  (pre-v0.37.1 default — GPT-5 Nano)
-//   mistral        — ~$0.000600
-// Override per-deployment with PYANCHOR_POLLINATIONS_MODEL=<name>.
-// Any non-`paid_only` model from text.pollinations.ai/models works;
-// see docs/pollinations-setup.md for the catalog snapshot.
-const DEFAULT_MODEL = "nova-fast";
+// v0.37.2 — reverted to `openai-fast`. v0.37.1 briefly tried
+// `nova-fast` (Amazon Nova Micro, ~55% cheaper per call in the
+// catalog), but the legacy `text.pollinations.ai/openai` endpoint
+// returns an empty response for that model name — Pollinations only
+// exposes the full multi-model catalog (qwen-coder / nova-fast /
+// gemini-fast / claude-fast etc.) on the new `enter.pollinations.ai`
+// gateway, which uses a different request path. Until the adapter is
+// migrated to that endpoint, `openai-fast` (= GPT-5 Nano on
+// authenticated calls, GPT-OSS 20B on anonymous) is the only model
+// the legacy text endpoint will reliably route. Override with
+// PYANCHOR_POLLINATIONS_MODEL=<name> + a matching
+// PYANCHOR_POLLINATIONS_BASE_URL if you've moved to the new endpoint.
+const DEFAULT_MODEL = "openai-fast";
 const DEFAULT_MAX_TURNS = 12;
 const READ_FILE_MAX_BYTES = 32_000;
 const TOOL_RESULT_MAX_CHARS = 8_000;

@@ -32,9 +32,14 @@ with `tools: auto` and runs its own tool loop —
 `list_files` → `read_file` → `write_file` → `done` — against
 pyanchor's scratch workspace. It honours `PYANCHOR_POLLINATIONS_TOKEN`
 (Bearer), `PYANCHOR_POLLINATIONS_REFERRER` (attribution), and
-`PYANCHOR_POLLINATIONS_MODEL` (default `nova-fast` since v0.37.1 —
-Amazon Nova Micro, the cheapest tool-capable model in your catalog,
-chosen specifically because anonymous-tier pollen quota is tight).
+`PYANCHOR_POLLINATIONS_MODEL` (default `openai-fast` — the only
+model the legacy `text.pollinations.ai/openai` endpoint reliably
+routes for authenticated callers). We briefly tried `nova-fast`
+(Amazon Nova Micro, ~55% cheaper per call) in v0.37.1 since it
+appeared in your catalog without `paid_only`, but that endpoint
+returns an empty response for it. Cheaper / specialized catalog
+models work on `enter.pollinations.ai` — let us know if you'd like
+us to migrate the adapter and we'll prioritize it.
 
 Why this matters for Pollinations: pyanchor is positioned as
 "self-hosted, prod-attached, free-of-vendor-lock-in", and the
@@ -78,16 +83,17 @@ apply without local setup.)
 
 ## Tier requested
 
-🌸 **Flower** — the v0.37.1 default `nova-fast` model is the
-cheapest tool-capable option in your catalog (~$0.000245/call,
-~$0.0012 per typical 5-call edit cycle), so the dominant
-pyanchor use case (small UI tweaks) fits the anonymous quota for
-a handful of users. Heavier multi-file edits or sustained demo
-traffic still hit the wall fast, though. A Flower allocation
-(≈10 pollen/day on the developer account that owns the
-`pyanchor.pyan.kr` referrer) covers normal demo traffic and lets
-us advertise Pollinations as the recommended "zero-install"
-backend in the README.
+🌸 **Flower** — the default `openai-fast` model handles small
+UI tweaks (the dominant pyanchor use case) but at ~$0.00055/call
+× 4-6 calls per edit cycle, the anonymous-tier quota gets eaten
+by a handful of demo visitors. A Flower allocation (≈10 pollen/day
+on the developer account that owns the `pyanchor.pyan.kr`
+referrer) covers normal demo traffic and lets us advertise
+Pollinations as the recommended "zero-install" backend in the
+README. Migrating the adapter to `enter.pollinations.ai` would
+unlock the cheaper catalog models (`nova-fast`, `qwen-coder`)
+which would stretch the same Flower quota further — happy to
+prioritize that work post-approval if it'd help.
 
 ## Verification
 

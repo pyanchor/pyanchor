@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.37.2] - 2026-05-04
+
+Emergency revert of v0.37.1's default-model swap. v0.37.1 changed
+the default Pollinations model from `openai-fast` to `nova-fast`
+based on the public catalog at <https://text.pollinations.ai/models>
+which lists nova-fast as a non-`paid_only` model with `tools: true`.
+On the wire, however, the legacy `text.pollinations.ai/openai`
+endpoint **silently returns an empty response** for `nova-fast` —
+Pollinations is migrating its full multi-model catalog to a new
+`enter.pollinations.ai` gateway with a different request shape, and
+only `openai-fast` is reliably routed by the legacy endpoint today.
+
+### Changed
+- `src/agents/pollinations.ts` — `DEFAULT_MODEL` reverted to
+  `"openai-fast"`. Comment now explicitly documents the legacy
+  endpoint constraint so a future contributor doesn't redo the
+  v0.37.1 swap without first migrating the base URL.
+- `docs/pollinations-setup.md` — model table now shows which models
+  work on the legacy endpoint (only `openai-fast`) vs which require
+  the new `enter.pollinations.ai` gateway. Cheaper catalog options
+  (`nova-fast`, `qwen-coder`, etc.) are listed but flagged as
+  needing a `PYANCHOR_POLLINATIONS_BASE_URL` change.
+- `docs/POLLINATIONS-APP-SUBMISSION.md` — model line updated to
+  match. Tier-Requested rationale notes that an `enter.pollinations.ai`
+  migration would unlock cheaper catalog models post-approval.
+
+### Notes
+- No code logic change; just the constant. Existing test suite
+  passes unchanged.
+- v0.37.1 should be considered a misship — the npm tarball is still
+  installable but defaults to a broken model. Anyone who already
+  upgraded should `npm install pyanchor@0.37.2` immediately.
+- Migrating to `enter.pollinations.ai` is queued as a separate piece
+  of work; the path/payload spec needs to come from the Pollinations
+  team (the OpenAI-compat path `/v1/chat/completions` returns 405
+  there). Will sync after the App Submission lands.
+
 ## [0.37.1] - 2026-05-04
 
 Default Pollinations model swapped from `openai-fast` to
