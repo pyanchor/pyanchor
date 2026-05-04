@@ -85,9 +85,10 @@ for you.
                                                │ spawns worker
                                                ▼
                             ┌──────────────────────────────┐
-                            │  Agent (any of 5 built-in:   │
+                            │  Agent (any of 6 built-in:   │
                             │   openclaw / claude-code /   │
-                            │   codex / aider / gemini)    │
+                            │   codex / aider / gemini /   │
+                            │   pollinations)              │
                             │                              │
                             │  1. mutate code in workspace │
                             │  2. install + build          │
@@ -257,7 +258,7 @@ export PYANCHOR_APP_DIR=/abs/path/to/your/app          # Next.js, Vite, Astro, a
 export PYANCHOR_WORKSPACE_DIR=/abs/path/to/scratch-workspace
 export PYANCHOR_RESTART_SCRIPT=/abs/path/to/restart-frontend.sh
 export PYANCHOR_HEALTHCHECK_URL=http://127.0.0.1:3000/
-export PYANCHOR_AGENT=openclaw   # or claude-code | codex | aider | gemini
+export PYANCHOR_AGENT=openclaw   # or claude-code | codex | aider | gemini | pollinations
 export PYANCHOR_FRAMEWORK=nextjs # or vite. Anything else: see step 5c.
 
 pyanchor
@@ -408,6 +409,7 @@ is reachable so you know before the first edit.
 | `codex` | ✅ shipped | OpenAI Codex CLI on `PATH`. Install: `npm i -g @openai/codex`. Override binary with `PYANCHOR_CODEX_BIN`. |
 | `aider` | ✅ shipped | aider-chat CLI on `PATH`. Install: `pip install aider-chat`. Workspace should be a git repo. Override binary with `PYANCHOR_AIDER_BIN`. |
 | `gemini` | ✅ shipped | Google Gemini CLI on `PATH`. Install: `npm i -g @google/gemini-cli`. Auth: `GEMINI_API_KEY` env, `gemini auth login` (OAuth), or Vertex AI. Setup: [`docs/gemini-setup.md`](./docs/gemini-setup.md) |
+| `pollinations` | ✅ shipped (v0.36.0) | **No CLI install** — HTTP-only. Calls `text.pollinations.ai/openai`. Anonymous works (IP-rate-limited); set `PYANCHOR_POLLINATIONS_TOKEN=sk_...` for tier quota. Setup: [`docs/pollinations-setup.md`](./docs/pollinations-setup.md) |
 | Goose, Cline, custom | 🟡 | implement the [`AgentRunner`](./src/agents/types.ts) interface — see [`docs/adapters.md`](./docs/adapters.md) |
 
 ## Supported frameworks
@@ -557,6 +559,7 @@ isolation kicks in when you have multiple apps.
 | [`docs/openclaw-setup.md`](./docs/openclaw-setup.md) | Install OpenClaw and point pyanchor at it |
 | [`docs/claude-code-setup.md`](./docs/claude-code-setup.md) | Install the Anthropic Agent SDK and route pyanchor through Claude |
 | [`docs/gemini-setup.md`](./docs/gemini-setup.md) | Install the Google Gemini CLI + 3 auth options |
+| [`docs/pollinations-setup.md`](./docs/pollinations-setup.md) | HTTP-only adapter (no CLI install) — env vars + 3 auth modes (anonymous / referrer / bearer) + troubleshooting |
 | [`docs/adapters.md`](./docs/adapters.md) | Build your own agent adapter (~70 LOC interface, ~150 LOC adapter) |
 | [`docs/ACCESS-CONTROL.md`](./docs/ACCESS-CONTROL.md) | **Start here for security** — 9 access-control layers, recommended setups by scenario, what each layer blocks on token leak |
 | [`docs/SECURITY.md`](./docs/SECURITY.md) | Threat model + 3 deployment recipes (loopback / production gate cookie / existing auth) |
@@ -587,7 +590,8 @@ marked `Pre-1.0` are still under iteration.
 **Shipped highlights** (cumulative through v0.30.0):
 
 - **Adapters**: `openclaw` (default), `claude-code`, `codex`, `aider`,
-  `gemini`, pluggable third-party via the `AgentRunner` interface
+  `gemini`, `pollinations` (HTTP-only — no CLI install), pluggable
+  third-party via the `AgentRunner` interface
 - **Frameworks**: `nextjs` (default), `vite`, with two-env override
   (`PYANCHOR_INSTALL_COMMAND` / `PYANCHOR_BUILD_COMMAND`) for Astro /
   SvelteKit / Remix / Nuxt / anything else

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.36.1] - 2026-05-04
+
+README + Korean README catch-up for the v0.36.0 adapter ship.
+v0.36.0 added the Pollinations runner but the README still
+listed "5 built-in agents" everywhere — npm.js page now matches
+reality.
+
+### Changed
+- `README.md`:
+  - ASCII architecture diagram: `5 built-in` → `6 built-in`,
+    `pollinations` added to the agent enum.
+  - "Pick a backend" table: new `pollinations` row with the
+    HTTP-only / no-CLI-install distinguisher and link to
+    `docs/pollinations-setup.md`.
+  - Quickstart env example now includes `pollinations` in
+    the agent comma-list.
+  - Doc table: new `docs/pollinations-setup.md` row.
+  - Shipped highlights bullet updated to include `pollinations
+    (HTTP-only — no CLI install)`.
+- `README-ko.md`:
+  - Same updates in Korean — env var list, agent table
+    (`5개 백엔드` → `6개 백엔드` + new row), docs index entry.
+
+### Notes
+- No code or test changes — README + CHANGELOG only. v0.36.0
+  npm tarball already ships the working adapter; this release
+  just fixes the user-visible advertising of it.
+
 ## [0.36.0] - 2026-05-04
 
 Sixth agent backend: Pollinations. First HTTP-only adapter — no

@@ -100,7 +100,7 @@ npx pyanchor
 
 5개 필수 env (`pyanchor init`이 자동 작성):
 - `PYANCHOR_TOKEN` — bearer auth secret
-- `PYANCHOR_AGENT` — `codex` / `claude-code` / `openclaw` / `aider` / `gemini`
+- `PYANCHOR_AGENT` — `codex` / `claude-code` / `openclaw` / `aider` / `gemini` / `pollinations`
 - `PYANCHOR_APP_DIR` — 당신 앱의 root
 - `PYANCHOR_WORKSPACE_DIR` — agent가 편집하는 scratch 디렉토리
 - `PYANCHOR_RESTART_SCRIPT` — 편집 후 프론트엔드 reload 방법
@@ -109,15 +109,16 @@ npx pyanchor
 
 ## 지원 agent
 
-5개 백엔드. `PYANCHOR_AGENT=<name>` 한 줄로 swap.
+6개 백엔드. `PYANCHOR_AGENT=<name>` 한 줄로 swap.
 
-| Agent         | 설치                                                 | 인증                                |
-| ------------- | ---------------------------------------------------- | ----------------------------------- |
-| `codex`       | `npm i -g @openai/codex`                             | `codex login` (ChatGPT account 또는 OpenAI API key) |
-| `claude-code` | `npm i @anthropic-ai/claude-agent-sdk`               | `ANTHROPIC_API_KEY` 또는 Claude OAuth |
-| `openclaw`    | OpenClaw 자체 설치 (per-agent profiles)              | OpenClaw OAuth                      |
-| `aider`       | `pip install aider-chat`                             | `OPENAI_API_KEY` 등                 |
-| `gemini`      | `npm i -g @google/gemini-cli`                        | `GEMINI_API_KEY` 또는 `gemini auth login` |
+| Agent           | 설치                                                 | 인증                                |
+| --------------- | ---------------------------------------------------- | ----------------------------------- |
+| `codex`         | `npm i -g @openai/codex`                             | `codex login` (ChatGPT account 또는 OpenAI API key) |
+| `claude-code`   | `npm i @anthropic-ai/claude-agent-sdk`               | `ANTHROPIC_API_KEY` 또는 Claude OAuth |
+| `openclaw`      | OpenClaw 자체 설치 (per-agent profiles)              | OpenClaw OAuth                      |
+| `aider`         | `pip install aider-chat`                             | `OPENAI_API_KEY` 등                 |
+| `gemini`        | `npm i -g @google/gemini-cli`                        | `GEMINI_API_KEY` 또는 `gemini auth login` |
+| `pollinations`  | **CLI 설치 불필요** (HTTP-only, v0.36.0+)            | 익명 IP 한도 / `PYANCHOR_POLLINATIONS_TOKEN=sk_...` Bearer |
 
 ## 지원 framework
 
@@ -174,6 +175,7 @@ override.
 - [`docs/openclaw-setup.md`](./docs/openclaw-setup.md) — openclaw
 - [`docs/aider-setup.md`](./docs/aider-setup.md) — aider
 - [`docs/gemini-setup.md`](./docs/gemini-setup.md) — gemini
+- [`docs/pollinations-setup.md`](./docs/pollinations-setup.md) — pollinations (HTTP-only)
 - [`docs/integrate-with-vite.md`](./docs/integrate-with-vite.md) —
   Vite 통합 자세히
 
