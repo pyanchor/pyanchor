@@ -1,11 +1,13 @@
 import cookieParser from "cookie-parser";
 import express, { type NextFunction, type Request, type Response } from "express";
+import { timingSafeEqual as cryptoTimingSafeEqual } from "node:crypto";
 import path from "node:path";
 
 import { renderAdminHtml } from "./admin";
 import { verifyActorHeader } from "./actor";
 import { isPyanchorConfigured, pyanchorConfig, validateConfig } from "./config";
 import { SESSION_COOKIE, requireGateCookie, requireToken } from "./auth";
+import { signGateJwt } from "./gate-jwt";
 import { requireAllowedOrigin } from "./origin";
 import { tokenBucketMiddleware } from "./rate-limit";
 import { activeSessionCount, createSession, revokeSession } from "./sessions";
@@ -199,6 +201,83 @@ app.get("/readyz", (_request, response) => {
   const ready = isPyanchorConfigured();
   response.status(ready ? 200 : 503).json({ ok: ready, ready });
 });
+
+// ─── optional sidecar-side unlock endpoint (v0.37.0) ──────────────────
+//
+// Issues a HS256-signed JWT cookie when GET <unlockPath>?secret=<X>
+// matches PYANCHOR_UNLOCK_SECRET. Use case: static-build deployments
+// (vite/Astro/Next-export → nginx) have no host-app middleware to
+// issue a signed cookie, so cookie issuance has to happen somewhere.
+// The sidecar volunteers this route — but only when both
+// PYANCHOR_UNLOCK_SECRET and PYANCHOR_GATE_COOKIE_HMAC_SECRET are
+// set (an unsigned unlock would be the same security-theater as the
+// pre-v0.37 `=1` marker and we explicitly refuse to ship that).
+//
+// All other inputs (wrong secret, missing secret, GET with no query)
+// return 404 — same shape as nginx's `if ($arg_secret != "...") return 404`
+// pattern, so the endpoint's existence isn't enumerable by probing.
+//
+// Honest-name discipline: the endpoint is at PYANCHOR_UNLOCK_PATH
+// (default /_pyanchor/unlock). Operators who want it less guessable
+// can set PYANCHOR_UNLOCK_PATH=/_pyanchor/whatever — the sidecar
+// uses the configured value, not a fixed string.
+const unlockEnabled = !!(
+  pyanchorConfig.unlockSecret &&
+  pyanchorConfig.unlockSecret.length > 0 &&
+  pyanchorConfig.gateCookieHmacSecret &&
+  pyanchorConfig.gateCookieHmacSecret.length > 0
+);
+if (unlockEnabled) {
+  // Pre-encode the secret bytes once so per-request work is just the
+  // length check + timingSafeEqual call.
+  const unlockSecretBuf = Buffer.from(pyanchorConfig.unlockSecret, "utf8");
+  app.get(pyanchorConfig.unlockPath, (request: Request, response: Response) => {
+    setNoStore(response);
+    const provided = request.query.secret;
+    if (typeof provided !== "string" || provided.length === 0) {
+      response.status(404).end();
+      return;
+    }
+    const providedBuf = Buffer.from(provided, "utf8");
+    if (
+      providedBuf.length !== unlockSecretBuf.length ||
+      !cryptoTimingSafeEqual(providedBuf, unlockSecretBuf)
+    ) {
+      response.status(404).end();
+      return;
+    }
+    const ttlSec = pyanchorConfig.unlockCookieTtlSec;
+    let token: string;
+    try {
+      token = signGateJwt(pyanchorConfig.gateCookieHmacSecret, { ttlSec });
+    } catch (err) {
+      // Should be impossible (we just checked the secret is non-empty)
+      // but if signing throws, return a clean 500 rather than leaking.
+      console.error("[pyanchor] unlock endpoint sign failed:", err);
+      response.status(500).end();
+      return;
+    }
+    // Cookie must be readable by the client-side bootstrap fail-safe
+    // (it parses document.cookie to decide whether to mount the
+    // overlay), so HttpOnly is intentionally OFF — the tamper-resistant
+    // property comes from HMAC verification on the server, not from
+    // hiding the value from JS. See docs/ACCESS-CONTROL.md "Gate
+    // cookie + HttpOnly trade-off".
+    const isSecureRequest =
+      request.protocol === "https" ||
+      (typeof request.get("x-forwarded-proto") === "string" &&
+        request.get("x-forwarded-proto")?.toLowerCase() === "https");
+    const cookieParts = [
+      `${pyanchorConfig.gateCookieName}=${token}`,
+      "Path=/",
+      "SameSite=Strict",
+      `Max-Age=${ttlSec}`
+    ];
+    if (isSecureRequest) cookieParts.push("Secure");
+    response.setHeader("Set-Cookie", cookieParts.join("; "));
+    response.redirect(302, "/");
+  });
+}
 
 // v0.16.0: BUILT_IN_LOCALE_SET imported from `src/shared/locales.ts`
 // so this whitelist and the bootstrap auto-inject list can never

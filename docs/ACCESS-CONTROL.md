@@ -36,7 +36,9 @@ warrants.
 | 2 | **Bind address** | Which network interfaces the sidecar listens on | `PYANCHOR_HOST=127.0.0.1` (loopback only) | `127.0.0.1` |
 | 3 | **Origin allowlist (CSRF)** | Which `Origin:` headers `/api/edit` accepts | `PYANCHOR_ALLOWED_ORIGINS=https://app.example.com,...` | empty (warns on boot) |
 | 4 | **Trusted hosts (browser)** | Which hosts the bootstrap script will mount on | `<script data-pyanchor-trusted-hosts="prod.example.com,...">` | `localhost / 127.0.0.1 / *.local` |
-| 5 | **Gate cookie** | Sidecar refuses every request without a host-set cookie — used to tie pyanchor access to your existing auth | Sidecar: `PYANCHOR_REQUIRE_GATE_COOKIE=true` + `PYANCHOR_GATE_COOKIE_NAME=pyanchor_dev`. Host app: middleware sets the cookie after its own auth check. | off |
+| 5 | **Gate cookie (presence-only)** | Sidecar refuses requests without a named cookie. Treats any non-empty value as valid — a discoverability gate, not a forgery-resistant boundary. See "Gate cookie modes" below. | Sidecar: `PYANCHOR_REQUIRE_GATE_COOKIE=true` + `PYANCHOR_GATE_COOKIE_NAME=pyanchor_dev`. Host app: middleware sets the cookie after its own auth check. | off |
+| 5b | **Gate cookie (HMAC, v0.37.0)** | Adds HS256 JWT verification to layer 5 — a forged `=1` cookie from devtools console is rejected with 403. The cookie is now a forgery-resistant boundary. | Add `PYANCHOR_GATE_COOKIE_HMAC_SECRET=$(openssl rand -hex 64)`. Host app issues the cookie as a signed JWT (or uses layer 5c). | off |
+| 5c | **Sidecar unlock endpoint (v0.37.0)** | Optional `GET /_pyanchor/unlock?secret=<X>` route that issues a signed JWT cookie. Static-build deployments (vite/Astro/Next-export → nginx) that have nowhere natural to issue a cookie can use this instead of host-app middleware. Refuses to start unless layer 5b is also enabled. | Add `PYANCHOR_UNLOCK_SECRET=$(openssl rand -hex 64)` (in addition to layer 5b's secret) — endpoint registers automatically. Override path with `PYANCHOR_UNLOCK_PATH`. | off |
 | 6 | **Bootstrap fail-safe** | Browser-side defense-in-depth — overlay refuses to mount if the named cookie isn't present | `<script data-pyanchor-require-gate-cookie="pyanchor_dev">` | off |
 | 7 | **Reverse proxy gate (nginx / Caddy)** | IP allowlist, basic auth, SSO subrequest auth, mTLS — anything your proxy supports | nginx: `allow 10.0.0.0/8; deny all;` or `auth_request /sso-check;` in front of `location /_pyanchor/` | up to operator |
 | 8 | **systemd `IPAddressAllow/Deny`** | Linux kernel-level network filter (cgroup v2) — only relevant under systemd | Edit the unit's `IPAddressDeny=`/`IPAddressAllow=` directives. ⚠ Don't blanket-block outbound or you'll cut off agent CLIs / GitHub / webhooks. | not set in the shipped template |
@@ -115,14 +117,88 @@ response.cookies.set("pyanchor_dev", "1", {
 > never see it and the overlay never mounts — even for users who
 > passed the server-side check.
 >
-> The shipped examples all use **non-HttpOnly** gate cookies. The
-> cookie value is a literal `"1"` marker — it carries no auth
-> secret. The sidecar token (visible in HTML for any page reader)
-> is the actual privilege boundary, so HttpOnly on the gate cookie
-> adds no real security. If you really want HttpOnly (your security
-> review insists), drop the bootstrap fail-safe attribute and rely
-> on the server-side `PYANCHOR_REQUIRE_GATE_COOKIE` enforcement
-> alone (one fewer layer, but still defense in depth).
+> The shipped examples all use **non-HttpOnly** gate cookies. In
+> presence-only mode (default, layer 5) the cookie value is a
+> literal `"1"` marker carrying no auth secret — JS visibility
+> changes nothing, since an attacker who learns the cookie name
+> (visible as `data-pyanchor-require-gate-cookie="..."` in any
+> page's HTML source) can forge `document.cookie="<name>=1"` from
+> devtools console. **In HMAC mode (layer 5b, v0.37.0) the cookie
+> value is a signed JWT and forgery is rejected with 403** — the
+> tamper-resistance comes from server-side HMAC verification, not
+> from hiding the cookie from JS, so HttpOnly remains unnecessary.
+
+#### Gate cookie modes
+
+There are two server-side enforcement modes for layer 5. Pick based
+on your threat model.
+
+**Presence-only mode** (default, pre-v0.37 behavior). The sidecar
+checks that the named cookie exists with any non-empty value. Any
+visitor who learns the cookie *name* — visible in HTML source as
+`data-pyanchor-require-gate-cookie="<name>"` — can forge it from
+devtools console:
+
+```js
+document.cookie = "pyanchor_dev=1; Path=/; SameSite=Strict; Secure"
+// → bypasses layer 5
+```
+
+This mode is a **discoverability gate**, not a forgery-resistant
+boundary. It still blocks bots / crawlers / casual visitors (they
+have no reason to try the cookie), and it composes with the rest of
+the stack — but on its own it's not a privilege boundary. Use it
+when an attacker who reads page source is *already inside* (e.g.
+you've combined it with NextAuth's session cookie pattern below,
+where the gate cookie is set by your own middleware after a real
+auth check).
+
+**HMAC mode** (v0.37.0, opt-in). Set
+`PYANCHOR_GATE_COOKIE_HMAC_SECRET=$(openssl rand -hex 64)` — the
+sidecar now requires the cookie value to be a valid HS256 JWT
+signed with that secret. A forged `=1` is rejected with 403 + a
+diagnostic `X-Pyanchor-Gate-Status: malformed` header (for log
+operators; never trust this header in client code). The JWT format
+is standard `header.payload.signature` so anyone can decode at
+[jwt.io](https://jwt.io) for debugging.
+
+The sidecar exports a helper for host apps that want to issue the
+cookie themselves:
+
+```ts
+import { signGateJwt } from "pyanchor/dist/gate-jwt"; // available v0.37.0+
+
+// In your host-app middleware, after the user's real auth passes:
+const token = signGateJwt(process.env.PYANCHOR_GATE_COOKIE_HMAC_SECRET!, {
+  ttlSec: 60 * 60 * 24 * 30, // 30 days
+  sub: session.user.email     // optional, for your own audit
+});
+response.cookies.set("pyanchor_dev", token, {
+  sameSite: "strict",
+  path: "/",
+  maxAge: 60 * 60 * 24 * 30
+  // not HttpOnly — bootstrap fail-safe needs to read it from JS
+});
+```
+
+For static-build deployments (vite/Astro/Next-export → nginx) that
+have no host-app middleware, set `PYANCHOR_UNLOCK_SECRET=$(openssl
+rand -hex 64)` to expose `GET /_pyanchor/unlock?secret=<X>` from the
+sidecar — wrong/missing secret returns 404 (don't leak existence),
+right secret returns 302 + Set-Cookie containing the JWT. The
+endpoint refuses to register unless HMAC mode is also enabled, so
+you can't accidentally ship an unsigned-cookie unlock URL. Override
+the path with `PYANCHOR_UNLOCK_PATH=/_pyanchor/whatever` if you'd
+rather it not be guessable from the default.
+
+> **Why we shipped presence-only first.** The pre-v0.37 design
+> assumed the gate cookie's job was to compose with a host-app
+> auth layer that was already doing the real work — so the cookie
+> just had to be a *signal* that the host app vouched for the
+> visitor, not a *proof*. That assumption broke for static-build
+> deployments where there is no host-app middleware to do the real
+> work. v0.37.0 adds HMAC mode + the unlock endpoint so those
+> deployments have a forgery-resistant primitive too.
 
 Bootstrap tag with fail-safe:
 

@@ -309,6 +309,39 @@ export const pyanchorConfig = {
   requireGateCookie: optionalBool("PYANCHOR_REQUIRE_GATE_COOKIE", false),
   gateCookieName: optionalEnv("PYANCHOR_GATE_COOKIE_NAME", "pyanchor_dev"),
 
+  // ─── gate cookie HMAC mode (v0.37.0) ───────────────────────────
+  // When PYANCHOR_GATE_COOKIE_HMAC_SECRET is set, the gate-cookie
+  // value is verified as an HS256 JWT (see src/gate-jwt.ts) instead
+  // of being treated as a presence-only marker. A forged cookie
+  // ("=1" from devtools console) is rejected with 403.
+  //
+  // Pre-v0.37 behavior (presence-only) is preserved when the secret
+  // is empty — same env, no migration required, hosts opt in by
+  // setting the secret + having their issuer (own middleware OR the
+  // /_pyanchor/unlock endpoint below) emit JWT cookies.
+  //
+  // Recommended secret: 64 random bytes hex-encoded.
+  gateCookieHmacSecret: optionalEnv("PYANCHOR_GATE_COOKIE_HMAC_SECRET", ""),
+
+  // ─── optional sidecar-side unlock endpoint (v0.37.0) ───────────
+  // Some deployments (static-build + nginx in front) have nowhere
+  // natural to issue a signed cookie — there is no live host-app
+  // middleware. Set both PYANCHOR_UNLOCK_SECRET and
+  // PYANCHOR_GATE_COOKIE_HMAC_SECRET to enable a sidecar route at
+  // PYANCHOR_UNLOCK_PATH (default /_pyanchor/unlock):
+  //
+  //   GET /_pyanchor/unlock?secret=<UNLOCK_SECRET>
+  //     → 302 / + Set-Cookie: <gateCookieName>=<HS256-JWT>
+  //   wrong/missing secret → 404 (don't leak the endpoint's existence)
+  //
+  // The endpoint is NOT registered when either env is empty, so
+  // existing deployments are unaffected.
+  unlockSecret: optionalEnv("PYANCHOR_UNLOCK_SECRET", ""),
+  unlockPath: optionalEnv("PYANCHOR_UNLOCK_PATH", "/_pyanchor/unlock"),
+  // TTL (seconds) of the JWT cookie issued by the unlock endpoint.
+  // Default 30 days, matches the demo cookie's pre-v0.37 Max-Age.
+  unlockCookieTtlSec: optionalNumber("PYANCHOR_UNLOCK_COOKIE_TTL_S", 60 * 60 * 24 * 30),
+
   // ─── paths (derived / overridable) ─────────────────────────────
   stateDir,
   stateFile: path.join(stateDir, "state.json"),

@@ -2,6 +2,7 @@ import { timingSafeEqual as cryptoTimingSafeEqual } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 
 import { pyanchorConfig, REQUIRED_PLACEHOLDER } from "./config";
+import { GateJwtError, verifyGateJwt } from "./gate-jwt";
 import { validateSession } from "./sessions";
 
 const tokenBytes = (() => {
@@ -36,6 +37,20 @@ export const SESSION_COOKIE = "pyanchor_session";
  *
  * The check fires BEFORE `requireToken` so anonymous traffic gets a
  * 403 without leaking whether the token was even configured.
+ *
+ * v0.37.0 — two verification modes:
+ *   - **Presence-only** (default; pre-v0.37 behavior): cookie just
+ *     needs to be present and non-empty. Accepts any value, including
+ *     a forged `=1` from devtools console. This mode is a
+ *     discoverability gate, not a real privilege boundary.
+ *   - **HMAC** (when `PYANCHOR_GATE_COOKIE_HMAC_SECRET` is set): the
+ *     cookie value is verified as an HS256 JWT — see src/gate-jwt.ts.
+ *     A forged cookie is rejected with 403; expired cookies are
+ *     rejected with 403 + a hint header.
+ *
+ * Both modes still require the cookie to be present, so the layer-6
+ * bootstrap fail-safe (`data-pyanchor-require-gate-cookie`) keeps
+ * working unchanged.
  */
 export function requireGateCookie(
   request: Request,
@@ -57,6 +72,28 @@ export function requireGateCookie(
       });
     return;
   }
+
+  // HMAC mode: verify JWT signature + expiry. Forged or expired
+  // cookies are rejected; presence alone is no longer sufficient.
+  const secret = pyanchorConfig.gateCookieHmacSecret;
+  if (secret) {
+    try {
+      verifyGateJwt(value, secret);
+    } catch (err) {
+      const code = err instanceof GateJwtError ? err.code : "malformed";
+      // Don't return the underlying message to the client — it can
+      // leak signal about the secret length / canonical-form check.
+      // The X-Pyanchor-Gate-Status header is for legit operators
+      // tailing logs; avoid relying on it programmatically.
+      response.setHeader("X-Pyanchor-Gate-Status", code);
+      response.status(403).json({
+        error:
+          "Production gate cookie invalid. Reissue the cookie via your host app middleware or the sidecar unlock endpoint."
+      });
+      return;
+    }
+  }
+
   next();
 }
 

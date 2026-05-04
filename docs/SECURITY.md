@@ -88,6 +88,19 @@ Defense layers stack:
 
 Anonymous attacker has to break **all four** to see anything.
 
+> **Forgery resistance (v0.37.0):** the four layers above all gate
+> on cookie *presence*, not value. An attacker who reads the page
+> source and learns the cookie name can forge `document.cookie="<name>=1"`
+> from devtools console and slip past layers 3 + 4. To make the gate
+> cookie a forgery-resistant boundary, also set
+> `PYANCHOR_GATE_COOKIE_HMAC_SECRET=$(openssl rand -hex 64)` and
+> issue the cookie as a signed HS256 JWT (use `signGateJwt()` from
+> `pyanchor/dist/gate-jwt`). For static-build deployments without a
+> host-app middleware to issue the cookie, also set
+> `PYANCHOR_UNLOCK_SECRET` to enable the sidecar's
+> `/_pyanchor/unlock?secret=<X>` route. See
+> [`docs/ACCESS-CONTROL.md`](./ACCESS-CONTROL.md#gate-cookie-modes).
+
 ### C. Existing auth (NextAuth / Clerk / Lucia / etc.)
 
 If your host app already has authentication, use it as the gate

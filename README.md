@@ -601,7 +601,13 @@ marked `Pre-1.0` are still under iteration.
 - **Output modes**: `apply` (default rsync+restart), `pr` (git +
   `gh pr create`), `dryrun`
 - **Production gating**: `PYANCHOR_REQUIRE_GATE_COOKIE` + bootstrap
-  fail-safe — anonymous traffic can't even fetch the bootstrap script
+  fail-safe — anonymous traffic can't even fetch the bootstrap script.
+  v0.37.0+ adds **HMAC-signed gate cookies**
+  (`PYANCHOR_GATE_COOKIE_HMAC_SECRET`) so a forged `=1` cookie from
+  devtools console is rejected with 403, plus an optional
+  `/_pyanchor/unlock?secret=<X>` sidecar endpoint for static-build
+  deployments without host-app middleware
+  ([`docs/ACCESS-CONTROL.md`](./docs/ACCESS-CONTROL.md#gate-cookie-modes))
 - **Audit log**: append-only JSONL with documented schema
   ([`AuditEvent`](./src/audit.ts))
 - **Identity passthrough**: `X-Pyanchor-Actor` header — v0.27.0+

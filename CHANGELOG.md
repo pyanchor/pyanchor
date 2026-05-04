@@ -7,6 +7,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-05-04
+
+Real fix for the gate-cookie forgery gap. Pre-v0.37 the layer-5
+`PYANCHOR_REQUIRE_GATE_COOKIE` check accepted any non-empty cookie
+value — an attacker who learned the cookie *name* (visible as
+`data-pyanchor-require-gate-cookie="<name>"` in any page's HTML)
+could forge it from devtools console with one line:
+
+```js
+document.cookie = "pyanchor_dev=1; Path=/; SameSite=Strict; Secure"
+```
+
+That made the layer a discoverability gate at best, not a
+forgery-resistant boundary. v0.37 adds **HMAC mode** (opt-in,
+backward-compatible) and an **optional sidecar unlock endpoint**
+for static-build deployments that have no host-app middleware to
+issue signed cookies.
+
+### Added — HMAC-signed gate cookie (layer 5b)
+- `PYANCHOR_GATE_COOKIE_HMAC_SECRET` env. When set, the sidecar
+  verifies the gate-cookie value as an HS256 JWT instead of
+  presence-only. Forged or expired cookies → 403 with
+  `X-Pyanchor-Gate-Status: <code>` diagnostic header (operator-only;
+  client error body stays generic to not leak verification details).
+- `src/gate-jwt.ts` — self-contained HS256 JWT helper using
+  `node:crypto` only (no new runtime dep). Standard
+  `header.payload.signature` format so anyone can decode at jwt.io
+  for debugging. Exposes `signGateJwt(secret, opts)` +
+  `verifyGateJwt(token, secret, nowSec?)` for host-app middleware
+  that issues the cookie itself.
+- Alg-confusion defense: parser only accepts the canonical HS256
+  header — `alg=none`, `alg=RS256`, and even `HS256` in non-canonical
+  serialization (whitespace / field order) are all rejected with
+  `wrong-alg` before HMAC compare.
+- 60s clock-skew tolerance on `iat`; future-dated tokens beyond that
+  → `malformed`.
+
+### Added — Sidecar unlock endpoint (layer 5c)
+- `PYANCHOR_UNLOCK_SECRET` + `PYANCHOR_UNLOCK_PATH` (default
+  `/_pyanchor/unlock`). Registers `GET <path>?secret=<X>`:
+    - Wrong / missing secret → 404 (don't leak existence)
+    - Right secret → 302 `/` + `Set-Cookie: <name>=<HS256-JWT>;
+      Path=/; SameSite=Strict; Secure?; Max-Age=...`
+- TTL via `PYANCHOR_UNLOCK_COOKIE_TTL_S` (default 30 days, matching
+  the demo cookie's pre-v0.37 Max-Age).
+- **Refuses to register unless HMAC mode is also enabled** — an
+  unsigned-cookie unlock endpoint would be the same security theater
+  as the pre-v0.37 `=1` marker, so we explicitly won't ship it.
+- Use case: vite/Astro/Next-export → nginx deployments where there's
+  no host-app middleware to issue a signed cookie.
+
+### Changed
+- `src/auth.ts` — `requireGateCookie` middleware now branches on
+  `PYANCHOR_GATE_COOKIE_HMAC_SECRET`. When set, value is verified;
+  when empty, falls back to the v0.17 presence-only behavior. **No
+  migration required for existing deployments** — the new env is
+  off by default.
+- `docs/ACCESS-CONTROL.md` — layers 5 / 5b / 5c documented in the
+  9-layer table, with explicit threat model: presence-only is a
+  *discoverability gate*, HMAC mode is the *forgery-resistant
+  boundary*. The pre-v0.37 docs were honest in spirit (line 118-125
+  hinted "the cookie value is a literal `1` marker") but never
+  explicit about the bypass — now stated outright.
+- `docs/SECURITY.md` — production gate cookie pattern gets a
+  forgery-resistance callout pointing at HMAC mode.
+- `README.md` — Shipped highlights "Production gating" bullet
+  expanded to mention HMAC mode + unlock endpoint.
+
+### Tests
+- `tests/gate-jwt.test.ts` (new, 20 cases): sign/verify round-trip,
+  bad-signature, tampered-payload, expired, clock-skew tolerance,
+  alg-confusion (alg=none, alg=RS256, non-canonical HS256), payload
+  shape validation, missing-secret.
+- `tests/auth.test.ts` (+6 cases): backward-compat presence-only
+  mode preserved when secret unset; HMAC mode rejects forged `=1`,
+  accepts properly signed JWT, rejects wrong-secret signatures,
+  rejects expired tokens, error body never leaks verification
+  details (no mention of HMAC / signature / alg / base64 / payload).
+- `tests/subprocess-smoke/server-unlock-endpoint.test.ts` (new, 8
+  cases): endpoint not registered when either secret env is unset;
+  wrong/empty/missing secret → 404; right secret → 302 + valid 3-part
+  JWT cookie; issued cookie subsequently passes `requireGateCookie`;
+  forged `=1` still rejected; `PYANCHOR_UNLOCK_PATH` override
+  honored.
+
+### Notes
+- The presence-only mode (default) is intentionally retained for
+  backward compatibility. Hosts that already had the gate cookie
+  set up with a magic-word URL or NextAuth pattern keep working with
+  no env change. To upgrade to HMAC mode, add the secret env, swap
+  cookie issuance to use `signGateJwt()`, and the sidecar transparently
+  starts verifying.
+- The unlock endpoint refuses to register unsigned, even by accident
+  — there is no env combination that exposes an unsigned-cookie
+  unlock route.
+- v0.37.0 is a feature release; semver minor bump (0.36.2 → 0.37.0)
+  per the new public surface (env vars + helper export).
+
 ## [0.36.2] - 2026-05-04
 
 Correction patch. The v0.36.0 release note claimed pyanchor and

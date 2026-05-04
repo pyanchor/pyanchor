@@ -359,3 +359,125 @@ describe("requireGateCookie (v0.17.0 production gating)", () => {
     expect(nextRight).toHaveBeenCalledOnce();
   });
 });
+
+describe("requireGateCookie HMAC mode (v0.37.0)", () => {
+  // Isolated env per test ensures the v0.17 presence-only describe
+  // block above stays unaffected (those tests don't set HMAC_SECRET).
+  const HMAC_SECRET = "auth-test-hmac-secret-deadbeef-deadbeef-deadbeef";
+
+  it("falls back to presence-only when HMAC_SECRET is empty (backward compat)", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    delete process.env.PYANCHOR_GATE_COOKIE_HMAC_SECRET;
+    const { requireGateCookie } = await import("../src/auth");
+
+    // Even a forged "=1" value passes when the HMAC secret is unset.
+    const req = makeRequest({ cookies: { pyanchor_dev: "1" } });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects a forged literal `1` cookie when HMAC_SECRET is set", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_GATE_COOKIE_HMAC_SECRET = HMAC_SECRET;
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+
+    const req = makeRequest({ cookies: { pyanchor_dev: "1" } });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    expect(res.statusCode).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.headers["X-Pyanchor-Gate-Status"]).toBe("malformed");
+  });
+
+  it("accepts a properly signed JWT", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_GATE_COOKIE_HMAC_SECRET = HMAC_SECRET;
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+    const { signGateJwt } = await import("../src/gate-jwt");
+
+    const token = signGateJwt(HMAC_SECRET, { ttlSec: 600 });
+    const req = makeRequest({ cookies: { pyanchor_dev: token } });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    expect(next).toHaveBeenCalledOnce();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects a JWT signed with a different secret (bad-signature)", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_GATE_COOKIE_HMAC_SECRET = HMAC_SECRET;
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+    const { signGateJwt } = await import("../src/gate-jwt");
+
+    const tokenWithWrongKey = signGateJwt(
+      "different-secret-cafebabe-cafebabe-cafebabe-cafe",
+      { ttlSec: 600 }
+    );
+    const req = makeRequest({ cookies: { pyanchor_dev: tokenWithWrongKey } });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    expect(res.statusCode).toBe(403);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.headers["X-Pyanchor-Gate-Status"]).toBe("bad-signature");
+  });
+
+  it("rejects an expired JWT", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_GATE_COOKIE_HMAC_SECRET = HMAC_SECRET;
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+    const { signGateJwt } = await import("../src/gate-jwt");
+
+    // 1-hour-old token with 60s TTL → expired by ~59 minutes.
+    const longAgo = Math.floor(Date.now() / 1000) - 3600;
+    const expired = signGateJwt(HMAC_SECRET, { iat: longAgo, ttlSec: 60 });
+    const req = makeRequest({ cookies: { pyanchor_dev: expired } });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.headers["X-Pyanchor-Gate-Status"]).toBe("expired");
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("error body does NOT leak HMAC verification details", async () => {
+    process.env.PYANCHOR_REQUIRE_GATE_COOKIE = "true";
+    process.env.PYANCHOR_GATE_COOKIE_HMAC_SECRET = HMAC_SECRET;
+    process.env.PYANCHOR_TOKEN = "supersecret-token-value-12345678";
+    const { requireGateCookie } = await import("../src/auth");
+
+    const req = makeRequest({ cookies: { pyanchor_dev: "garbage.value.here" } });
+    const res = makeResponse();
+    const next = vi.fn() as NextFunction;
+
+    requireGateCookie(req, res, next);
+
+    // Body should be a generic "invalid" message — no mention of
+    // signatures, algorithms, base64, or which check failed.
+    const body = res.jsonBody as { error?: string } | undefined;
+    expect(body?.error).toBeDefined();
+    expect(body?.error).not.toMatch(/HMAC|signature|alg|base64|payload/i);
+    // The status header is still set for legit operators tailing logs.
+    expect(res.headers["X-Pyanchor-Gate-Status"]).toBeDefined();
+  });
+});
