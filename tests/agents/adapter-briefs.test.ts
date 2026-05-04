@@ -256,7 +256,7 @@ describe("pollinations.buildBrief (v0.36.0)", () => {
     expect(brief).toContain("Do NOT call write_file");
   });
 
-  it("truncates conversation history to the last 6 turns", async () => {
+  it("truncates conversation history to the last 4 turns (v0.38.1)", async () => {
     const { buildBrief } = await import("../../src/agents/pollinations");
     const messages = Array.from({ length: 10 }, (_, i) => ({
       id: String(i),
@@ -268,8 +268,58 @@ describe("pollinations.buildBrief (v0.36.0)", () => {
       status: null
     }));
     const brief = buildBrief(baseInput({ recentMessages: messages }));
-    expect(brief).not.toContain("pmsg-3");
-    expect(brief).toContain("pmsg-4");
+    // Cap is 4 (down from pre-v0.38.1's 6) — see formatRecent comment.
+    expect(brief).not.toContain("pmsg-5");
+    expect(brief).toContain("pmsg-6");
     expect(brief).toContain("pmsg-9");
+  });
+
+  it("v0.38.1 — drops `system` rows and assistant boilerplate-done summaries", async () => {
+    const { buildBrief } = await import("../../src/agents/pollinations");
+    const messages = [
+      {
+        id: "u1",
+        jobId: "j",
+        role: "user" as const,
+        mode: "edit" as const,
+        text: "real-user-prompt-A",
+        createdAt: new Date(0).toISOString(),
+        status: null
+      },
+      {
+        id: "s1",
+        jobId: "j",
+        role: "system" as const,
+        mode: "edit" as const,
+        text: "worker-chatter-do-not-show",
+        createdAt: new Date(0).toISOString(),
+        status: null
+      },
+      {
+        id: "a1",
+        jobId: "j",
+        role: "assistant" as const,
+        mode: "edit" as const,
+        text: "Done (no explicit summary).",
+        createdAt: new Date(0).toISOString(),
+        status: "done" as const
+      },
+      {
+        id: "u2",
+        jobId: "j",
+        role: "user" as const,
+        mode: "edit" as const,
+        text: "real-user-prompt-B",
+        createdAt: new Date(0).toISOString(),
+        status: null
+      }
+    ];
+    const brief = buildBrief(baseInput({ recentMessages: messages }));
+    expect(brief).toContain("real-user-prompt-A");
+    expect(brief).toContain("real-user-prompt-B");
+    // System chatter and boilerplate-done summaries are stripped so
+    // they don't teach the model "previous turns ended in a no-op".
+    expect(brief).not.toContain("worker-chatter-do-not-show");
+    expect(brief).not.toContain("Done (no explicit summary)");
   });
 });

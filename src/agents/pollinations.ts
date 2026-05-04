@@ -73,11 +73,29 @@ type ChatMessage =
   | { role: "assistant"; content?: string | null; tool_calls?: ToolCall[] }
   | { role: "tool"; tool_call_id: string; content: string };
 
+// v0.38.1 — filter and trim history before injecting into the brief.
+//
+// Pre-v0.38.1 we passed the last 6 messages verbatim. With pyanchor's
+// shorter Pollinations cycles, prior assistant turns were often the
+// generic "Done (no explicit summary)." marker; replaying those at
+// the top of the next brief taught the model "previous turns ended
+// with an immediate done" and it started no-op'ing on the new request.
+//
+// Now we drop assistant boilerplate-summaries entirely, drop system
+// rows (they're worker chatter the model doesn't need), and cap to
+// the last 4 user-facing turns.
+const ASSISTANT_BOILERPLATE = /^(done|done\.|done \(no explicit summary\)\.?)$/i;
+
 function formatRecent(messages: AgentRunInput["recentMessages"]): string {
-  return messages
-    .slice(-6)
+  const filtered = messages.filter((m) => {
+    if (m.role === "system") return false;
+    if (m.role === "assistant" && ASSISTANT_BOILERPLATE.test(m.text.trim())) return false;
+    return true;
+  });
+  return filtered
+    .slice(-4)
     .map((m) => {
-      const role = m.role === "assistant" ? "Assistant" : m.role === "system" ? "System" : "User";
+      const role = m.role === "assistant" ? "Assistant" : "User";
       return `- ${role} [${m.mode}]${m.status ? ` (${m.status})` : ""}: ${m.text}`;
     })
     .join("\n");
@@ -104,16 +122,16 @@ export function buildBrief(input: AgentRunInput): string {
     const framework = selectFramework(pyanchorConfig.framework);
     sections.push("");
     sections.push(
-      "Apply the change to the appropriate files in the workspace. " +
+      "Apply the change by calling read_file on the target file, THEN write_file " +
+        "with the full new contents, THEN done. Do not skip the write_file step. " +
         `${framework.briefBuildHint} ` +
-        "Do not refactor unrelated areas. Call the `done` tool with a 2-3 line summary " +
-        "when finished."
+        "Do not refactor unrelated areas. The `done` summary should be 2-3 lines."
     );
   } else {
     sections.push("");
     sections.push(
-      "Inspect the relevant files and answer the user's question. Do NOT call write_file. " +
-        "Call the `done` tool with your answer when finished."
+      "Inspect the relevant files with read_file and answer the user's question. " +
+        "Do NOT call write_file. Call the `done` tool with your answer when finished."
     );
   }
 
@@ -121,19 +139,40 @@ export function buildBrief(input: AgentRunInput): string {
 }
 
 const SYSTEM_PROMPT = [
-  "You are pyanchor's Pollinations agent. You edit a small slice of a running web app",
-  "via four tools: list_files, read_file, write_file, done.",
+  "You are pyanchor's Pollinations agent. You edit a small slice of a running",
+  "web app via four tools: list_files, read_file, write_file, done.",
   "",
-  "Workflow:",
-  "  1. Use list_files / read_file to understand the area you must change.",
-  "  2. Make the smallest possible edit with write_file (full file contents).",
-  "  3. Call done with a short summary.",
+  "MANDATORY workflow for every edit-mode request:",
+  "  1. ALWAYS call read_file at least once on the file you intend to change",
+  "     BEFORE doing anything else. Never assume you remember a file's contents.",
+  "  2. After reading, ALWAYS call write_file with the FULL new contents of",
+  "     the file (even if only one line changes). One write_file per file is",
+  "     enough; do not loop multiple write_files on the same file.",
+  "  3. After write_file, call done with a 2-3 line summary of what changed.",
   "",
-  "Rules:",
-  "  - All paths are workspace-relative. Never use absolute paths or `..` segments.",
-  "  - Edit only the files needed for the user request. Do not refactor.",
-  "  - In chat mode, never call write_file.",
-  "  - When you have nothing more to do, call done. Do not loop forever."
+  "Tool-call discipline (violations cause silent failures):",
+  "  - In edit mode, NEVER call done without calling write_file first. If you",
+  "    think no change is needed, call write_file with the file contents",
+  "    unchanged before calling done — you'll be wrong about \"no change\"",
+  "    most of the time and the user prefers a no-op edit to a missed edit.",
+  "  - NEVER pass diff/patch syntax to write_file. The `content` argument is",
+  "    the literal new file contents — no \"+\"/\"-\" line prefixes, no \"@@\"",
+  "    hunk headers, no \"diff --git\" lines. write_file replaces the whole",
+  "    file with whatever string you supply, verbatim.",
+  "  - In chat mode, NEVER call write_file. Use read_file to inspect, then",
+  "    call done with the answer in the summary.",
+  "",
+  "Path discipline:",
+  "  - All paths are workspace-relative.",
+  "  - Never use absolute paths or `..` segments.",
+  "  - Common locations: package.json / vite.config.ts / tsconfig.json /",
+  "    next.config.js / index.html sit at the workspace ROOT, not under src/.",
+  "    Component sources sit under src/.",
+  "",
+  "Constraint discipline:",
+  "  - Edit only the files explicitly named or implied by the user request.",
+  "  - Do NOT modify package.json or package-lock.json unless the user",
+  "    request is explicitly about adding or removing a dependency."
 ].join("\n");
 
 const TOOLS = [
@@ -374,9 +413,17 @@ export class PollinationsAgentRunner implements AgentRunner {
         break;
       }
 
+      // v0.38.1 — strip `content` when tool_calls are present. Some
+      // Bedrock-routed models on Pollinations (notably nova-fast) emit
+      // a "<thinking>…</thinking>" prelude in `content` alongside the
+      // tool_calls; replaying that on the next turn trips the Bedrock
+      // backend's "Model produced invalid sequence as part of ToolUse"
+      // rejection. The OpenAI canonical shape for an assistant turn
+      // that calls tools is content=null + tool_calls=[…], and that's
+      // what every Pollinations model accepts on the next turn.
       messages.push({
         role: "assistant",
-        content: choice.content ?? null,
+        content: toolCalls.length > 0 ? null : (choice.content ?? null),
         tool_calls: toolCalls
       });
 

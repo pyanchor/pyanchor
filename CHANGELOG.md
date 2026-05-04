@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.38.1] - 2026-05-04
+
+Pollinations adapter multi-turn quality fix. End-to-end testing
+against the live demo surfaced three reproducible failure modes
+that were specific to the adapter's multi-turn loop (not the
+underlying models — single-turn raw HTTP calls produced correct
+tool_calls for every model tested):
+
+  - **nova-fast** failed on turn 2 with Bedrock's "Model produced
+    invalid sequence as part of ToolUse". Root cause: nova-fast
+    emits `<thinking>…</thinking>` raw text in `content`
+    alongside `tool_calls`; replaying that on the next turn
+    tripped the Bedrock backend's strict assistant-message
+    schema.
+  - **openai-fast** wrote files with unified-diff syntax (`+`
+    line prefixes, `@@` hunk markers) instead of resolved file
+    contents, causing TypeScript syntax errors. The system prompt
+    didn't explicitly forbid diff-format output.
+  - **qwen-coder** called `done` immediately on simple single-line
+    edit prompts, skipping `read_file` and `write_file` entirely
+    (no-op edit). The brief's `recent conversation` section was
+    replaying prior assistant boilerplate (`Done (no explicit
+    summary).`) and teaching the model "previous turns ended
+    immediately with done".
+
+### Changed
+- `src/agents/pollinations.ts`:
+  - `SYSTEM_PROMPT` rewritten with explicit MANDATORY workflow
+    (read_file → write_file → done), tool-call discipline rules
+    (no diff syntax, no done without write_file in edit mode),
+    and workspace-structure hints (`vite.config.ts /
+    package.json / tsconfig.json` are at workspace root, not
+    under `src/`). Pre-fix the prompt was only 14 lines and
+    permissive; now 35 lines with explicit forbiddens.
+  - `buildBrief()` edit-mode tail now requires the agent to
+    "read_file on the target file, THEN write_file with the full
+    new contents, THEN done. Do not skip the write_file step."
+    Pre-fix it just said "Apply the change" — too permissive.
+  - `formatRecent()` filters `system` rows and assistant
+    boilerplate (`Done`, `Done (no explicit summary).`) before
+    injecting into the brief, and caps to the last 4 turns
+    (down from 6). Stops the boilerplate-replay learning effect.
+  - The assistant-message push in the turn loop now strips
+    `content` to `null` whenever `tool_calls` is non-empty.
+    Matches the OpenAI canonical shape and eliminates Bedrock's
+    invalid-sequence rejection.
+
+### Tests
+- `tests/agents/adapter-briefs.test.ts`:
+  - "truncates conversation history to the last 6 turns" updated
+    to "to the last 4 turns" (cap dropped per the new
+    `formatRecent` filter behavior).
+  - New: "drops system rows and assistant boilerplate-done
+    summaries" — locks the new filter behavior so future
+    refactors can't silently re-introduce the boilerplate-replay
+    problem. Total adapter-brief cases 23 → 24.
+
+### Notes
+- This is a quality fix, not an API change. Existing env vars and
+  the adapter's public surface are unchanged.
+- Recommended default model for production use unchanged
+  (`nova-fast` per v0.38.0); the v0.38.1 fixes make `nova-fast`
+  actually usable on the live demo workload that pre-fix tripped
+  the Bedrock invalid-sequence error.
+
 ## [0.38.0] - 2026-05-04
 
 Migrated the Pollinations adapter to the new
