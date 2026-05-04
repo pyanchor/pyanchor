@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.36.2] - 2026-05-04
+
+Correction patch. The v0.36.0 release note claimed pyanchor and
+EnverBot would share a single Pollinations OSS-app token — this
+turned out wrong: pyanchor gets its own dedicated app on
+auth.pollinations.ai, separate from EnverBot's. Token is now
+stored at `/home/bot/keys/POLLINATIONS_API_KEY_PYANCHOR` on the
+demo host (mode 600), independent from EnverBot's existing
+`POLLINATIONS_API_KEY`.
+
+### Changed
+- `CHANGELOG.md`: v0.36.0 "Notes" section corrected — removed
+  the "shared bearer with EnverBot" claim. Pyanchor's
+  Pollinations app submission is for a dedicated app/token
+  that does not share quota with any other project.
+- `docs/POLLINATIONS-APP-SUBMISSION.md`: already framed as a
+  dedicated submission (no shared-token wording was present);
+  no body change required.
+
+### Notes
+- No code, test, or runtime behavior change. Tokens are still
+  read from `PYANCHOR_POLLINATIONS_TOKEN` env — just the
+  source-of-truth file on the demo host is renamed for
+  separation of concerns.
+- Demo at https://pyanchor.pyan.kr (sidecar PID rotated at
+  16:33) is now serving with the dedicated pyanchor key.
+
 ## [0.36.1] - 2026-05-04
 
 README + Korean README catch-up for the v0.36.0 adapter ship.
@@ -80,9 +107,10 @@ real chat completion + tool loop against the live endpoint.
 
 ### Notes
 - `user_tier` returned by the API is `anonymous` until the
-  Pollinations team approves the App Submission for the
-  shared OSS-app token. Pyanchor and EnverBot share the same
-  bearer; the upgrade unlocks both at once.
+  Pollinations team approves the App Submission. Pyanchor's
+  submission is for a **dedicated app** — see v0.36.2 for the
+  correction (an earlier draft of this note incorrectly
+  described the token as shared with another project).
 - `dist/worker/runner.cjs` rebuilt — the pollinations adapter
   is bundled into the worker subprocess. No new public dist
   files, no bundle-size guard ceiling change required.
