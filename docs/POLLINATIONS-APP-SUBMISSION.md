@@ -29,15 +29,24 @@ overlay end-to-end with zero install.
 
 The Pollinations adapter calls `POST https://gen.pollinations.ai/v1/chat/completions`
 with `tools: auto` and runs its own tool loop —
-`list_files` → `read_file` → `write_file` → `done` — against
-pyanchor's scratch workspace. It honours `PYANCHOR_POLLINATIONS_TOKEN`
-(Bearer), `PYANCHOR_POLLINATIONS_REFERRER` (attribution), and
+`list_files` → `read_file` → `search_replace` (or `write_file`) →
+`done` — against pyanchor's scratch workspace. It honours
+`PYANCHOR_POLLINATIONS_TOKEN` (Bearer),
+`PYANCHOR_POLLINATIONS_REFERRER` (attribution), and
 `PYANCHOR_POLLINATIONS_MODEL` (default `nova-fast` — Amazon Nova
 Micro, the cheapest tool-capable model in your catalog at
 ~$0.000245/call vs `openai-fast` at ~$0.00055). v0.38.0 migrated
 the adapter from the legacy `text.pollinations.ai/openai` endpoint
 to `gen.pollinations.ai/v1/chat/completions` so the full ~36-model
-catalog is reachable.
+catalog is reachable. v0.39.0 added a `search_replace(path, find,
+replace)` patch-based edit tool so small models don't have to
+re-emit the entire file for every change (closes a class of
+truncation/quality bugs we hit on 200+ line files). v0.40.x added
+host brand override (`data-pyanchor-brand-icon-url` /
+`data-pyanchor-brand-name` on the bootstrap script) so each
+deployment can put their own logo + name in the in-page overlay,
+and explicit response-language detection so a user prompt in
+Korean / Japanese / etc. gets a same-language `done` summary back.
 
 Why this matters for Pollinations: pyanchor is positioned as
 "self-hosted, prod-attached, free-of-vendor-lock-in", and the
@@ -71,13 +80,15 @@ apply without local setup.)
 ## Optional fields
 
 - **GitHub repository**: <https://github.com/pyanchor/pyanchor>
-  (MIT, public, regular releases on npm — current version 0.38.0;
-  the Pollinations adapter shipped in v0.36.0, v0.36.1 / v0.36.2
-  were docs catch-up patches, v0.37.0 added HMAC-signed gate
-  cookies + the optional sidecar unlock endpoint that the
-  reviewer URL below uses, and v0.38.0 migrated the adapter from
-  the legacy `text.pollinations.ai/openai` endpoint to the new
-  `gen.pollinations.ai/v1/chat/completions` gateway.)
+  (MIT, public, regular releases on npm — current version 0.40.2.
+  Pollinations-relevant release path: v0.36.0 introduced the
+  adapter; v0.37.0 added HMAC-signed gate cookies + the sidecar
+  `/_pyanchor/unlock` endpoint the reviewer URL below uses;
+  v0.38.0 migrated to `gen.pollinations.ai/v1/chat/completions`;
+  v0.39.0 added the `search_replace` patch-based edit tool;
+  v0.40.0 added host brand override; v0.40.1 / v0.40.2 added
+  explicit user-prompt-language detection so non-English prompts
+  get same-language summaries.)
 - **App language**: English (with Korean README at
   [`README-ko.md`](https://github.com/pyanchor/pyanchor/blob/main/README-ko.md)).
 
@@ -100,7 +111,7 @@ can verify in three ways:
 
 1. **Static**: open
    <https://github.com/pyanchor/pyanchor/blob/main/src/agents/pollinations.ts>
-   and grep for `text.pollinations.ai/openai`.
+   and grep for `gen.pollinations.ai/v1/chat/completions`.
 2. **Bundle**: `npm pack pyanchor && tar -xOf pyanchor-*.tgz
    package/dist/worker/runner.cjs | grep -c PYANCHOR_POLLINATIONS`
    → returns 5 (one per env var).
@@ -108,14 +119,25 @@ can verify in three ways:
    for the secret. The unlock URL hits the v0.37.0 sidecar
    `/_pyanchor/unlock` route, which validates the secret server-
    side, issues a 30-day HMAC-signed JWT cookie, and 302-redirects
-   to the demo. From there: click the floating pyanchor button,
-   point at any heading, type a short instruction (e.g. "make this
-   blue"), and hit enter. The browser Network tab will show `POST
-   gen.pollinations.ai/v1/chat/completions` with `Referer:
-   https://pyanchor.pyan.kr` plus an `Authorization: Bearer sk_...`
-   header (Pyanchor's dedicated OSS-app token) and `model:
-   "nova-fast"`. The edit is then rsynced into the live deploy by
-   the sidecar and the page reloads with the change visible.
+   to the demo. From there: click the floating pyanchor button
+   (uses our brand icon thanks to v0.40.0), point at any heading,
+   type a short instruction (e.g. "make this blue", or "이 헤딩을
+   파란색으로 만들어줘" — both work), and hit enter. The change
+   is rsynced into the live deploy by the sidecar and the page
+   reloads.
+
+   **Note on the network tab**: the Pollinations API call is
+   server-side from the pyanchor sidecar, NOT browser-side. So
+   the only outbound request the browser sees is `POST /_pyanchor/api/edit`
+   to the sidecar. The actual `POST gen.pollinations.ai/v1/chat/completions`
+   call (with `Authorization: Bearer sk_...`,
+   `Referer: https://pyanchor.pyan.kr`, `model: "nova-fast"`) goes
+   from the sidecar's worker process. To verify it really hits
+   Pollinations, the audit log
+   (`/var/lib/pyanchor-demo/state/audit.jsonl`) records every job
+   with `agent: "pollinations"`, and we can share `journalctl -u
+   pyanchor-demo` excerpts on request that show the outbound
+   fetch.
 
    The unlock secret is **not** included in this public submission
    body — it's emailed separately so reviewers don't need to share
