@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-05-04
+
+Sixth agent backend: Pollinations. First HTTP-only adapter — no
+CLI install required, just an env var. Cleared end-to-end with a
+real chat completion + tool loop against the live endpoint.
+
+### Added
+- **Pollinations agent adapter** (`PYANCHOR_AGENT=pollinations`).
+  Calls `POST https://text.pollinations.ai/openai` (OpenAI-
+  compatible chat completions) with a self-contained
+  `list_files` / `read_file` / `write_file` / `done` tool loop.
+  Workspace path-traversal guard + AbortSignal support. Three
+  auth modes:
+    - **Anonymous** — no token, IP-rate-limited (queue depth 1).
+    - **Referrer** — `PYANCHOR_POLLINATIONS_REFERRER=<url>` for
+      attribution / dashboard linkage.
+    - **Bearer** — `PYANCHOR_POLLINATIONS_TOKEN=sk_...` for
+      tier-aware quota (Seed → Flower after app submission).
+  - `src/agents/pollinations.ts` — HTTP adapter (~370 LOC).
+  - `src/agents/index.ts` — registered in the adapters map.
+  - `docs/pollinations-setup.md` — env reference + auth modes
+    + troubleshooting (queue-full 429 cool-down, deprecation
+    notice in the API response, fallback to anonymous).
+  - `docs/adapters.md` — table now shows all six backends
+    (gemini row was missing too — added in the same commit).
+- New env vars consumed by the adapter:
+  - `PYANCHOR_POLLINATIONS_TOKEN`
+  - `PYANCHOR_POLLINATIONS_REFERRER`
+  - `PYANCHOR_POLLINATIONS_MODEL` (default `openai-fast`)
+  - `PYANCHOR_POLLINATIONS_BASE_URL` (default
+    `https://text.pollinations.ai`)
+  - `PYANCHOR_POLLINATIONS_MAX_TURNS` (default 12, capped at 64)
+
+### Tests
+- `tests/agents/registry.test.ts`: new case asserts
+  `PYANCHOR_AGENT=pollinations` resolves to the new runner; the
+  unknown-agent error message regex extended to include
+  `pollinations` so a future drop of the registration trips the
+  test.
+- `tests/agents/adapter-briefs.test.ts`: 4 new cases mirror the
+  gemini brief contract (target route, `done`-tool steering, no
+  `write_file` in chat mode, 6-turn history truncation).
+
+### Notes
+- `user_tier` returned by the API is `anonymous` until the
+  Pollinations team approves the App Submission for the
+  shared OSS-app token. Pyanchor and EnverBot share the same
+  bearer; the upgrade unlocks both at once.
+- `dist/worker/runner.cjs` rebuilt — the pollinations adapter
+  is bundled into the worker subprocess. No new public dist
+  files, no bundle-size guard ceiling change required.
+
 ## [0.35.1] - 2026-04-22
 
 CLI i18n locale parity with the overlay. v0.35.0 shipped en + ko;

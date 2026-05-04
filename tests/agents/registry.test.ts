@@ -69,6 +69,13 @@ describe("selectAgent", () => {
     expect(selectAgent().name).toBe("gemini");
   });
 
+  it("returns the pollinations runner when PYANCHOR_AGENT=pollinations (v0.36.0)", async () => {
+    setEnv({ PYANCHOR_AGENT: "pollinations" });
+    vi.resetModules();
+    const { selectAgent } = await import("../../src/agents");
+    expect(selectAgent().name).toBe("pollinations");
+  });
+
   it("matches case-insensitively", async () => {
     setEnv({ PYANCHOR_AGENT: "OpenClaw" });
     vi.resetModules();
@@ -81,6 +88,6 @@ describe("selectAgent", () => {
     vi.resetModules();
     const { selectAgent } = await import("../../src/agents");
     expect(() => selectAgent()).toThrow(/Unknown agent "ghost-agent"/);
-    expect(() => selectAgent()).toThrow(/openclaw, claude-code, codex, aider, gemini/);
+    expect(() => selectAgent()).toThrow(/openclaw, claude-code, codex, aider, gemini, pollinations/);
   });
 });

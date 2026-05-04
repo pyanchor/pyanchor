@@ -5,6 +5,7 @@ import { ClaudeCodeAgentRunner } from "./claude-code";
 import { CodexAgentRunner } from "./codex";
 import { GeminiAgentRunner } from "./gemini";
 import { OpenClawAgentRunner } from "./openclaw";
+import { PollinationsAgentRunner } from "./pollinations";
 import type { AgentRunner } from "./types";
 
 export type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./types";
@@ -15,7 +16,8 @@ const adapters = new Map<string, () => AgentRunner>([
   ["claude-code", () => new ClaudeCodeAgentRunner()],
   ["codex", () => new CodexAgentRunner()],
   ["aider", () => new AiderAgentRunner()],
-  ["gemini", () => new GeminiAgentRunner()]
+  ["gemini", () => new GeminiAgentRunner()],
+  ["pollinations", () => new PollinationsAgentRunner()]
 ]);
 
 export function selectAgent(): AgentRunner {

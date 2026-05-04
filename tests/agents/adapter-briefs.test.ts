@@ -228,3 +228,48 @@ describe("gemini.buildBrief (v0.25.0)", () => {
     expect(brief).toContain("msg-9");
   });
 });
+
+describe("pollinations.buildBrief (v0.36.0)", () => {
+  // Pollinations is HTTP-only (no CLI shell-out) but still uses the
+  // shared brief contract so user expectations carry across backends.
+  it("includes target route, mode, and the user request", async () => {
+    const { buildBrief } = await import("../../src/agents/pollinations");
+    const brief = buildBrief(baseInput());
+    expect(brief).toContain("Target route: /dashboard");
+    expect(brief).toContain("Mode: edit");
+    expect(brief).toContain("make the button blue");
+  });
+
+  it("instructs the model to call `done` and not refactor in edit mode", async () => {
+    const { buildBrief } = await import("../../src/agents/pollinations");
+    const brief = buildBrief(baseInput({ mode: "edit" }));
+    // Tool-loop adapter — the brief steers the model toward the `done`
+    // tool and away from broad refactors.
+    expect(brief).toContain("done");
+    expect(brief).toMatch(/Do not refactor/i);
+  });
+
+  it("forbids write_file in chat mode", async () => {
+    const { buildBrief } = await import("../../src/agents/pollinations");
+    const brief = buildBrief(baseInput({ mode: "chat" }));
+    expect(brief).toContain("Mode: chat");
+    expect(brief).toContain("Do NOT call write_file");
+  });
+
+  it("truncates conversation history to the last 6 turns", async () => {
+    const { buildBrief } = await import("../../src/agents/pollinations");
+    const messages = Array.from({ length: 10 }, (_, i) => ({
+      id: String(i),
+      jobId: "j",
+      role: "user" as const,
+      mode: "edit" as const,
+      text: `pmsg-${i}`,
+      createdAt: new Date(0).toISOString(),
+      status: null
+    }));
+    const brief = buildBrief(baseInput({ recentMessages: messages }));
+    expect(brief).not.toContain("pmsg-3");
+    expect(brief).toContain("pmsg-4");
+    expect(brief).toContain("pmsg-9");
+  });
+});

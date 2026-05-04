@@ -12,6 +12,8 @@ Built-in backends:
 | `claude-code` | ✅ shipped | Requires `@anthropic-ai/claude-agent-sdk` to be installed in the host project (declared as an optional peer dep). Source: [`src/agents/claude-code.ts`](../src/agents/claude-code.ts). |
 | `codex` | ✅ shipped | Shells out to the OpenAI Codex CLI (`codex exec --json`). Install: `npm i -g @openai/codex`. Override binary with `PYANCHOR_CODEX_BIN`. Source: [`src/agents/codex.ts`](../src/agents/codex.ts). |
 | `aider` | ✅ shipped | Shells out to aider-chat (`aider --no-stream --yes --message`). Install: `pip install aider-chat`. Workspace should be a git repo. Override binary with `PYANCHOR_AIDER_BIN`. Source: [`src/agents/aider.ts`](../src/agents/aider.ts). |
+| `gemini` | ✅ shipped | Shells out to the Google Gemini CLI. Install: `npm i -g @google/gemini-cli`. Override binary with `PYANCHOR_GEMINI_BIN`. Source: [`src/agents/gemini.ts`](../src/agents/gemini.ts). |
+| `pollinations` | ✅ shipped | HTTP-only — no CLI to install. Calls `POST https://text.pollinations.ai/openai` (OpenAI-compatible) with a `read_file` / `write_file` / `list_files` / `done` tool loop. Anonymous works (rate-limited per IP); set `PYANCHOR_POLLINATIONS_TOKEN` and/or `PYANCHOR_POLLINATIONS_REFERRER` for the developer's tier. Setup: [`docs/pollinations-setup.md`](./pollinations-setup.md). Source: [`src/agents/pollinations.ts`](../src/agents/pollinations.ts). |
 
 Future adapters (`goose`, `cline`, custom) implement the same interface
 defined below.
