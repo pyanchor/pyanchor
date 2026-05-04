@@ -67,8 +67,9 @@ apply without local setup.)
 ## Optional fields
 
 - **GitHub repository**: <https://github.com/pyanchor/pyanchor>
-  (MIT, public, regular releases on npm — current version 0.36.0,
-  the release that introduced the Pollinations adapter.)
+  (MIT, public, regular releases on npm — current version 0.36.2;
+  the Pollinations adapter shipped in v0.36.0, with v0.36.1 and
+  v0.36.2 as docs catch-up patches.)
 - **App language**: English (with Korean README at
   [`README-ko.md`](https://github.com/pyanchor/pyanchor/blob/main/README-ko.md)).
 
