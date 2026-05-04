@@ -67,9 +67,11 @@ apply without local setup.)
 ## Optional fields
 
 - **GitHub repository**: <https://github.com/pyanchor/pyanchor>
-  (MIT, public, regular releases on npm — current version 0.36.2;
+  (MIT, public, regular releases on npm — current version 0.37.0;
   the Pollinations adapter shipped in v0.36.0, with v0.36.1 and
-  v0.36.2 as docs catch-up patches.)
+  v0.36.2 as docs catch-up patches and v0.37.0 adding HMAC-signed
+  gate cookies + an optional sidecar unlock endpoint that the
+  reviewer URL below uses.)
 - **App language**: English (with Korean README at
   [`README-ko.md`](https://github.com/pyanchor/pyanchor/blob/main/README-ko.md)).
 
@@ -94,9 +96,24 @@ can verify in three ways:
 2. **Bundle**: `npm pack pyanchor && tar -xOf pyanchor-*.tgz
    package/dist/worker/runner.cjs | grep -c PYANCHOR_POLLINATIONS`
    → returns 5 (one per env var).
-3. **Live**: visit <https://pyanchor.pyan.kr>, click the floating
-   pyanchor button, and point at a heading. Network tab will show
-   `POST text.pollinations.ai/openai` with `Referer:
-   https://pyanchor.pyan.kr`.
+3. **Live**: one-click reviewer unlock URL — see the contact email
+   for the secret. The unlock URL hits the v0.37.0 sidecar
+   `/_pyanchor/unlock` route, which validates the secret server-
+   side, issues a 30-day HMAC-signed JWT cookie, and 302-redirects
+   to the demo. From there: click the floating pyanchor button,
+   point at any heading, type a short instruction (e.g. "make this
+   blue"), and hit enter. The browser Network tab will show `POST
+   text.pollinations.ai/openai` with `Referer:
+   https://pyanchor.pyan.kr` plus an `Authorization: Bearer sk_...`
+   header (Pyanchor's dedicated OSS-app token). The edit is then
+   rsynced into the live deploy by the sidecar and the page
+   reloads with the change visible.
+
+   The unlock secret is **not** included in this public submission
+   body — it's emailed separately so reviewers don't need to share
+   it with the public, and so we can rotate it after review without
+   touching the GitHub issue. (If preferred, we can make the URL
+   public for the review window — let us know on the issue and we
+   will edit this section to include it inline.)
 
 Thanks for the open infrastructure 🌱
