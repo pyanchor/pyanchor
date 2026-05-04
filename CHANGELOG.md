@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.1] - 2026-05-04
+
+Pollinations adapter — match response language to the user prompt's
+natural language. Pre-fix the `done` summary always came back in
+English even when the user wrote the prompt in Korean / Japanese /
+Spanish / etc., because every line of `SYSTEM_PROMPT` and
+`buildBrief()` was English and small models default to mirroring
+the system language.
+
+### Changed
+- `src/agents/pollinations.ts` `SYSTEM_PROMPT` — added a new
+  "Response-language discipline" section instructing the model to
+  detect the user prompt's natural language and write the `done`
+  summary in the same language. Tool-call arguments (paths,
+  find/replace literal strings) explicitly stay in the file's
+  native language so code is unaffected.
+
+### Notes
+- No code logic / test changes needed; existing tests don't assert
+  on prompt body content beyond the workflow keywords.
+- Model fidelity varies — small models follow the language hint
+  reliably for short prompts; for long technical prompts the
+  summary may still drift to English. This is a "best effort"
+  contract.
+
 ## [0.40.0] - 2026-05-04
 
 Host brand override for the overlay UI. Pre-v0.40 every pyanchor

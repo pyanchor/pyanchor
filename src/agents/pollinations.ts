@@ -184,7 +184,18 @@ const SYSTEM_PROMPT = [
   "Constraint discipline:",
   "  - Edit only the files explicitly named or implied by the user request.",
   "  - Do NOT modify package.json or package-lock.json unless the user",
-  "    request is explicitly about adding or removing a dependency."
+  "    request is explicitly about adding or removing a dependency.",
+  "",
+  "Response-language discipline:",
+  "  - Detect the user prompt's natural language (English, Korean,",
+  "    Japanese, Spanish, etc.) and write the `done` summary in the",
+  "    SAME language. If the user prompt is Korean, the summary must",
+  "    be Korean; if Japanese, Japanese; etc.",
+  "  - This applies to the `done` tool's `summary` argument and any",
+  "    free-form `content` you emit. Tool-call arguments (paths,",
+  "    `find`/`replace` strings) stay in whatever literal form the",
+  "    target file uses — code stays code regardless of prompt",
+  "    language."
 ].join("\n");
 
 const TOOLS = [
