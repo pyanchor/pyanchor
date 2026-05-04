@@ -122,8 +122,10 @@ export function buildBrief(input: AgentRunInput): string {
     const framework = selectFramework(pyanchorConfig.framework);
     sections.push("");
     sections.push(
-      "Apply the change by calling read_file on the target file, THEN write_file " +
-        "with the full new contents, THEN done. Do not skip the write_file step. " +
+      "Apply the change by: (1) calling read_file on the target file, (2) calling " +
+        "search_replace once per spot you need to change (preferred for small edits) " +
+        "OR write_file with the full new contents (only for new files or full rewrites), " +
+        "(3) calling done. Do not skip the edit step. " +
         `${framework.briefBuildHint} ` +
         "Do not refactor unrelated areas. The `done` summary should be 2-3 lines."
     );
@@ -131,7 +133,8 @@ export function buildBrief(input: AgentRunInput): string {
     sections.push("");
     sections.push(
       "Inspect the relevant files with read_file and answer the user's question. " +
-        "Do NOT call write_file. Call the `done` tool with your answer when finished."
+        "Do NOT call write_file or search_replace. Call the `done` tool with your " +
+        "answer when finished."
     );
   }
 
@@ -140,27 +143,36 @@ export function buildBrief(input: AgentRunInput): string {
 
 const SYSTEM_PROMPT = [
   "You are pyanchor's Pollinations agent. You edit a small slice of a running",
-  "web app via four tools: list_files, read_file, write_file, done.",
+  "web app via five tools: list_files, read_file, search_replace, write_file, done.",
   "",
   "MANDATORY workflow for every edit-mode request:",
   "  1. ALWAYS call read_file at least once on the file you intend to change",
   "     BEFORE doing anything else. Never assume you remember a file's contents.",
-  "  2. After reading, ALWAYS call write_file with the FULL new contents of",
-  "     the file (even if only one line changes). One write_file per file is",
-  "     enough; do not loop multiple write_files on the same file.",
-  "  3. After write_file, call done with a 2-3 line summary of what changed.",
+  "  2. After reading, prefer search_replace over write_file:",
+  "       - search_replace(path, find, replace) — for any change that touches",
+  "         less than ~20 lines of an existing file. The `find` substring must",
+  "         be unique in the file (5-15 chars of surrounding context on each",
+  "         side is usually enough). For multi-spot edits, call search_replace",
+  "         once per spot.",
+  "       - write_file(path, content) — ONLY when creating a new file or",
+  "         rewriting an existing file in its entirety. Do NOT use write_file",
+  "         for small edits to existing 200+ line files; small models often",
+  "         truncate the tail when emitting the whole file.",
+  "  3. After all edits, call done with a 2-3 line summary of what changed.",
   "",
   "Tool-call discipline (violations cause silent failures):",
-  "  - In edit mode, NEVER call done without calling write_file first. If you",
-  "    think no change is needed, call write_file with the file contents",
-  "    unchanged before calling done — you'll be wrong about \"no change\"",
-  "    most of the time and the user prefers a no-op edit to a missed edit.",
+  "  - In edit mode, NEVER call done without calling search_replace or",
+  "    write_file at least once. If you think no change is needed, look",
+  "    again — the user prefers a no-op edit to a missed edit.",
   "  - NEVER pass diff/patch syntax to write_file. The `content` argument is",
   "    the literal new file contents — no \"+\"/\"-\" line prefixes, no \"@@\"",
-  "    hunk headers, no \"diff --git\" lines. write_file replaces the whole",
-  "    file with whatever string you supply, verbatim.",
-  "  - In chat mode, NEVER call write_file. Use read_file to inspect, then",
-  "    call done with the answer in the summary.",
+  "    hunk headers, no \"diff --git\" lines.",
+  "  - search_replace's `find` and `replace` are LITERAL strings — no regex,",
+  "    no escapes. If the tool errors with \"appears N times\", add more",
+  "    surrounding context to make the match unique. If it errors with",
+  "    \"not found\", call read_file again to update your view of the file.",
+  "  - In chat mode, NEVER call write_file or search_replace. Use read_file",
+  "    to inspect, then call done with the answer in the summary.",
   "",
   "Path discipline:",
   "  - All paths are workspace-relative.",
@@ -208,9 +220,33 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "search_replace",
+      description:
+        "PREFERRED for small edits — replace a unique substring in a file. Both `find` and `replace` are literal strings (no regex, no escaping). The `find` string MUST appear exactly once in the file; if it appears 0 or 2+ times the tool errors so you can add more surrounding context. Use this for line-level or string-level edits instead of write_file — it preserves the rest of the file verbatim and avoids the truncation/regeneration bugs that hit 200+ line files.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Workspace-relative path." },
+          find: {
+            type: "string",
+            description:
+              "Literal substring to locate. Include enough surrounding context (5-15 chars on each side of the change) so the match is unique."
+          },
+          replace: {
+            type: "string",
+            description: "What to substitute in place of the matched substring."
+          }
+        },
+        required: ["path", "find", "replace"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "write_file",
       description:
-        "Replace a workspace-relative file with the given full contents. Creates parent dirs as needed.",
+        "Replace a workspace-relative file with the given full contents. Creates parent dirs as needed. Use ONLY when creating a new file or rewriting a file in its entirety — for small edits to existing files, use search_replace instead (write_file on a 200+ line file from a small model often truncates the tail).",
       parameters: {
         type: "object",
         properties: {
@@ -293,6 +329,55 @@ async function writeFileTool(
   await fs.mkdir(path.dirname(abs), { recursive: true });
   await fs.writeFile(abs, args.content, "utf8");
   return `wrote ${args.content.length} bytes to ${args.path}`;
+}
+
+/**
+ * v0.39.0 — small-edit tool. Read the existing file, count how many
+ * times `find` appears, and only commit when the count is exactly 1.
+ * Zero or multiple matches return a descriptive error so the model
+ * can either add more surrounding context (to disambiguate) or read
+ * the file again (to update its mental model).
+ *
+ * Why a separate tool instead of just write_file: small/fast models
+ * (nova-fast, qwen-coder, openai-fast) regularly truncate the tail
+ * of a 200+ line file when asked to emit the entire new contents
+ * via write_file. search_replace lets them emit just the change,
+ * so token budget / attention limits never become a quality risk.
+ */
+async function searchReplaceTool(
+  workspaceDir: string,
+  args: { path?: string; find?: string; replace?: string }
+): Promise<string> {
+  if (!args.path) throw new Error("path is required");
+  if (typeof args.find !== "string") throw new Error("find must be a string");
+  if (typeof args.replace !== "string") throw new Error("replace must be a string");
+  if (args.find.length === 0) throw new Error("find must be a non-empty string");
+
+  const abs = resolveInsideWorkspace(workspaceDir, args.path);
+  const original = await fs.readFile(abs, "utf8");
+
+  // Count occurrences without paying the cost of regex compilation. For
+  // the workspace files we touch (under 8KB typical, 32KB max via
+  // read_file) split() is fast enough.
+  const occurrences = original.split(args.find).length - 1;
+  if (occurrences === 0) {
+    throw new Error(
+      `find string not found in ${args.path}. Call read_file again to see the current contents, ` +
+        `then retry with a substring that actually appears in the file.`
+    );
+  }
+  if (occurrences > 1) {
+    throw new Error(
+      `find string appears ${occurrences} times in ${args.path}. Add more surrounding ` +
+        `context (5-15 chars on each side) so the match is unique, then retry.`
+    );
+  }
+
+  // Use the callback form of String.prototype.replace so `replace`
+  // patterns like `$1` / `$&` don't get interpreted as backrefs.
+  const updated = original.replace(args.find, () => args.replace as string);
+  await fs.writeFile(abs, updated, "utf8");
+  return `replaced ${args.find.length} chars with ${args.replace.length} chars in ${args.path}`;
 }
 
 function clip(s: string, max = TOOL_RESULT_MAX_CHARS): string {
@@ -443,6 +528,16 @@ export class PollinationsAgentRunner implements AgentRunner {
           } else if (name === "read_file") {
             yield { type: "step", label: "read_file", description: String(args.path ?? "") };
             toolOutput = await readFileTool(ctx.workspaceDir, args as { path?: string });
+          } else if (name === "search_replace") {
+            if (input.mode !== "edit") {
+              toolOutput = "error: search_replace is not allowed in chat mode";
+            } else {
+              yield { type: "step", label: "search_replace", description: String(args.path ?? "") };
+              toolOutput = await searchReplaceTool(
+                ctx.workspaceDir,
+                args as { path?: string; find?: string; replace?: string }
+              );
+            }
           } else if (name === "write_file") {
             if (input.mode !== "edit") {
               toolOutput = "error: write_file is not allowed in chat mode";

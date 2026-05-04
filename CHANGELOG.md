@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-05-04
+
+Pollinations adapter gets a fifth tool: **`search_replace`** — a
+patch-based edit primitive that fixes the entire-file-rewrite
+quality wall hit on every small/fast model when asked to edit a
+200+ line file via `write_file`.
+
+### Why
+
+`write_file` requires the model to emit the *entire* new file
+contents. Small models (nova-fast, qwen-coder, openai-fast) on a
+~250-line input regularly:
+  - truncate the tail of the file (Footer JSX missing closing tags)
+  - inject diff-format syntax (`+` line prefixes from a unified diff
+    mental model)
+  - replace whole sections with default-template boilerplate they
+    saw during pre-training
+v0.38.1's prompt-engineering fixes (read_file → write_file → done
++ "no diff syntax" forbid) helped on single-line changes but did
+not fix the underlying token-budget / attention limit on large
+files. `search_replace` removes the requirement entirely — the model
+emits only the changed substring.
+
+### Added
+
+- `search_replace(path, find, replace)` tool in the Pollinations
+  adapter:
+  - `find` and `replace` are literal strings (no regex, no escape
+    semantics — the implementation uses `String.prototype.replace`
+    with a callback so `$1` / `$&` / `$$` patterns in `replace` are
+    treated as literal text).
+  - `find` MUST appear exactly once in the file. Zero matches
+    return a "not found, call read_file again" error; multiple
+    matches return an "appears N times, add more context" error.
+    Both errors are passed back to the model as tool results so it
+    can correct itself.
+  - Path-traversal guard reuses the same `resolveInsideWorkspace`
+    helper as the other workspace-fs tools.
+  - Disallowed in `chat` mode (same as `write_file`).
+
+### Changed
+
+- `src/agents/pollinations.ts`:
+  - `TOOLS` array now exposes `search_replace` between `read_file`
+    and `write_file`. Tool order in the array influences which
+    tool the model picks first when both are valid options; this
+    placement nudges the model toward the safer primitive.
+  - `SYSTEM_PROMPT` updated — workflow now reads "prefer
+    `search_replace` for any change touching less than ~20 lines;
+    use `write_file` only for new files or full rewrites".
+  - `buildBrief()` edit-mode tail mirrors the same guidance.
+  - `write_file` description now explicitly warns "small models
+    truncate the tail when emitting 200+ line files" so models that
+    read tool descriptions during planning bias toward
+    `search_replace`.
+
+### Tests
+
+- New `tests/agents/pollinations-tools.test.ts` (6 cases, all
+  pure-fs with stubbed `fetch`):
+  - happy path: replaces a unique substring + persists to disk
+  - 0 matches → tool error surfaced via `log` event
+  - 2+ matches → "appears N times" error surfaced
+  - `replace` with `$1` / `$&` / `$$` → literal substitution (no
+    backref expansion regression)
+  - path traversal → `resolveInsideWorkspace` rejects + tool error
+  - `mode: "chat"` → tool refuses to run, file unchanged
+- Total suite 943 → 949, all green.
+
+### Notes
+
+- Existing edit flows that used `write_file` still work — this
+  release is additive. The model picks based on tool descriptions +
+  system prompt guidance.
+- This is a feature release (semver minor) because the adapter's
+  public-facing tool surface grew. `npm i pyanchor@^0.38` keeps
+  the old behavior; `npm i pyanchor@^0.39` opts into the new tool.
+
 ## [0.38.1] - 2026-05-04
 
 Pollinations adapter multi-turn quality fix. End-to-end testing
