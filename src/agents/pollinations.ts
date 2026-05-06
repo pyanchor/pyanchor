@@ -10,12 +10,14 @@ import type { AgentEvent, AgentRunContext, AgentRunInput, AgentRunner } from "./
  * Pollinations.AI adapter.
  *
  * Pollinations exposes an OpenAI-compatible chat completions endpoint
- * (POST https://text.pollinations.ai/openai) with `tools` support. Unlike
- * the other adapters in this directory, Pollinations is HTTP-only — there
- * is no CLI binary and the model has no built-in workspace IO. So this
- * adapter implements its own tool loop: the LLM calls `list_files`,
- * `read_file`, `write_file`, and `done`, and we execute them against the
- * agent's scratch workspace.
+ * (POST https://gen.pollinations.ai/v1/chat/completions; the legacy
+ * https://text.pollinations.ai/openai endpoint is still honored via
+ * PYANCHOR_POLLINATIONS_BASE_URL) with `tools` support. Unlike the other
+ * adapters in this directory, Pollinations is HTTP-only — there is no
+ * CLI binary and the model has no built-in workspace IO. So this adapter
+ * implements its own tool loop: the LLM calls `list_files`, `read_file`,
+ * `search_replace`, `write_file`, and `done`, and we execute them against
+ * the agent's scratch workspace.
  *
  * Configuration (all optional):
  *   PYANCHOR_AGENT=pollinations

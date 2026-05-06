@@ -8,7 +8,7 @@
 [![npm version](https://img.shields.io/npm/v/pyanchor.svg?style=flat-square&color=cb3837)](https://www.npmjs.com/package/pyanchor)
 [![npm downloads](https://img.shields.io/npm/dm/pyanchor.svg?style=flat-square)](https://www.npmjs.com/package/pyanchor)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg?style=flat-square)](./LICENSE)
-[![Pollinations OSS app](https://img.shields.io/badge/pollinations.ai-flower--tier-7c6cf6?style=flat-square)](https://github.com/pollinations/pollinations/issues/10670)
+[![Pollinations OSS app](https://img.shields.io/badge/pollinations.ai-flower--tier-7c6cf6?style=flat-square)](https://pollinations.ai/apps)
 
 <br />
 

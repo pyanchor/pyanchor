@@ -13,14 +13,18 @@ install, no SDK to add to your project. The adapter calls the
 OpenAI-compatible endpoint:
 
 ```
-POST https://text.pollinations.ai/openai
+POST https://gen.pollinations.ai/v1/chat/completions
 ```
 
+(default model: `nova-fast`, ~$0.000245/call. Override the base URL
+via `PYANCHOR_POLLINATIONS_BASE_URL` if you need the legacy
+`text.pollinations.ai` endpoint or a self-hosted mirror.)
+
 with `tools: auto` and runs its own loop, executing the model's
-function calls (`list_files`, `read_file`, `write_file`, `done`)
-against `PYANCHOR_WORKSPACE_DIR`. Same workspace lifecycle as every
-other adapter — pyanchor still rsyncs from your app dir, installs,
-builds, syncs back, and restarts the frontend.
+function calls (`list_files`, `read_file`, `search_replace`,
+`write_file`, `done`) against `PYANCHOR_WORKSPACE_DIR`. Same workspace
+lifecycle as every other adapter — pyanchor still rsyncs from your
+app dir, installs, builds, syncs back, and restarts the frontend.
 
 ## 1. Decide on attribution
 

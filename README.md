@@ -9,7 +9,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/pyanchor.svg?style=flat-square)](https://www.npmjs.com/package/pyanchor)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg?style=flat-square)](./LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/pyanchor/pyanchor?style=flat-square)](https://github.com/pyanchor/pyanchor/stargazers)
-[![Pollinations OSS app](https://img.shields.io/badge/pollinations.ai-flower--tier-7c6cf6?style=flat-square)](https://github.com/pollinations/pollinations/issues/10670)
+[![Pollinations OSS app](https://img.shields.io/badge/pollinations.ai-flower--tier-7c6cf6?style=flat-square)](https://pollinations.ai/apps)
 
 <br />
 
@@ -420,7 +420,7 @@ is reachable so you know before the first edit.
 | `codex` | ✅ shipped | OpenAI Codex CLI on `PATH`. Install: `npm i -g @openai/codex`. Override binary with `PYANCHOR_CODEX_BIN`. |
 | `aider` | ✅ shipped | aider-chat CLI on `PATH`. Install: `pip install aider-chat`. Workspace should be a git repo. Override binary with `PYANCHOR_AIDER_BIN`. |
 | `gemini` | ✅ shipped | Google Gemini CLI on `PATH`. Install: `npm i -g @google/gemini-cli`. Auth: `GEMINI_API_KEY` env, `gemini auth login` (OAuth), or Vertex AI. Setup: [`docs/gemini-setup.md`](./docs/gemini-setup.md) |
-| `pollinations` | ✅ shipped (v0.36.0) | **No CLI install** — HTTP-only. Calls `text.pollinations.ai/openai`. Anonymous works (IP-rate-limited); set `PYANCHOR_POLLINATIONS_TOKEN=sk_...` for tier quota. Setup: [`docs/pollinations-setup.md`](./docs/pollinations-setup.md) |
+| `pollinations` | ✅ shipped (v0.36.0+; v0.38.0 endpoint migration) | **No CLI install** — HTTP-only. Calls `gen.pollinations.ai/v1/chat/completions` (default `nova-fast`, ~$0.000245/call). Anonymous works (IP-rate-limited); set `PYANCHOR_POLLINATIONS_TOKEN=sk_...` for tier quota. Setup: [`docs/pollinations-setup.md`](./docs/pollinations-setup.md) |
 | Goose, Cline, custom | 🟡 | implement the [`AgentRunner`](./src/agents/types.ts) interface — see [`docs/adapters.md`](./docs/adapters.md) |
 
 ## Supported frameworks
